@@ -1,6 +1,6 @@
 // Package resourcecore is the public, consumer-neutral Go contract for the
 // GARFEX Resource Master Core. It is a translation boundary, not a second
-// business authority: every read delegates to the existing authoritative
+// business authority: every operation delegates to the existing authoritative
 // application services (internal/app/catalogo.Service and
 // internal/app/recursos.Service) through a module-owned internal bridge
 // (internal/bridge/resourcecore.Adapter). This package owns its DTOs,
@@ -10,20 +10,13 @@
 // duplicates business, presentation, or validation rules already owned by
 // Core.
 //
-// # Shipped contract: READ only
+// # Shipped contract: Reader and Writer
 //
-// This version exposes read-only operations through Reader: active catalog
-// classes, catalog descriptors, catalog list/get, resource search/get, and
-// canonical resource presentation (delegated to recursos.Service.Describe,
-// never reconstructed here). Reader has no Create, Update, Deactivate,
-// Reactivate, Delete, Publish, Reload, repository accessor, or mutable
-// authority accessor. Public WRITE is a distinct, later, operation-gated
-// change: each write operation graduates independently only after it
-// separately proves lifecycle parity, atomic applicability behavior,
-// revision-based compare-and-swap, guarded-delete policy where applicable,
-// and persistence/authority equivalence. The presence of this package's
-// read API is never permission to infer that any write operation is
-// available.
+// Reader exposes catalog and resource reads. Writer exposes the graduated
+// catalog/resource create, update, lifecycle, and hard-delete operations.
+// Both delegate to the same authoritative application services; neither
+// exposes a repository, connection pool, DSN, publication control, or mutable
+// catalog authority.
 //
 // # Lifecycle semantics visible through READ
 //
@@ -51,16 +44,9 @@
 // # Errors
 //
 // Every failure returned by this package is an Error carrying one of the
-// fifteen stable ErrorCode categories (see Code and IsCode). All fifteen
-// categories are fixed at this read release so a later operation-gated
-// WRITE change never renumbers or redefines an existing one; today's
-// read-only surface actually reaches only a subset of them —
-// INVALID_ARGUMENT, NOT_FOUND, INTEGRITY, INVALID_CATALOG, UNAVAILABLE, and
-// INTERNAL. The remaining categories (DUPLICATE, INVALID_REFERENCE,
-// VALIDATION, IDENTITY_CONFLICT, INVALID_LIFECYCLE,
-// REACTIVATION_IMPOSSIBLE, IN_USE, IMMUTABLE_CODE, and CONFLICT) describe
-// write outcomes and become reachable only once the corresponding write
-// operation ships. Error does not implement Unwrap, does not expose a
+// fifteen stable ErrorCode categories (see Code and IsCode). Reader and
+// Writer map internal outcomes through the same safe error boundary. Error
+// does not implement Unwrap, does not expose a
 // Cause, and never formats or retains a PostgreSQL message, SQLSTATE,
 // constraint, table, column, driver type, or other technical detail; those
 // causes are recorded only behind the internal bridge's non-public
