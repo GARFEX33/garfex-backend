@@ -8,7 +8,10 @@ import (
 	"testing"
 
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/app/catalogo"
+	"github.com/GARFEX33/garfex-costos-unitarios/internal/app/recursos"
+	resourcebridge "github.com/GARFEX33/garfex-costos-unitarios/internal/bridge/resourcecore"
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -1275,8 +1278,25 @@ func TestCatalogCASConcreteRepositoryV2Integration(t *testing.T) {
 			if err != nil || setActiveResult.Record == nil || setActiveResult.Record.Active || setActiveResult.Record.Revision != 3 {
 				t.Fatalf("SetActive = %+v, err = %v, want inactive at revision 3", setActiveResult.Record, err)
 			}
-			if got, err := legacy.Get(ctx, tc.kind, id); err != nil || got.Active {
-				t.Fatalf("Get after SetActive(false) = active:%v err:%v, want active=false", got.Active, err)
+			if got, err := legacy.Get(ctx, tc.kind, id); err != nil || got.Active || got.Revision != 3 {
+				t.Fatalf("Get after SetActive(false) = active:%v revision:%d err:%v, want active=false revision=3", got.Active, got.Revision, err)
+			}
+			listed, err := legacy.List(ctx, tc.kind, domain.CatalogFilter{Status: domain.CatalogStatusAll})
+			if err != nil {
+				t.Fatalf("List after SetActive(false): %v", err)
+			}
+			found := false
+			for _, got := range listed {
+				if got.ID == id {
+					found = true
+					if got.Revision != 3 {
+						t.Fatalf("List after SetActive(false) revision = %d, want 3", got.Revision)
+					}
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("List after SetActive(false) omitted id %d", id)
 			}
 
 			deleteResult, err := repo.Delete(ctx, tc.kind, id, 3)
@@ -1345,6 +1365,83 @@ func TestCatalogCASConcreteRepositoryV2Integration(t *testing.T) {
 			t.Fatalf("rule count after SetActive = %d, want 1 (unchanged)", got)
 		}
 	})
+}
+
+// TestPublicCatalogLifecycleRevisionCompositionIntegration proves that the
+// public bridge's post-deactivation confirm-read retains the V2 revision needed
+// by the next public lifecycle operation.
+func TestPublicCatalogLifecycleRevisionCompositionIntegration(t *testing.T) {
+	dsn := os.Getenv("GARFEX_TEST_DSN")
+	if dsn == "" {
+		t.Skip("GARFEX_TEST_DSN not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect to PostgreSQL: %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	boot, err := LoadResourceCatalog(ctx, pool)
+	if err != nil {
+		t.Fatalf("boot LoadResourceCatalog: %v", err)
+	}
+	authority := domain.NewCatalogAuthority(boot)
+	catalogService := catalogo.NewServiceWithCatalogAuthority(
+		NewCatalogAdminRepository(pool), domain.NewCatalogRegistry(), authority,
+	).WithCatalogAdminRepositoryV2(NewCatalogAdminRepositoryV2(pool))
+	resourceService := recursos.NewServiceWithCatalogAuthority(NewResourceRepository(pool), authority)
+	adapter := resourcebridge.NewAdapter(catalogService, resourceService)
+	reader, err := resourcecore.NewReadOnly(adapter)
+	if err != nil {
+		t.Fatalf("new public reader: %v", err)
+	}
+	writer, err := resourcecore.NewWriter(adapter)
+	if err != nil {
+		t.Fatalf("new public writer: %v", err)
+	}
+	legacy := NewCatalogAdminRepository(pool)
+
+	created, err := writer.CreateCatalog(ctx, resourcecore.CatalogWriteRequest{
+		Actor:  "integration-test",
+		Kind:   resourcecore.KindUnit,
+		Active: true,
+		Values: map[string]resourcecore.Value{
+			"code":      {Kind: resourcecore.ValueCode, Text: "TEST_PUBLIC_CAS_UNIT"},
+			"name":      {Kind: resourcecore.ValueText, Text: "Test Public CAS Unit"},
+			"symbol":    {Kind: resourcecore.ValueText, Text: "tpc"},
+			"dimension": {Kind: resourcecore.ValueText, Text: "Longitud"},
+		},
+	})
+	if err != nil || created.Revision != 1 {
+		t.Fatalf("CreateCatalog = record:%+v err:%v, want revision 1", created, err)
+	}
+	t.Cleanup(func() { _ = legacy.Delete(ctx, domain.KindUnit, created.ID) })
+
+	deactivated, err := writer.DeactivateCatalog(ctx, resourcecore.CatalogLifecycleRequest{
+		Actor: "integration-test", Kind: resourcecore.KindUnit, ID: created.ID, ExpectedRevision: 1,
+	})
+	if err != nil || deactivated.Revision != 2 || deactivated.Active {
+		t.Fatalf("DeactivateCatalog = record:%+v err:%v, want inactive revision 2", deactivated, err)
+	}
+	current, err := reader.GetCatalog(ctx, resourcecore.CatalogKey{Kind: resourcecore.KindUnit, ID: created.ID})
+	if err != nil || current.Revision != 2 || current.Active {
+		t.Fatalf("GetCatalog after Deactivate = record:%+v err:%v, want inactive revision 2", current, err)
+	}
+
+	if err := writer.HardDeleteCatalog(ctx, resourcecore.CatalogLifecycleRequest{
+		Actor: "integration-test", Kind: resourcecore.KindUnit, ID: created.ID, ExpectedRevision: 1,
+	}); !resourcecore.IsCode(err, resourcecore.Conflict) {
+		t.Fatalf("HardDeleteCatalog stale revision error = %v, want CONFLICT", err)
+	}
+	if err := writer.HardDeleteCatalog(ctx, resourcecore.CatalogLifecycleRequest{
+		Actor: "integration-test", Kind: resourcecore.KindUnit, ID: created.ID, ExpectedRevision: 2,
+	}); err != nil {
+		t.Fatalf("HardDeleteCatalog current revision: %v", err)
+	}
+	if _, err := reader.GetCatalog(ctx, resourcecore.CatalogKey{Kind: resourcecore.KindUnit, ID: created.ID}); !resourcecore.IsCode(err, resourcecore.NotFound) {
+		t.Fatalf("GetCatalog after HardDelete error = %v, want NOT_FOUND", err)
+	}
 }
 
 // TestCatalogConcurrentDependencyDeleteRaceIntegration is 3I's mandatory true
