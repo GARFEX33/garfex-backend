@@ -195,11 +195,17 @@ func (r *catalogAdminRepository) ReferencedByResources(ctx context.Context, kind
 // unexported text/boolean/integer/list/ref helpers, which this package
 // cannot call directly) --------------------------------------------------
 
-func fieldText(rec domain.CatalogRecord, name string) string   { return rec.Values[name].Text }
-func fieldBool(rec domain.CatalogRecord, name string) bool     { return rec.Values[name].Bool }
-func fieldInt(rec domain.CatalogRecord, name string) int       { return rec.Values[name].Int }
-func fieldList(rec domain.CatalogRecord, name string) []string { return rec.Values[name].List }
-func fieldRef(rec domain.CatalogRecord, name string) string    { return rec.Values[name].Ref.Code }
+func fieldText(rec domain.CatalogRecord, name string) string { return rec.Values[name].Text }
+func fieldBool(rec domain.CatalogRecord, name string) bool   { return rec.Values[name].Bool }
+func fieldInt(rec domain.CatalogRecord, name string) int     { return rec.Values[name].Int }
+func fieldList(rec domain.CatalogRecord, name string) []string {
+	values := rec.Values[name].List
+	if values == nil {
+		return []string{}
+	}
+	return values
+}
+func fieldRef(rec domain.CatalogRecord, name string) string { return rec.Values[name].Ref.Code }
 
 // --- shared record builders ----------------------------------------------
 

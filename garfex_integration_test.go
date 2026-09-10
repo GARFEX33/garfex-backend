@@ -60,18 +60,35 @@ func TestOpenIntegrationExposesFourLiveHandles(t *testing.T) {
 
 	suffix := time.Now().UTC().Format("20060102150405.000000000")
 	classCode := "TEST_CORE_" + suffix
+	classValues := func() map[string]resourcecore.Value {
+		return map[string]resourcecore.Value{
+			"code":   {Kind: resourcecore.ValueCode, Text: classCode},
+			"name":   {Kind: resourcecore.ValueText, Text: "Core integration class"},
+			"plural": {Kind: resourcecore.ValueText, Text: "Core integration classes"},
+			"slug":   {Kind: resourcecore.ValueText, Text: "core-integration-" + suffix},
+		}
+	}
+	assertEmptyStringList := func(t *testing.T, rec resourcecore.CatalogRecord, field string) {
+		t.Helper()
+		value, ok := rec.Values[field]
+		if !ok || value.Kind != resourcecore.ValueStringList || value.Strings == nil || len(value.Strings) != 0 {
+			t.Fatalf("%s = %+v, want a non-nil empty STRING_LIST", field, value)
+		}
+	}
+	getClass := func(t *testing.T, id int64) resourcecore.CatalogRecord {
+		t.Helper()
+		rec, err := app.ResourceReader.GetCatalog(ctx, resourcecore.CatalogKey{Kind: resourcecore.KindClass, ID: id})
+		if err != nil {
+			t.Fatalf("ResourceReader.GetCatalog() error = %v", err)
+		}
+		return rec
+	}
+
 	class, err := app.ResourceWriter.CreateCatalog(ctx, resourcecore.CatalogWriteRequest{
 		Actor:  "core-integration-test",
 		Kind:   resourcecore.KindClass,
 		Active: true,
-		Values: map[string]resourcecore.Value{
-			"code":     {Kind: resourcecore.ValueCode, Text: classCode},
-			"name":     {Kind: resourcecore.ValueText, Text: "Core integration class"},
-			"plural":   {Kind: resourcecore.ValueText, Text: "Core integration classes"},
-			"slug":     {Kind: resourcecore.ValueText, Text: "core-integration-" + suffix},
-			"aliases":  {Kind: resourcecore.ValueStringList, Strings: []string{"core integration"}},
-			"keywords": {Kind: resourcecore.ValueStringList, Strings: []string{"core integration"}},
-		},
+		Values: classValues(),
 	})
 	if err != nil {
 		t.Fatalf("ResourceWriter.CreateCatalog() error = %v", err)
@@ -96,6 +113,62 @@ func TestOpenIntegrationExposesFourLiveHandles(t *testing.T) {
 			t.Errorf("cleanup resource class: %v", err)
 		}
 	}()
+
+	storedClass := getClass(t, class.ID)
+	assertEmptyStringList(t, storedClass, "aliases")
+	assertEmptyStringList(t, storedClass, "keywords")
+
+	nonemptyValues := classValues()
+	nonemptyValues["aliases"] = resourcecore.Value{Kind: resourcecore.ValueStringList, Strings: []string{"core integration"}}
+	nonemptyValues["keywords"] = resourcecore.Value{Kind: resourcecore.ValueStringList, Strings: []string{"core", "integration"}}
+	class, err = app.ResourceWriter.UpdateCatalog(ctx, resourcecore.CatalogUpdateRequest{
+		Actor:            "core-integration-test",
+		Kind:             resourcecore.KindClass,
+		ID:               class.ID,
+		ExpectedRevision: class.Revision,
+		Active:           true,
+		Values:           nonemptyValues,
+	})
+	if err != nil {
+		t.Fatalf("ResourceWriter.UpdateCatalog() with nonempty lists error = %v", err)
+	}
+	storedClass = getClass(t, class.ID)
+	if len(storedClass.Values["aliases"].Strings) != 1 || storedClass.Values["aliases"].Strings[0] != "core integration" || len(storedClass.Values["keywords"].Strings) != 2 || storedClass.Values["keywords"].Strings[1] != "integration" {
+		t.Fatalf("nonempty aliases/keywords were not persisted: %+v", storedClass.Values)
+	}
+
+	clearedValues := classValues()
+	clearedValues["aliases"] = resourcecore.Value{Kind: resourcecore.ValueStringList, Strings: nil}
+	clearedValues["keywords"] = resourcecore.Value{Kind: resourcecore.ValueStringList, Strings: []string{}}
+	class, err = app.ResourceWriter.UpdateCatalog(ctx, resourcecore.CatalogUpdateRequest{
+		Actor:            "core-integration-test",
+		Kind:             resourcecore.KindClass,
+		ID:               class.ID,
+		ExpectedRevision: class.Revision,
+		Active:           true,
+		Values:           clearedValues,
+	})
+	if err != nil {
+		t.Fatalf("ResourceWriter.UpdateCatalog() clearing lists error = %v", err)
+	}
+	storedClass = getClass(t, class.ID)
+	assertEmptyStringList(t, storedClass, "aliases")
+	assertEmptyStringList(t, storedClass, "keywords")
+
+	class, err = app.ResourceWriter.UpdateCatalog(ctx, resourcecore.CatalogUpdateRequest{
+		Actor:            "core-integration-test",
+		Kind:             resourcecore.KindClass,
+		ID:               class.ID,
+		ExpectedRevision: class.Revision,
+		Active:           true,
+		Values:           classValues(),
+	})
+	if err != nil {
+		t.Fatalf("ResourceWriter.UpdateCatalog() omitting lists error = %v", err)
+	}
+	storedClass = getClass(t, class.ID)
+	assertEmptyStringList(t, storedClass, "aliases")
+	assertEmptyStringList(t, storedClass, "keywords")
 
 	activeClasses, err := app.ResourceReader.ActiveClasses(ctx)
 	if err != nil {

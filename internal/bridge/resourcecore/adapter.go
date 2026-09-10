@@ -496,7 +496,7 @@ func (a *Adapter) mapCatalogValue(kind domain.CatalogKindCode, name string, v do
 	case domain.FieldInt:
 		return public.Value{Kind: public.ValueInteger, Text: strconv.FormatInt(int64(v.Int), 10)}
 	case domain.FieldStringList:
-		return public.Value{Kind: public.ValueStringList, Strings: append([]string(nil), v.List...)}
+		return public.Value{Kind: public.ValueStringList, Strings: public.CloneStringSlice(v.List)}
 	case domain.FieldRef:
 		if v.Ref.Code == "" && v.Ref.Kind == "" {
 			return public.Value{Kind: public.ValueReference}
@@ -531,7 +531,7 @@ func (a *Adapter) toDomainCatalogValue(kind domain.CatalogKindCode, name string,
 		n, _ := strconv.Atoi(v.Text)
 		return domain.CatalogValue{Int: n}
 	case domain.FieldStringList:
-		return domain.CatalogValue{List: append([]string(nil), v.Strings...)}
+		return domain.CatalogValue{List: public.CloneStringSlice(v.Strings)}
 	case domain.FieldRef:
 		if v.Reference == nil {
 			return domain.CatalogValue{}

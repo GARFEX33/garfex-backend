@@ -2139,3 +2139,53 @@ func TestResourceLifecycle_ActorReachesDiagnosticSeam(t *testing.T) {
 		t.Fatalf("expected Actor to reach the diagnostic seam via ctx, got %q", core.ActorFrom(capturedCtx))
 	}
 }
+
+func TestCatalogStringListMapping_PreservesPresenceAndOwnership(t *testing.T) {
+	catalog := &fakeCatalogReader{kinds: domain.NewCatalogRegistry().Kinds()}
+	adapter := newTestAdapter(catalog, nil)
+	tests := []struct {
+		name    string
+		strings []string
+		wantNil bool
+	}{
+		{name: "omitted", wantNil: true},
+		{name: "explicit empty", strings: []string{}, wantNil: false},
+		{name: "nonempty", strings: []string{"term"}, wantNil: false},
+	}
+
+	for _, field := range []string{"aliases", "keywords"} {
+		for _, tt := range tests {
+			t.Run(field+"/"+tt.name, func(t *testing.T) {
+				toDomainInput := public.Value{Kind: public.ValueStringList, Strings: public.CloneStringSlice(tt.strings)}
+				mappedDomain := adapter.toDomainCatalogValue(domain.KindClass, field, toDomainInput)
+				if (mappedDomain.List == nil) != tt.wantNil {
+					t.Fatalf("toDomainCatalogValue nil presence = %v, want %v", mappedDomain.List == nil, tt.wantNil)
+				}
+				if len(mappedDomain.List) != len(tt.strings) {
+					t.Fatalf("toDomainCatalogValue length = %d, want %d", len(mappedDomain.List), len(tt.strings))
+				}
+				if len(tt.strings) > 0 {
+					mappedDomain.List[0] = "mutated-domain"
+					if toDomainInput.Strings[0] != "term" {
+						t.Fatal("toDomainCatalogValue retained caller-owned backing storage")
+					}
+				}
+
+				toPublicInput := domain.CatalogValue{List: public.CloneStringSlice(tt.strings)}
+				mappedPublic := adapter.mapCatalogValue(domain.KindClass, field, toPublicInput)
+				if (mappedPublic.Strings == nil) != tt.wantNil {
+					t.Fatalf("mapCatalogValue nil presence = %v, want %v", mappedPublic.Strings == nil, tt.wantNil)
+				}
+				if len(mappedPublic.Strings) != len(tt.strings) {
+					t.Fatalf("mapCatalogValue length = %d, want %d", len(mappedPublic.Strings), len(tt.strings))
+				}
+				if len(tt.strings) > 0 {
+					mappedPublic.Strings[0] = "mutated-public"
+					if toPublicInput.List[0] != "term" {
+						t.Fatal("mapCatalogValue retained domain-owned backing storage")
+					}
+				}
+			})
+		}
+	}
+}
