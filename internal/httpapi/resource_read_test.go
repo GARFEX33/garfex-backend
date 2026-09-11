@@ -12,8 +12,9 @@ import (
 )
 
 type resourceReaderFuncs struct {
-	get    func(context.Context, resourcecore.ResourceKey) (resourcecore.Resource, error)
-	search func(context.Context, resourcecore.ResourceQuery) (resourcecore.ResourcePage, error)
+	get      func(context.Context, resourcecore.ResourceKey) (resourcecore.Resource, error)
+	search   func(context.Context, resourcecore.ResourceQuery) (resourcecore.ResourcePage, error)
+	describe func(context.Context, resourcecore.ResourceKey) (string, error)
 }
 
 func (f resourceReaderFuncs) GetResource(ctx context.Context, key resourcecore.ResourceKey) (resourcecore.Resource, error) {
@@ -22,6 +23,10 @@ func (f resourceReaderFuncs) GetResource(ctx context.Context, key resourcecore.R
 
 func (f resourceReaderFuncs) SearchResources(ctx context.Context, q resourcecore.ResourceQuery) (resourcecore.ResourcePage, error) {
 	return f.search(ctx, q)
+}
+
+func (f resourceReaderFuncs) DescribeResource(ctx context.Context, key resourcecore.ResourceKey) (string, error) {
+	return f.describe(ctx, key)
 }
 
 func TestResourceSearchPassesQueryAndMapsPage(t *testing.T) {

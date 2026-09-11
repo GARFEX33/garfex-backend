@@ -15,10 +15,11 @@ const (
 )
 
 // ResourceReader is the narrow Core capability required by the resource
-// search and detail routes.
+// search, detail, and describe routes.
 type ResourceReader interface {
 	GetResource(context.Context, resourcecore.ResourceKey) (resourcecore.Resource, error)
 	SearchResources(context.Context, resourcecore.ResourceQuery) (resourcecore.ResourcePage, error)
+	DescribeResource(context.Context, resourcecore.ResourceKey) (string, error)
 }
 
 type resourcePageResponse struct {

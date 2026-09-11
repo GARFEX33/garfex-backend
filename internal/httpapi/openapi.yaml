@@ -522,6 +522,29 @@ paths:
         '400': { $ref: '#/components/responses/InvalidArgument' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{classCode}/{identityV1}/describe:
+    get:
+      summary: Describe a resource
+      description: Returns the canonical presentation text of one resource by class code and durable identity-v1.
+      parameters:
+        - name: classCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: identityV1
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Resource description
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceDescription'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/resources/{id}:
     put:
       summary: Update a resource
@@ -962,3 +985,9 @@ components:
         resources: { type: array, items: { $ref: '#/components/schemas/Resource' } }
         hasPrevious: { type: boolean }
         hasNext: { type: boolean }
+    ResourceDescription:
+      type: object
+      additionalProperties: false
+      required: [description]
+      properties:
+        description: { type: string }

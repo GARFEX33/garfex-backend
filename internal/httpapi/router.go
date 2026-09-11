@@ -66,6 +66,10 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveResourceLifecycle(w, r, resourceWriter, id, action)
 			return
 		}
+		if classCode, identityV1, ok := resourceDescribePath(r.URL.Path); ok {
+			serveResourceDescribe(w, r, resourceReader, classCode, identityV1)
+			return
+		}
 		if classCode, identityV1, ok := resourceDetailPath(r.URL.Path); ok {
 			serveResourceDetail(w, r, resourceReader, classCode, identityV1)
 			return
@@ -148,6 +152,24 @@ func supplierNestedDetailPath(path, separator string) (supplierID, childID strin
 	}
 	supplierID, childID, ok = strings.Cut(remainder, separator)
 	return supplierID, childID, ok && supplierID != "" && childID != "" && !strings.Contains(childID, "/")
+}
+
+// resourceDescribePath matches the reserved /describe action path, a
+// three-segment shape that resourceDetailPath's two-segment Cut already
+// rejects, so no ordering is required between them.
+func resourceDescribePath(path string) (classCode, identityV1 string, ok bool) {
+	const prefix = "/v1/resources/"
+	const suffix = "/describe"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", "", false
+	}
+	trimmed, ok := strings.CutSuffix(remainder, suffix)
+	if !ok {
+		return "", "", false
+	}
+	classCode, identityV1, ok = strings.Cut(trimmed, "/")
+	return classCode, identityV1, ok && classCode != "" && identityV1 != "" && !strings.Contains(identityV1, "/")
 }
 
 func resourceDetailPath(path string) (classCode, identityV1 string, ok bool) {
