@@ -112,7 +112,7 @@ func TestOpenAPIDescribesOnlyImplementedBusinessPath(t *testing.T) {
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
 
 	body := r.Body.String()
-	for _, path := range []string{"  /healthz:\n", "  /v1/catalog/descriptors:\n", "  /v1/catalog/{kind}:\n", "  /v1/catalog/{kind}/{id}:\n", "  /v1/suppliers:\n", "  /v1/suppliers/{id}:\n", "  /v1/resources:\n", "  /v1/resources/{classCode}/{identityV1}:\n", "  /openapi.yaml:\n", "  /docs:\n"} {
+	for _, path := range []string{"  /healthz:\n", "  /v1/catalog/descriptors:\n", "  /v1/catalog/{kind}:\n", "  /v1/catalog/{kind}/{id}:\n", "  /v1/suppliers:\n", "  /v1/suppliers/{id}:\n", "  /v1/resources:\n", "  /v1/resources/{classCode}/{identityV1}:\n", "  /v1/resources/{id}:\n", "  /openapi.yaml:\n", "  /docs:\n"} {
 		if !strings.Contains(body, path) {
 			t.Errorf("OpenAPI document does not contain %q", path)
 		}

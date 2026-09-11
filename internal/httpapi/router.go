@@ -46,8 +46,21 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveResourceDetail(w, r, resourceReader, classCode, identityV1)
 			return
 		}
+		if id, ok := resourceIDPath(r.URL.Path); ok {
+			serveResourceUpdate(w, r, resourceWriter, id)
+			return
+		}
 		writeText(w, http.StatusNotFound, "404 not found\n")
 	}
+}
+
+// resourceIDPath matches the numeric-id write path, distinct from
+// resourceDetailPath's natural-key read path: Core addresses resource
+// writes by internal id, obtained as a byproduct of a prior read.
+func resourceIDPath(path string) (id string, ok bool) {
+	const prefix = "/v1/resources/"
+	id, ok = strings.CutPrefix(path, prefix)
+	return id, ok && id != "" && !strings.Contains(id, "/")
 }
 
 func supplierDetailPath(path string) (id string, ok bool) {

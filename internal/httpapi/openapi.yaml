@@ -270,6 +270,33 @@ paths:
         '400': { $ref: '#/components/responses/InvalidArgument' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{id}:
+    put:
+      summary: Update a resource
+      description: Replaces one existing resource's content by its internal id, obtained from a prior read, under optimistic concurrency.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceUpdateRequest'
+      responses:
+        '200':
+          description: Updated resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
   /openapi.yaml:
     get:
       summary: OpenAPI document
@@ -513,6 +540,16 @@ components:
       required: [actor, scope, naturalUnit, attributes]
       properties:
         actor: { type: string }
+        scope: { $ref: '#/components/schemas/ResourceScope' }
+        naturalUnit: { type: string }
+        attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    ResourceUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedRevision, scope, naturalUnit, attributes]
+      properties:
+        actor: { type: string }
+        expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
         scope: { $ref: '#/components/schemas/ResourceScope' }
         naturalUnit: { type: string }
         attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
