@@ -13,8 +13,15 @@ func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWrit
 	})
 }
 
+// maxRequestBodyBytes bounds every request body read through this router.
+// 1 MiB is generous for the largest documented JSON payload (a catalog
+// record with its values and rules) while still rejecting pathological
+// inputs before they reach a decoder.
+const maxRequestBodyBytes = 1 << 20
+
 func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader, catalogWriter CatalogWriter) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 
 	switch r.URL.Path {
 	case "/healthz":

@@ -1,11 +1,29 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
 )
+
+func TestRouterRejectsOversizedRequestBody(t *testing.T) {
+	called := false
+	writer := catalogWriterFuncs{create: func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
+		called = true
+		return resourcecore.CatalogRecord{}, nil
+	}}
+	h := NewRouter(nil, nil, nil, nil, nil, writer)
+	oversized := strings.Repeat("a", maxRequestBodyBytes+1)
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(oversized)))
+	if r.Code != http.StatusBadRequest || called {
+		t.Fatalf("status/called = %d/%t, want %d/false", r.Code, called, http.StatusBadRequest)
+	}
+}
 
 func TestPublicEndpoints(t *testing.T) {
 	h := NewRouter(nil, nil, nil, nil, nil, nil)
