@@ -42,19 +42,29 @@ func serveCatalogDetail(w http.ResponseWriter, r *http.Request, reader CatalogRe
 }
 
 func catalogKey(kind, id string) (resourcecore.CatalogKey, bool) {
-	if len(id) == 0 || id[0] < '1' || id[0] > '9' {
-		return resourcecore.CatalogKey{}, false
-	}
-	for _, char := range id[1:] {
-		if char < '0' || char > '9' {
-			return resourcecore.CatalogKey{}, false
-		}
-	}
-	parsed, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
+	parsed, ok := positiveInt64(id)
+	if !ok {
 		return resourcecore.CatalogKey{}, false
 	}
 	return resourcecore.CatalogKey{Kind: resourcecore.KindCode(kind), ID: parsed}, true
+}
+
+// positiveInt64 parses a strict positive decimal integer (no leading zero,
+// no sign) into an int64, rejecting anything else.
+func positiveInt64(s string) (int64, bool) {
+	if len(s) == 0 || s[0] < '1' || s[0] > '9' {
+		return 0, false
+	}
+	for _, char := range s[1:] {
+		if char < '0' || char > '9' {
+			return 0, false
+		}
+	}
+	parsed, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func serveCatalogList(w http.ResponseWriter, r *http.Request, reader CatalogReader, kind string) {

@@ -98,6 +98,31 @@ paths:
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
   /v1/suppliers:
+    get:
+      summary: Search suppliers
+      description: Returns a page of suppliers matching the query.
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Supplier page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
     post:
       summary: Create a supplier
       description: Creates one supplier. Created suppliers are always active.
@@ -119,6 +144,25 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}:
+    get:
+      summary: Get a supplier
+      description: Returns one supplier by strict positive decimal identifier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Supplier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
   /v1/resources:
     post:
@@ -346,6 +390,14 @@ components:
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    SupplierPage:
+      type: object
+      additionalProperties: false
+      required: [suppliers, hasPrevious, hasNext]
+      properties:
+        suppliers: { type: array, items: { $ref: '#/components/schemas/Supplier' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
     ResourceScope:
       type: object
       additionalProperties: false

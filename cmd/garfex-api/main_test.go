@@ -53,7 +53,7 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestNewHTTPServerUsesRouterAndTimeouts(t *testing.T) {
-	s := newHTTPServer("127.0.0.1:8080", httpapiRouter(nil, nil, nil))
+	s := newHTTPServer("127.0.0.1:8080", httpapiRouter(nil, nil, nil, nil))
 	if s.Addr != "127.0.0.1:8080" || s.ReadHeaderTimeout == 0 || s.ReadTimeout == 0 || s.WriteTimeout == 0 || s.IdleTimeout == 0 {
 		t.Fatalf("server not configured: %#v", s)
 	}
@@ -158,6 +158,7 @@ type fakeApp struct {
 func (a *fakeApp) ResourceReader() httpapi.CatalogReader  { return nil }
 func (a *fakeApp) SupplierWriter() httpapi.SupplierWriter { return nil }
 func (a *fakeApp) ResourceWriter() httpapi.ResourceWriter { return nil }
+func (a *fakeApp) SupplierReader() httpapi.SupplierReader { return nil }
 
 func (a *fakeApp) Close() {
 	a.closes++

@@ -7,11 +7,13 @@ import (
 )
 
 // NewRouter returns the complete public HTTP surface for this unit.
-func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { route(w, r, reader, supplierWriter, resourceWriter) })
+func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		route(w, r, reader, supplierWriter, resourceWriter, supplierReader)
+	})
 }
 
-func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter) {
+func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	switch r.URL.Path {
@@ -20,7 +22,7 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 	case "/v1/catalog/descriptors":
 		serveCatalogDescriptors(w, r, reader)
 	case "/v1/suppliers":
-		serveCreateSupplier(w, r, supplierWriter)
+		serveSuppliers(w, r, supplierWriter, supplierReader)
 	case "/v1/resources":
 		serveCreateResource(w, r, resourceWriter)
 	case "/openapi.yaml":
@@ -36,8 +38,18 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveCatalogList(w, r, reader, kind)
 			return
 		}
+		if id, ok := supplierDetailPath(r.URL.Path); ok {
+			serveSupplierDetail(w, r, supplierReader, id)
+			return
+		}
 		writeText(w, http.StatusNotFound, "404 not found\n")
 	}
+}
+
+func supplierDetailPath(path string) (id string, ok bool) {
+	const prefix = "/v1/suppliers/"
+	id, ok = strings.CutPrefix(path, prefix)
+	return id, ok && id != "" && !strings.Contains(id, "/")
 }
 
 func catalogDetailPath(path string) (kind, id string, ok bool) {
