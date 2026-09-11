@@ -16,10 +16,14 @@ const (
 )
 
 // SupplierReader is the narrow Core capability required by the supplier
-// search and detail routes.
+// search and detail routes, including the nested branch and contact routes.
 type SupplierReader interface {
 	GetSupplier(context.Context, int64) (suppliercore.Supplier, error)
 	SearchSuppliers(context.Context, suppliercore.SupplierQuery) (suppliercore.SupplierPage, error)
+	ListBranches(context.Context, suppliercore.BranchQuery) (suppliercore.BranchPage, error)
+	GetBranch(context.Context, suppliercore.BranchKey) (suppliercore.Branch, error)
+	ListContacts(context.Context, suppliercore.ContactQuery) (suppliercore.ContactPage, error)
+	GetContact(context.Context, suppliercore.ContactKey) (suppliercore.Contact, error)
 }
 
 type supplierPageResponse struct {

@@ -42,6 +42,22 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveCatalogByKind(w, r, reader, catalogWriter, kind)
 			return
 		}
+		if supplierID, branchID, ok := supplierBranchDetailPath(r.URL.Path); ok {
+			serveBranchDetail(w, r, supplierReader, supplierID, branchID)
+			return
+		}
+		if supplierID, ok := supplierBranchListPath(r.URL.Path); ok {
+			serveBranchList(w, r, supplierReader, supplierID)
+			return
+		}
+		if supplierID, contactID, ok := supplierContactDetailPath(r.URL.Path); ok {
+			serveContactDetail(w, r, supplierReader, supplierID, contactID)
+			return
+		}
+		if supplierID, ok := supplierContactListPath(r.URL.Path); ok {
+			serveContactList(w, r, supplierReader, supplierID)
+			return
+		}
 		if id, ok := supplierDetailPath(r.URL.Path); ok {
 			serveSupplierDetail(w, r, supplierReader, supplierWriter, id)
 			return
@@ -96,6 +112,42 @@ func supplierDetailPath(path string) (id string, ok bool) {
 	const prefix = "/v1/suppliers/"
 	id, ok = strings.CutPrefix(path, prefix)
 	return id, ok && id != "" && !strings.Contains(id, "/")
+}
+
+func supplierBranchListPath(path string) (supplierID string, ok bool) {
+	return supplierNestedListPath(path, "/branches")
+}
+
+func supplierBranchDetailPath(path string) (supplierID, branchID string, ok bool) {
+	return supplierNestedDetailPath(path, "/branches/")
+}
+
+func supplierContactListPath(path string) (supplierID string, ok bool) {
+	return supplierNestedListPath(path, "/contacts")
+}
+
+func supplierContactDetailPath(path string) (supplierID, contactID string, ok bool) {
+	return supplierNestedDetailPath(path, "/contacts/")
+}
+
+func supplierNestedListPath(path, suffix string) (supplierID string, ok bool) {
+	const prefix = "/v1/suppliers/"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
+	supplierID, ok = strings.CutSuffix(remainder, suffix)
+	return supplierID, ok && supplierID != "" && !strings.Contains(supplierID, "/")
+}
+
+func supplierNestedDetailPath(path, separator string) (supplierID, childID string, ok bool) {
+	const prefix = "/v1/suppliers/"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", "", false
+	}
+	supplierID, childID, ok = strings.Cut(remainder, separator)
+	return supplierID, childID, ok && supplierID != "" && childID != "" && !strings.Contains(childID, "/")
 }
 
 func resourceDetailPath(path string) (classCode, identityV1 string, ok bool) {

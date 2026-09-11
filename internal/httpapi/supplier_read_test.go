@@ -13,8 +13,12 @@ import (
 )
 
 type supplierReaderFuncs struct {
-	get    func(context.Context, int64) (suppliercore.Supplier, error)
-	search func(context.Context, suppliercore.SupplierQuery) (suppliercore.SupplierPage, error)
+	get          func(context.Context, int64) (suppliercore.Supplier, error)
+	search       func(context.Context, suppliercore.SupplierQuery) (suppliercore.SupplierPage, error)
+	listBranches func(context.Context, suppliercore.BranchQuery) (suppliercore.BranchPage, error)
+	getBranch    func(context.Context, suppliercore.BranchKey) (suppliercore.Branch, error)
+	listContacts func(context.Context, suppliercore.ContactQuery) (suppliercore.ContactPage, error)
+	getContact   func(context.Context, suppliercore.ContactKey) (suppliercore.Contact, error)
 }
 
 func (f supplierReaderFuncs) GetSupplier(ctx context.Context, id int64) (suppliercore.Supplier, error) {
@@ -23,6 +27,22 @@ func (f supplierReaderFuncs) GetSupplier(ctx context.Context, id int64) (supplie
 
 func (f supplierReaderFuncs) SearchSuppliers(ctx context.Context, q suppliercore.SupplierQuery) (suppliercore.SupplierPage, error) {
 	return f.search(ctx, q)
+}
+
+func (f supplierReaderFuncs) ListBranches(ctx context.Context, q suppliercore.BranchQuery) (suppliercore.BranchPage, error) {
+	return f.listBranches(ctx, q)
+}
+
+func (f supplierReaderFuncs) GetBranch(ctx context.Context, key suppliercore.BranchKey) (suppliercore.Branch, error) {
+	return f.getBranch(ctx, key)
+}
+
+func (f supplierReaderFuncs) ListContacts(ctx context.Context, q suppliercore.ContactQuery) (suppliercore.ContactPage, error) {
+	return f.listContacts(ctx, q)
+}
+
+func (f supplierReaderFuncs) GetContact(ctx context.Context, key suppliercore.ContactKey) (suppliercore.Contact, error) {
+	return f.getContact(ctx, key)
 }
 
 func TestSupplierSearchPassesQueryAndMapsPage(t *testing.T) {

@@ -333,6 +333,115 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/branches:
+    get:
+      summary: List branches
+      description: Returns a page of branches belonging to one supplier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Branch page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/branches/{branchId}:
+    get:
+      summary: Get a branch
+      description: Returns one branch belonging to one supplier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: branchId
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Branch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/contacts:
+    get:
+      summary: List contacts
+      description: Returns a page of contacts belonging to one supplier, optionally narrowed to one branch.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: branchId
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Contact page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/contacts/{contactId}:
+    get:
+      summary: Get a contact
+      description: Returns one contact belonging to one supplier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: contactId
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/resources:
     get:
       summary: Search resources
@@ -738,6 +847,58 @@ components:
       required: [suppliers, hasPrevious, hasNext]
       properties:
         suppliers: { type: array, items: { $ref: '#/components/schemas/Supplier' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    Branch:
+      type: object
+      additionalProperties: false
+      required: [id, supplierId, name, reference, city, state, country, address, generalPhone, generalEmail, notes, active, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        name: { type: string }
+        reference: { type: string }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+        address: { type: string }
+        generalPhone: { type: string }
+        generalEmail: { type: string }
+        notes: { type: string }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BranchPage:
+      type: object
+      additionalProperties: false
+      required: [branches, hasPrevious, hasNext]
+      properties:
+        branches: { type: array, items: { $ref: '#/components/schemas/Branch' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    Contact:
+      type: object
+      additionalProperties: false
+      required: [id, supplierId, name, role, phone, mobile, email, notes, active, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        branchId: { type: string, description: Decimal integer identifier; omitted when the contact has no branch, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        name: { type: string }
+        role: { type: string }
+        phone: { type: string }
+        mobile: { type: string }
+        email: { type: string }
+        notes: { type: string }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ContactPage:
+      type: object
+      additionalProperties: false
+      required: [contacts, hasPrevious, hasNext]
+      properties:
+        contacts: { type: array, items: { $ref: '#/components/schemas/Contact' } }
         hasPrevious: { type: boolean }
         hasNext: { type: boolean }
     ResourceScope:
