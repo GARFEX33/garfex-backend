@@ -97,6 +97,29 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers:
+    post:
+      summary: Create a supplier
+      description: Creates one supplier. Created suppliers are always active.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierCreateRequest'
+      responses:
+        '201':
+          description: Created supplier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
   /openapi.yaml:
     get:
       summary: OpenAPI document
@@ -275,3 +298,28 @@ components:
       type: object
       required: [error]
       properties: { error: { type: string } }
+    SupplierCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor]
+      properties:
+        actor: { type: string }
+        tradeName: { type: string }
+        legalName: { type: string }
+        taxIdentifier: { type: string }
+        website: { type: string }
+        notes: { type: string }
+    Supplier:
+      type: object
+      additionalProperties: false
+      required: [id, tradeName, legalName, taxIdentifier, website, notes, active, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        tradeName: { type: string }
+        legalName: { type: string }
+        taxIdentifier: { type: string }
+        website: { type: string }
+        notes: { type: string }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
