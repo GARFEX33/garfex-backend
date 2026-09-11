@@ -11,10 +11,12 @@ import (
 )
 
 // ResourceWriter is the narrow Core capability required by the resource
-// create and update routes.
+// create, update, and lifecycle routes.
 type ResourceWriter interface {
 	CreateResource(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error)
 	UpdateResource(context.Context, resourcecore.ResourceUpdateRequest) (resourcecore.Resource, error)
+	DeactivateResource(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error)
+	ReactivateResource(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error)
 }
 
 type resourceCreateRequest struct {

@@ -14,8 +14,10 @@ import (
 )
 
 type resourceWriterFuncs struct {
-	create func(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error)
-	update func(context.Context, resourcecore.ResourceUpdateRequest) (resourcecore.Resource, error)
+	create     func(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error)
+	update     func(context.Context, resourcecore.ResourceUpdateRequest) (resourcecore.Resource, error)
+	deactivate func(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error)
+	reactivate func(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error)
 }
 
 func (f resourceWriterFuncs) CreateResource(ctx context.Context, req resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
@@ -24,6 +26,14 @@ func (f resourceWriterFuncs) CreateResource(ctx context.Context, req resourcecor
 
 func (f resourceWriterFuncs) UpdateResource(ctx context.Context, req resourcecore.ResourceUpdateRequest) (resourcecore.Resource, error) {
 	return f.update(ctx, req)
+}
+
+func (f resourceWriterFuncs) DeactivateResource(ctx context.Context, req resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error) {
+	return f.deactivate(ctx, req)
+}
+
+func (f resourceWriterFuncs) ReactivateResource(ctx context.Context, req resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error) {
+	return f.reactivate(ctx, req)
 }
 
 func TestCreateResourceMapsRequestAndResponse(t *testing.T) {

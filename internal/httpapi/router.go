@@ -42,6 +42,10 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveSupplierDetail(w, r, supplierReader, supplierWriter, id)
 			return
 		}
+		if id, action, ok := resourceLifecyclePath(r.URL.Path); ok {
+			serveResourceLifecycle(w, r, resourceWriter, id, action)
+			return
+		}
 		if classCode, identityV1, ok := resourceDetailPath(r.URL.Path); ok {
 			serveResourceDetail(w, r, resourceReader, classCode, identityV1)
 			return
@@ -61,6 +65,27 @@ func resourceIDPath(path string) (id string, ok bool) {
 	const prefix = "/v1/resources/"
 	id, ok = strings.CutPrefix(path, prefix)
 	return id, ok && id != "" && !strings.Contains(id, "/")
+}
+
+// resourceLifecyclePath matches the reserved deactivate/reactivate action
+// paths. It is checked before resourceDetailPath, since both share the
+// same two-segment shape; only these two literal action names are reserved.
+func resourceLifecyclePath(path string) (id, action string, ok bool) {
+	const prefix = "/v1/resources/"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", "", false
+	}
+	id, action, ok = strings.Cut(remainder, "/")
+	if !ok || id == "" {
+		return "", "", false
+	}
+	switch action {
+	case "deactivate", "reactivate":
+		return id, action, true
+	default:
+		return "", "", false
+	}
 }
 
 func supplierDetailPath(path string) (id string, ok bool) {

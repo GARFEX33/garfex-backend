@@ -297,6 +297,58 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{id}/deactivate:
+    post:
+      summary: Deactivate a resource
+      description: Deactivates one existing resource under optimistic concurrency.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceLifecycleRequest'
+      responses:
+        '200':
+          description: Deactivated resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{id}/reactivate:
+    post:
+      summary: Reactivate a resource
+      description: Reactivates one existing resource under optimistic concurrency.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceLifecycleRequest'
+      responses:
+        '200':
+          description: Reactivated resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
   /openapi.yaml:
     get:
       summary: OpenAPI document
@@ -553,6 +605,13 @@ components:
         scope: { $ref: '#/components/schemas/ResourceScope' }
         naturalUnit: { type: string }
         attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    ResourceLifecycleRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedRevision]
+      properties:
+        actor: { type: string }
+        expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
     Resource:
       type: object
       additionalProperties: false
