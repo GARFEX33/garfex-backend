@@ -7,11 +7,11 @@ import (
 )
 
 // NewRouter returns the complete public HTTP surface for this unit.
-func NewRouter(reader CatalogReader, supplierWriter SupplierWriter) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { route(w, r, reader, supplierWriter) })
+func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { route(w, r, reader, supplierWriter, resourceWriter) })
 }
 
-func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter) {
+func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	switch r.URL.Path {
@@ -21,6 +21,8 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 		serveCatalogDescriptors(w, r, reader)
 	case "/v1/suppliers":
 		serveCreateSupplier(w, r, supplierWriter)
+	case "/v1/resources":
+		serveCreateResource(w, r, resourceWriter)
 	case "/openapi.yaml":
 		serveGet(w, r, serveOpenAPI)
 	case "/docs":

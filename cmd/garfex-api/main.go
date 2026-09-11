@@ -31,6 +31,7 @@ type application interface {
 	Close()
 	ResourceReader() httpapi.CatalogReader
 	SupplierWriter() httpapi.SupplierWriter
+	ResourceWriter() httpapi.ResourceWriter
 }
 
 type coreApplication struct{ *garfex.Application }
@@ -41,6 +42,10 @@ func (a coreApplication) ResourceReader() httpapi.CatalogReader {
 
 func (a coreApplication) SupplierWriter() httpapi.SupplierWriter {
 	return a.Application.SupplierWriter
+}
+
+func (a coreApplication) ResourceWriter() httpapi.ResourceWriter {
+	return a.Application.ResourceWriter
 }
 
 type server interface {
@@ -115,7 +120,7 @@ func run(parent context.Context, config config, deps dependencies) error {
 	if err != nil {
 		return errors.New("API startup failed")
 	}
-	server := deps.newServer(config.listenAddr, httpapiRouter(app.ResourceReader(), app.SupplierWriter()))
+	server := deps.newServer(config.listenAddr, httpapiRouter(app.ResourceReader(), app.SupplierWriter(), app.ResourceWriter()))
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(listener) }()
 
@@ -163,8 +168,8 @@ func productionDependencies() dependencies {
 	}
 }
 
-func httpapiRouter(reader httpapi.CatalogReader, supplierWriter httpapi.SupplierWriter) http.Handler {
-	return httpapi.NewRouter(reader, supplierWriter)
+func httpapiRouter(reader httpapi.CatalogReader, supplierWriter httpapi.SupplierWriter, resourceWriter httpapi.ResourceWriter) http.Handler {
+	return httpapi.NewRouter(reader, supplierWriter, resourceWriter)
 }
 
 func newHTTPServer(addr string, handler http.Handler) *http.Server {

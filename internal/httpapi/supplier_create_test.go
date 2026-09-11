@@ -30,7 +30,7 @@ func TestCreateSupplierMapsRequestAndResponse(t *testing.T) {
 			TaxIdentifier: req.TaxIdentifier, Website: req.Website, Notes: req.Notes,
 			Active: true, CreatedAt: created, UpdatedAt: updated,
 		}, nil
-	}))
+	}), nil)
 	body := `{"actor":"tester","tradeName":"Acme","legalName":"Acme SA","taxIdentifier":"TAX1","website":"https://acme.test","notes":"n"}`
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers", strings.NewReader(body)))
@@ -65,7 +65,7 @@ func TestCreateSupplierRequiresPOST(t *testing.T) {
 	h := NewRouter(nil, supplierWriterFunc(func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
 		called = true
 		return suppliercore.Supplier{}, nil
-	}))
+	}), nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers", nil))
 	var got errorResponse
@@ -82,7 +82,7 @@ func TestCreateSupplierRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 	h := NewRouter(nil, supplierWriterFunc(func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
 		called = true
 		return suppliercore.Supplier{}, nil
-	}))
+	}), nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers", strings.NewReader("{not json")))
 	var got errorResponse
@@ -95,7 +95,7 @@ func TestCreateSupplierRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestCreateSupplierSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil)
+	h := NewRouter(nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers", strings.NewReader(`{"actor":"tester"}`)))
 	var got errorResponse
@@ -122,7 +122,7 @@ func TestCreateSupplierMapsAndSanitizesCoreErrors(t *testing.T) {
 		t.Run(string(tc.code), func(t *testing.T) {
 			h := NewRouter(nil, supplierWriterFunc(func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
 				return suppliercore.Supplier{}, suppliercore.NewError(tc.code, "postgres://user:secret@host/db")
-			}))
+			}), nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers", strings.NewReader(`{"actor":"tester"}`)))
 			var got errorResponse

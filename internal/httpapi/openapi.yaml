@@ -120,6 +120,29 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources:
+    post:
+      summary: Create a resource
+      description: Creates one resource under a class/family/type scope.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceCreateRequest'
+      responses:
+        '201':
+          description: Created resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
   /openapi.yaml:
     get:
       summary: OpenAPI document
@@ -323,3 +346,39 @@ components:
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ResourceScope:
+      type: object
+      additionalProperties: false
+      required: [classCode, familyCode, typeCode]
+      properties:
+        classCode: { type: string }
+        familyCode: { type: string }
+        typeCode: { type: string }
+    ResourceAttribute:
+      type: object
+      additionalProperties: false
+      required: [code, value]
+      properties:
+        code: { type: string }
+        value: { $ref: '#/components/schemas/CatalogValue' }
+    ResourceCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, scope, naturalUnit, attributes]
+      properties:
+        actor: { type: string }
+        scope: { $ref: '#/components/schemas/ResourceScope' }
+        naturalUnit: { type: string }
+        attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    Resource:
+      type: object
+      additionalProperties: false
+      required: [id, identityV1, scope, naturalUnit, active, revision, attributes]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        identityV1: { type: string }
+        scope: { $ref: '#/components/schemas/ResourceScope' }
+        naturalUnit: { type: string }
+        active: { type: boolean }
+        revision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
