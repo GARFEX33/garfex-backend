@@ -33,7 +33,7 @@ func TestResourceSearchPassesQueryAndMapsPage(t *testing.T) {
 			HasPrevious: true, HasNext: true,
 		}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, reader)
+	h := NewRouter(nil, nil, nil, nil, reader, nil)
 
 	for _, tc := range []struct {
 		path string
@@ -71,7 +71,7 @@ func TestResourceSearchRejectsInvalidParametersWithoutCallingCore(t *testing.T) 
 		called = true
 		return resourcecore.ResourcePage{}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, reader)
+	h := NewRouter(nil, nil, nil, nil, reader, nil)
 	for _, query := range []string{"limit=0", "limit=51", "limit=bad", "offset=-1", "offset=bad", "scope=RETIRED"} {
 		t.Run(query, func(t *testing.T) {
 			called = false
@@ -89,7 +89,7 @@ func TestResourceSearchRejectsInvalidParametersWithoutCallingCore(t *testing.T) 
 }
 
 func TestResourceSearchSanitizesNilReader(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/resources", nil))
 	var got errorResponse
@@ -122,7 +122,7 @@ func TestResourceDetailMapsRecordAndSanitizesFailures(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewRouter(nil, nil, nil, nil, tc.reader)
+			h := NewRouter(nil, nil, nil, nil, tc.reader, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, tc.path, nil))
 			if r.Code != tc.status {
@@ -139,7 +139,7 @@ func TestResourceDetailMapsRecordAndSanitizesFailures(t *testing.T) {
 }
 
 func TestResourceDetailRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, resourceReaderFuncs{})
+	h := NewRouter(nil, nil, nil, nil, resourceReaderFuncs{}, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources/MATERIAL/abc", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {

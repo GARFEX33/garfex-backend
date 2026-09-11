@@ -67,6 +67,18 @@ func positiveInt64(s string) (int64, bool) {
 	return parsed, true
 }
 
+func serveCatalogByKind(w http.ResponseWriter, r *http.Request, reader CatalogReader, writer CatalogWriter, kind string) {
+	switch r.Method {
+	case http.MethodGet:
+		serveCatalogList(w, r, reader, kind)
+	case http.MethodPost:
+		serveCreateCatalog(w, r, writer, kind)
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+	}
+}
+
 func serveCatalogList(w http.ResponseWriter, r *http.Request, reader CatalogReader, kind string) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)

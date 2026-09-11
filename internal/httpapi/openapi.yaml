@@ -71,6 +71,33 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
+    post:
+      summary: Create a catalog record
+      description: Creates one catalog record of the requested kind.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogCreateRequest'
+      responses:
+        '201':
+          description: Created catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/catalog/{kind}/{id}:
     get:
       summary: Get a catalog record
@@ -493,6 +520,15 @@ components:
       additionalProperties: false
       required: [kind]
       properties: { kind: { type: string, enum: [NOT_APPLICABLE] } }
+    CatalogCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, values]
+      properties:
+        actor: { type: string }
+        active: { type: boolean }
+        values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
     CatalogDescriptorsResponse:
       type: object
       required: [descriptors]

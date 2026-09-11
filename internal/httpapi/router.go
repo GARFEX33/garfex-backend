@@ -7,13 +7,13 @@ import (
 )
 
 // NewRouter returns the complete public HTTP surface for this unit.
-func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader) http.Handler {
+func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader, catalogWriter CatalogWriter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		route(w, r, reader, supplierWriter, resourceWriter, supplierReader, resourceReader)
+		route(w, r, reader, supplierWriter, resourceWriter, supplierReader, resourceReader, catalogWriter)
 	})
 }
 
-func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader) {
+func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader, catalogWriter CatalogWriter) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	switch r.URL.Path {
@@ -35,7 +35,7 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			return
 		}
 		if kind, ok := catalogListKind(r.URL.Path); ok {
-			serveCatalogList(w, r, reader, kind)
+			serveCatalogByKind(w, r, reader, catalogWriter, kind)
 			return
 		}
 		if id, ok := supplierDetailPath(r.URL.Path); ok {

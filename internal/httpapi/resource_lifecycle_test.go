@@ -30,7 +30,7 @@ func TestResourceLifecycleMapsRequestAndResponse(t *testing.T) {
 				captured = req
 				return resourcecore.Resource{ID: req.ID, Revision: req.ExpectedRevision + 1}, nil
 			})
-			h := NewRouter(nil, nil, writer, nil, nil)
+			h := NewRouter(nil, nil, writer, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources/42/"+tc.action, strings.NewReader(`{"actor":"tester","expectedRevision":"3"}`)))
 
@@ -61,7 +61,7 @@ func TestResourceLifecycleRejectsInvalidIDWithoutCallingCore(t *testing.T) {
 		called = true
 		return resourcecore.Resource{}, nil
 	}}
-	h := NewRouter(nil, nil, writer, nil, nil)
+	h := NewRouter(nil, nil, writer, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources/0/deactivate", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 	var got errorResponse
@@ -88,7 +88,7 @@ func TestResourceLifecycleRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 				called = true
 				return resourcecore.Resource{}, nil
 			}}
-			h := NewRouter(nil, nil, writer, nil, nil)
+			h := NewRouter(nil, nil, writer, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources/1/deactivate", strings.NewReader(tc.body)))
 			var got errorResponse
@@ -103,7 +103,7 @@ func TestResourceLifecycleRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestResourceLifecycleSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources/1/deactivate", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 	var got errorResponse
@@ -129,7 +129,7 @@ func TestResourceLifecycleMapsAndSanitizesCoreErrors(t *testing.T) {
 			writer := resourceWriterFuncs{deactivate: func(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error) {
 				return resourcecore.Resource{}, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
 			}}
-			h := NewRouter(nil, nil, writer, nil, nil)
+			h := NewRouter(nil, nil, writer, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources/1/deactivate", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 			var got errorResponse
@@ -144,7 +144,7 @@ func TestResourceLifecycleMapsAndSanitizesCoreErrors(t *testing.T) {
 }
 
 func TestResourceLifecycleRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, resourceWriterFuncs{}, nil, nil)
+	h := NewRouter(nil, nil, resourceWriterFuncs{}, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/resources/1/deactivate", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodPost {
@@ -171,7 +171,7 @@ func TestResourceLifecycleRequestOpenAPIShape(t *testing.T) {
 func TestResourceLifecyclePathRejectsUnknownAction(t *testing.T) {
 	// An unreserved second segment falls through to the natural-key detail
 	// route, which only accepts GET.
-	h := NewRouter(nil, nil, resourceWriterFuncs{}, nil, nil)
+	h := NewRouter(nil, nil, resourceWriterFuncs{}, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources/1/archive", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {

@@ -23,7 +23,7 @@ func TestUpdateSupplierMapsRequestAndResponse(t *testing.T) {
 			Active: true, CreatedAt: created, UpdatedAt: created,
 		}, nil
 	}}
-	h := NewRouter(nil, writer, nil, nil, nil)
+	h := NewRouter(nil, writer, nil, nil, nil, nil)
 	body := `{"actor":"tester","tradeName":"Acme2","legalName":"Acme SA","taxIdentifier":"TAX2","website":"https://acme.test","notes":"n2"}`
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/suppliers/42", strings.NewReader(body)))
@@ -54,7 +54,7 @@ func TestUpdateSupplierRejectsInvalidIDWithoutCallingCore(t *testing.T) {
 		called = true
 		return suppliercore.Supplier{}, nil
 	}}
-	h := NewRouter(nil, writer, nil, nil, nil)
+	h := NewRouter(nil, writer, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/suppliers/0", strings.NewReader(`{"actor":"tester"}`)))
 	var got errorResponse
@@ -72,7 +72,7 @@ func TestUpdateSupplierRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 		called = true
 		return suppliercore.Supplier{}, nil
 	}}
-	h := NewRouter(nil, writer, nil, nil, nil)
+	h := NewRouter(nil, writer, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/suppliers/1", strings.NewReader("{not json")))
 	var got errorResponse
@@ -85,7 +85,7 @@ func TestUpdateSupplierRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestUpdateSupplierSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/suppliers/1", strings.NewReader(`{"actor":"tester"}`)))
 	var got errorResponse
@@ -121,7 +121,7 @@ func TestUpdateSupplierMapsAndSanitizesCoreErrors(t *testing.T) {
 			writer := supplierWriterFuncs{update: func(context.Context, suppliercore.SupplierUpdateRequest) (suppliercore.Supplier, error) {
 				return suppliercore.Supplier{}, suppliercore.NewError(tc.code, "postgres://user:secret@host/db")
 			}}
-			h := NewRouter(nil, writer, nil, nil, nil)
+			h := NewRouter(nil, writer, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/suppliers/1", strings.NewReader(`{"actor":"tester"}`)))
 			var got errorResponse
