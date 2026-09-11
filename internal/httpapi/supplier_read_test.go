@@ -142,7 +142,7 @@ func TestSupplierDetailRejectsWrongMethod(t *testing.T) {
 	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers/1", nil))
-	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {
+	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != "GET, PUT" {
 		t.Fatalf("status/allow = %d/%q", r.Code, r.Header().Get("Allow"))
 	}
 }

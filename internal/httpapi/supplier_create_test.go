@@ -13,24 +13,31 @@ import (
 	"github.com/GARFEX33/garfex-costos-unitarios/suppliercore"
 )
 
-type supplierWriterFunc func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error)
+type supplierWriterFuncs struct {
+	create func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error)
+	update func(context.Context, suppliercore.SupplierUpdateRequest) (suppliercore.Supplier, error)
+}
 
-func (f supplierWriterFunc) CreateSupplier(ctx context.Context, req suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
-	return f(ctx, req)
+func (f supplierWriterFuncs) CreateSupplier(ctx context.Context, req suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
+	return f.create(ctx, req)
+}
+
+func (f supplierWriterFuncs) UpdateSupplier(ctx context.Context, req suppliercore.SupplierUpdateRequest) (suppliercore.Supplier, error) {
+	return f.update(ctx, req)
 }
 
 func TestCreateSupplierMapsRequestAndResponse(t *testing.T) {
 	var captured suppliercore.SupplierWriteRequest
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	updated := created.Add(time.Hour)
-	h := NewRouter(nil, supplierWriterFunc(func(_ context.Context, req suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
+	h := NewRouter(nil, supplierWriterFuncs{create: func(_ context.Context, req suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
 		captured = req
 		return suppliercore.Supplier{
 			ID: 9007199254740993, TradeName: req.TradeName, LegalName: req.LegalName,
 			TaxIdentifier: req.TaxIdentifier, Website: req.Website, Notes: req.Notes,
 			Active: true, CreatedAt: created, UpdatedAt: updated,
 		}, nil
-	}), nil, nil, nil)
+	}}, nil, nil, nil)
 	body := `{"actor":"tester","tradeName":"Acme","legalName":"Acme SA","taxIdentifier":"TAX1","website":"https://acme.test","notes":"n"}`
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers", strings.NewReader(body)))
@@ -62,10 +69,10 @@ func TestCreateSupplierMapsRequestAndResponse(t *testing.T) {
 
 func TestSuppliersRejectsUnsupportedMethod(t *testing.T) {
 	called := false
-	h := NewRouter(nil, supplierWriterFunc(func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
+	h := NewRouter(nil, supplierWriterFuncs{create: func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
 		called = true
 		return suppliercore.Supplier{}, nil
-	}), nil, nil, nil)
+	}}, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPatch, "/v1/suppliers", nil))
 	var got errorResponse
@@ -79,10 +86,10 @@ func TestSuppliersRejectsUnsupportedMethod(t *testing.T) {
 
 func TestCreateSupplierRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 	called := false
-	h := NewRouter(nil, supplierWriterFunc(func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
+	h := NewRouter(nil, supplierWriterFuncs{create: func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
 		called = true
 		return suppliercore.Supplier{}, nil
-	}), nil, nil, nil)
+	}}, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers", strings.NewReader("{not json")))
 	var got errorResponse
@@ -120,9 +127,9 @@ func TestCreateSupplierMapsAndSanitizesCoreErrors(t *testing.T) {
 		{suppliercore.Internal, 500, "internal server error"},
 	} {
 		t.Run(string(tc.code), func(t *testing.T) {
-			h := NewRouter(nil, supplierWriterFunc(func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
+			h := NewRouter(nil, supplierWriterFuncs{create: func(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error) {
 				return suppliercore.Supplier{}, suppliercore.NewError(tc.code, "postgres://user:secret@host/db")
-			}), nil, nil, nil)
+			}}, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers", strings.NewReader(`{"actor":"tester"}`)))
 			var got errorResponse

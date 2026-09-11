@@ -11,9 +11,10 @@ import (
 )
 
 // SupplierWriter is the narrow Core capability required by the supplier
-// create route.
+// create and update routes.
 type SupplierWriter interface {
 	CreateSupplier(context.Context, suppliercore.SupplierWriteRequest) (suppliercore.Supplier, error)
+	UpdateSupplier(context.Context, suppliercore.SupplierUpdateRequest) (suppliercore.Supplier, error)
 }
 
 type supplierCreateRequest struct {

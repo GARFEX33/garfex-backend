@@ -39,7 +39,7 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			return
 		}
 		if id, ok := supplierDetailPath(r.URL.Path); ok {
-			serveSupplierDetail(w, r, supplierReader, id)
+			serveSupplierDetail(w, r, supplierReader, supplierWriter, id)
 			return
 		}
 		if classCode, identityV1, ok := resourceDetailPath(r.URL.Path); ok {

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -100,12 +101,19 @@ func mapSupplierPage(page suppliercore.SupplierPage) supplierPageResponse {
 	return supplierPageResponse{Suppliers: suppliers, HasPrevious: page.HasPrevious, HasNext: page.HasNext}
 }
 
-func serveSupplierDetail(w http.ResponseWriter, r *http.Request, reader SupplierReader, id string) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
+func serveSupplierDetail(w http.ResponseWriter, r *http.Request, reader SupplierReader, writer SupplierWriter, id string) {
+	switch r.Method {
+	case http.MethodGet:
+		serveSupplierGet(w, r, reader, id)
+	case http.MethodPut:
+		serveSupplierUpdate(w, r, writer, id)
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPut)
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
 	}
+}
+
+func serveSupplierGet(w http.ResponseWriter, r *http.Request, reader SupplierReader, id string) {
 	supplierID, ok := positiveInt64(id)
 	if !ok {
 		writeSupplierError(w, suppliercore.NewError(suppliercore.InvalidArgument, "invalid supplier id"))
@@ -116,6 +124,37 @@ func serveSupplierDetail(w http.ResponseWriter, r *http.Request, reader Supplier
 		return
 	}
 	supplier, err := reader.GetSupplier(r.Context(), supplierID)
+	if err != nil {
+		writeSupplierError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, mapSupplier(supplier))
+}
+
+func serveSupplierUpdate(w http.ResponseWriter, r *http.Request, writer SupplierWriter, id string) {
+	supplierID, ok := positiveInt64(id)
+	if !ok {
+		writeSupplierError(w, suppliercore.NewError(suppliercore.InvalidArgument, "invalid supplier id"))
+		return
+	}
+	if writer == nil {
+		writeSupplierError(w, suppliercore.NewError(suppliercore.Internal, "supplier writer unavailable"))
+		return
+	}
+	var body supplierCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeSupplierError(w, suppliercore.NewError(suppliercore.InvalidArgument, "invalid request body"))
+		return
+	}
+	supplier, err := writer.UpdateSupplier(r.Context(), suppliercore.SupplierUpdateRequest{
+		Actor:         body.Actor,
+		ID:            supplierID,
+		TradeName:     body.TradeName,
+		LegalName:     body.LegalName,
+		TaxIdentifier: body.TaxIdentifier,
+		Website:       body.Website,
+		Notes:         body.Notes,
+	})
 	if err != nil {
 		writeSupplierError(w, err)
 		return

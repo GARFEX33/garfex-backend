@@ -164,6 +164,32 @@ paths:
         '400': { $ref: '#/components/responses/InvalidArgument' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
+    put:
+      summary: Update a supplier
+      description: Fully replaces one existing supplier's content. A field left empty clears the stored value.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierUpdateRequest'
+      responses:
+        '200':
+          description: Updated supplier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/resources:
     get:
       summary: Search resources
@@ -423,6 +449,17 @@ components:
       required: [error]
       properties: { error: { type: string } }
     SupplierCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor]
+      properties:
+        actor: { type: string }
+        tradeName: { type: string }
+        legalName: { type: string }
+        taxIdentifier: { type: string }
+        website: { type: string }
+        notes: { type: string }
+    SupplierUpdateRequest:
       type: object
       additionalProperties: false
       required: [actor]
