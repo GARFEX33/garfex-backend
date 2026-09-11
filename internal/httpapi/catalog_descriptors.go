@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
@@ -144,6 +145,7 @@ func enumValuesOrEmpty(values []resourcecore.EnumValue) []enumValueResponse {
 
 func writeCatalogError(w http.ResponseWriter, err error) {
 	status, message := catalogError(err)
+	log.Printf("catalog error: code=%s status=%d message=%q", resourcecore.Code(err), status, err.Error())
 	writeJSON(w, status, errorResponse{Error: message})
 }
 

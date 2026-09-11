@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -84,6 +85,7 @@ func mapSupplier(s suppliercore.Supplier) supplierResponse {
 
 func writeSupplierError(w http.ResponseWriter, err error) {
 	status, message := supplierError(err)
+	log.Printf("supplier error: code=%s status=%d message=%q", suppliercore.Code(err), status, err.Error())
 	writeJSON(w, status, errorResponse{Error: message})
 }
 
