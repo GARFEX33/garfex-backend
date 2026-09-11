@@ -19,8 +19,10 @@ func serveCatalogDetail(w http.ResponseWriter, r *http.Request, reader CatalogRe
 		serveCatalogGet(w, r, reader, kind, id)
 	case http.MethodPut:
 		serveCatalogUpdate(w, r, writer, kind, id)
+	case http.MethodDelete:
+		serveCatalogHardDelete(w, r, writer, kind, id)
 	default:
-		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPut)
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPut+", "+http.MethodDelete)
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
 	}
 }

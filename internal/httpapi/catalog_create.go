@@ -15,6 +15,7 @@ type CatalogWriter interface {
 	UpdateCatalog(context.Context, resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error)
 	DeactivateCatalog(context.Context, resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error)
 	ReactivateCatalog(context.Context, resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error)
+	HardDeleteCatalog(context.Context, resourcecore.CatalogLifecycleRequest) error
 }
 
 type catalogCreateRequest struct {

@@ -18,6 +18,7 @@ type catalogWriterFuncs struct {
 	update     func(context.Context, resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error)
 	deactivate func(context.Context, resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error)
 	reactivate func(context.Context, resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error)
+	hardDelete func(context.Context, resourcecore.CatalogLifecycleRequest) error
 }
 
 func (f catalogWriterFuncs) CreateCatalog(ctx context.Context, req resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
@@ -30,6 +31,10 @@ func (f catalogWriterFuncs) UpdateCatalog(ctx context.Context, req resourcecore.
 
 func (f catalogWriterFuncs) DeactivateCatalog(ctx context.Context, req resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error) {
 	return f.deactivate(ctx, req)
+}
+
+func (f catalogWriterFuncs) HardDeleteCatalog(ctx context.Context, req resourcecore.CatalogLifecycleRequest) error {
+	return f.hardDelete(ctx, req)
 }
 
 func (f catalogWriterFuncs) ReactivateCatalog(ctx context.Context, req resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error) {

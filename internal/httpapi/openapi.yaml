@@ -155,6 +155,31 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
+    delete:
+      summary: Permanently delete a catalog record
+      description: Irreversibly removes one existing catalog record under optimistic concurrency. Unlike deactivate, there is no idempotent no-op target and no record left to read back.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogLifecycleRequest'
+      responses:
+        '204':
+          description: Catalog record permanently deleted
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/catalog/{kind}/{id}/deactivate:
     post:
       summary: Deactivate a catalog record
