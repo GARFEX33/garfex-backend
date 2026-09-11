@@ -1,0 +1,277 @@
+openapi: 3.0.3
+info:
+  title: Garfex API
+  version: 0.1.0
+  description: Public operational, API-reference, catalog-descriptor, catalog-list, and catalog-detail endpoints.
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Reports that this HTTP process is running. It does not check database or dependency readiness.
+      responses:
+        '200':
+          description: Process is live
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /v1/catalog/descriptors:
+    get:
+      summary: List catalog descriptors
+      description: Returns Core's dynamic catalog metadata. It does not list catalog records.
+      responses:
+        '200':
+          description: Catalog descriptors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogDescriptorsResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/{kind}:
+    get:
+      summary: List catalog records
+      description: Returns a page of catalog records for one kind.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Catalog records page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/{kind}/{id}:
+    get:
+      summary: Get a catalog record
+      description: Returns one catalog record by kind and strict positive decimal identifier.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /openapi.yaml:
+    get:
+      summary: OpenAPI document
+      responses:
+        '200':
+          description: Embedded OpenAPI YAML document
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /docs:
+    get:
+      summary: API reference
+      description: Serves a Scalar API-reference page for this OpenAPI document.
+      responses:
+        '200':
+          description: HTML API-reference page
+          content:
+            text/html:
+              schema:
+                type: string
+components:
+  responses:
+    InvalidArgument: { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Requested resource was not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Conflict: { description: Request conflicts with current state, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unprocessable: { description: Request failed validation, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unavailable: { description: Service is temporarily unavailable, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Internal: { description: Internal server error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  schemas:
+    CatalogRecord:
+      type: object
+      required: [kind, id, revision, active, values, rules]
+      properties:
+        kind: { type: string }
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        revision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        active: { type: boolean }
+        values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
+    CatalogPage:
+      type: object
+      required: [records, hasPrevious, hasNext]
+      properties:
+        records: { type: array, items: { $ref: '#/components/schemas/CatalogRecord' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    ApplicabilityRule:
+      type: object
+      required: [attributeCode, equals, mode, identityParticipates, notApplicable, active]
+      properties:
+        attributeCode: { type: string }
+        equals: { $ref: '#/components/schemas/CatalogValue' }
+        mode: { type: string }
+        identityParticipates: { type: boolean }
+        notApplicable: { type: boolean }
+        active: { type: boolean }
+    CatalogValue:
+      oneOf:
+        - { $ref: '#/components/schemas/CatalogTextValue' }
+        - { $ref: '#/components/schemas/CatalogCodeValue' }
+        - { $ref: '#/components/schemas/CatalogBooleanValue' }
+        - { $ref: '#/components/schemas/CatalogIntegerValue' }
+        - { $ref: '#/components/schemas/CatalogDecimalValue' }
+        - { $ref: '#/components/schemas/CatalogQuantityValue' }
+        - { $ref: '#/components/schemas/CatalogReferenceValue' }
+        - { $ref: '#/components/schemas/CatalogEnumValue' }
+        - { $ref: '#/components/schemas/CatalogStringListValue' }
+        - { $ref: '#/components/schemas/CatalogControlledOptionValue' }
+        - { $ref: '#/components/schemas/CatalogNotApplicableValue' }
+      discriminator:
+        propertyName: kind
+        mapping:
+          TEXT: '#/components/schemas/CatalogTextValue'
+          CODE: '#/components/schemas/CatalogCodeValue'
+          BOOLEAN: '#/components/schemas/CatalogBooleanValue'
+          INTEGER: '#/components/schemas/CatalogIntegerValue'
+          DECIMAL: '#/components/schemas/CatalogDecimalValue'
+          QUANTITY: '#/components/schemas/CatalogQuantityValue'
+          REFERENCE: '#/components/schemas/CatalogReferenceValue'
+          ENUM: '#/components/schemas/CatalogEnumValue'
+          STRING_LIST: '#/components/schemas/CatalogStringListValue'
+          CONTROLLED_OPTION: '#/components/schemas/CatalogControlledOptionValue'
+          NOT_APPLICABLE: '#/components/schemas/CatalogNotApplicableValue'
+    CatalogTextValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [TEXT] }, value: { type: string } }
+    CatalogCodeValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [CODE] }, value: { type: string } }
+    CatalogBooleanValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [BOOLEAN] }, value: { type: boolean } }
+    CatalogIntegerValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [INTEGER] }, value: { type: string, description: Decimal integer, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } } }
+    CatalogDecimalValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [DECIMAL] }, value: { type: string, pattern: '^(?:0|-?(?:[1-9][0-9]*|(?:0|[1-9][0-9]*)\.[0-9]*[1-9]))$', not: { pattern: '[\r\n]' } } }
+    CatalogQuantityValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value, unitCode]
+      properties: { kind: { type: string, enum: [QUANTITY] }, value: { type: string, pattern: '^(?:0|-?(?:[1-9][0-9]*|(?:0|[1-9][0-9]*)\.[0-9]*[1-9]))$', not: { pattern: '[\r\n]' } }, unitCode: { type: string } }
+    CatalogReferenceValue:
+      type: object
+      additionalProperties: false
+      required: [kind, reference]
+      properties: { kind: { type: string, enum: [REFERENCE] }, reference: { $ref: '#/components/schemas/CatalogReference' } }
+    CatalogReference:
+      type: object
+      additionalProperties: false
+      required: [kind, id, code]
+      properties: { kind: { type: string }, id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }, code: { type: string } }
+    CatalogEnumValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [ENUM] }, value: { type: string } }
+    CatalogStringListValue:
+      type: object
+      additionalProperties: false
+      required: [kind, values]
+      properties: { kind: { type: string, enum: [STRING_LIST] }, values: { type: array, items: { type: string } } }
+    CatalogControlledOptionValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [CONTROLLED_OPTION] }, value: { type: string } }
+    CatalogNotApplicableValue:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties: { kind: { type: string, enum: [NOT_APPLICABLE] } }
+    CatalogDescriptorsResponse:
+      type: object
+      required: [descriptors]
+      properties: { descriptors: { type: array, items: { $ref: '#/components/schemas/CatalogDescriptor' } } }
+    CatalogDescriptor:
+      type: object
+      required: [kind, singular, plural, fields, identityFields, parentKind, parentField]
+      properties:
+        kind: { type: string }
+        singular: { type: string }
+        plural: { type: string }
+        fields: { type: array, items: { $ref: '#/components/schemas/FieldDescriptor' } }
+        identityFields: { type: array, items: { type: string } }
+        parentKind: { type: string }
+        parentField: { type: string }
+    FieldDescriptor:
+      type: object
+      required: [name, label, kind, required, refKind, refScopedBy, enumValues]
+      properties:
+        name: { type: string }
+        label: { type: string }
+        kind: { type: string }
+        required: { type: boolean }
+        refKind: { type: string }
+        refScopedBy: { type: array, items: { type: string } }
+        enumValues: { type: array, items: { $ref: '#/components/schemas/EnumValue' } }
+    EnumValue:
+      type: object
+      required: [value, label]
+      properties: { value: { type: string }, label: { type: string } }
+    Error:
+      type: object
+      required: [error]
+      properties: { error: { type: string } }
