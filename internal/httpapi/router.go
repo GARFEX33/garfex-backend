@@ -31,7 +31,7 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 		serveGet(w, r, serveDocs)
 	default:
 		if kind, id, ok := catalogDetailPath(r.URL.Path); ok {
-			serveCatalogDetail(w, r, reader, kind, id)
+			serveCatalogDetail(w, r, reader, catalogWriter, kind, id)
 			return
 		}
 		if kind, ok := catalogListKind(r.URL.Path); ok {

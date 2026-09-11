@@ -13,12 +13,19 @@ const (
 	maximumCatalogLimit = 50
 )
 
-func serveCatalogDetail(w http.ResponseWriter, r *http.Request, reader CatalogReader, kind, id string) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
+func serveCatalogDetail(w http.ResponseWriter, r *http.Request, reader CatalogReader, writer CatalogWriter, kind, id string) {
+	switch r.Method {
+	case http.MethodGet:
+		serveCatalogGet(w, r, reader, kind, id)
+	case http.MethodPut:
+		serveCatalogUpdate(w, r, writer, kind, id)
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPut)
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
 	}
+}
+
+func serveCatalogGet(w http.ResponseWriter, r *http.Request, reader CatalogReader, kind, id string) {
 	key, ok := catalogKey(kind, id)
 	if !ok {
 		writeCatalogError(w, resourcecore.NewError(resourcecore.InvalidArgument, "invalid catalog id"))

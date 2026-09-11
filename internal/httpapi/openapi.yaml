@@ -124,6 +124,37 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
+    put:
+      summary: Update a catalog record
+      description: Replaces one existing catalog record's content under optimistic concurrency.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogUpdateRequest'
+      responses:
+        '200':
+          description: Updated catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/suppliers:
     get:
       summary: Search suppliers
@@ -526,6 +557,16 @@ components:
       required: [actor, values]
       properties:
         actor: { type: string }
+        active: { type: boolean }
+        values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
+    CatalogUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedRevision, values]
+      properties:
+        actor: { type: string }
+        expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
         active: { type: boolean }
         values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
         rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }

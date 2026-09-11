@@ -373,7 +373,7 @@ func TestCatalogDetailRequiresGETAndRejectsEmptyOrExtraSegments(t *testing.T) {
 			if r.Code != tc.status || r.Body.String() != tc.body {
 				t.Fatalf("status/body = %d/%q", r.Code, r.Body.String())
 			}
-			if tc.status == http.StatusMethodNotAllowed && r.Header().Get("Allow") != http.MethodGet {
+			if tc.status == http.StatusMethodNotAllowed && r.Header().Get("Allow") != "GET, PUT" {
 				t.Fatalf("Allow = %q", r.Header().Get("Allow"))
 			}
 		})

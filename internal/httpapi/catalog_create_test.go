@@ -13,21 +13,28 @@ import (
 	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
 )
 
-type catalogWriterFunc func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error)
+type catalogWriterFuncs struct {
+	create func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error)
+	update func(context.Context, resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error)
+}
 
-func (f catalogWriterFunc) CreateCatalog(ctx context.Context, req resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
-	return f(ctx, req)
+func (f catalogWriterFuncs) CreateCatalog(ctx context.Context, req resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
+	return f.create(ctx, req)
+}
+
+func (f catalogWriterFuncs) UpdateCatalog(ctx context.Context, req resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error) {
+	return f.update(ctx, req)
 }
 
 func TestCreateCatalogMapsRequestAndResponse(t *testing.T) {
 	var captured resourcecore.CatalogWriteRequest
-	writer := catalogWriterFunc(func(_ context.Context, req resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
+	writer := catalogWriterFuncs{create: func(_ context.Context, req resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
 		captured = req
 		return resourcecore.CatalogRecord{
 			Kind: req.Kind, ID: 9007199254740993, Revision: 1, Active: req.Active,
 			Values: req.Values, Rules: req.Rules,
 		}, nil
-	})
+	}}
 	h := NewRouter(nil, nil, nil, nil, nil, writer)
 	body := `{
 		"actor": "tester",
@@ -72,10 +79,10 @@ func TestCreateCatalogPreservesNilVersusEmptyRules(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var captured resourcecore.CatalogWriteRequest
-			writer := catalogWriterFunc(func(_ context.Context, req resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
+			writer := catalogWriterFuncs{create: func(_ context.Context, req resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
 				captured = req
 				return resourcecore.CatalogRecord{Kind: req.Kind, ID: 1, Revision: 1, Values: req.Values, Rules: req.Rules}, nil
-			})
+			}}
 			h := NewRouter(nil, nil, nil, nil, nil, writer)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(tc.body)))
@@ -100,10 +107,10 @@ func TestCreateCatalogRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false
-			writer := catalogWriterFunc(func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
+			writer := catalogWriterFuncs{create: func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
 				called = true
 				return resourcecore.CatalogRecord{}, nil
-			})
+			}}
 			h := NewRouter(nil, nil, nil, nil, nil, writer)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(tc.body)))
@@ -142,9 +149,9 @@ func TestCreateCatalogMapsAndSanitizesCoreErrors(t *testing.T) {
 		{resourcecore.InvalidCatalog, 422, "validation failed"},
 	} {
 		t.Run(string(tc.code), func(t *testing.T) {
-			writer := catalogWriterFunc(func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
+			writer := catalogWriterFuncs{create: func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
 				return resourcecore.CatalogRecord{}, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
-			})
+			}}
 			h := NewRouter(nil, nil, nil, nil, nil, writer)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(`{"actor":"a","values":{"x":{"kind":"TEXT","value":"y"}}}`)))

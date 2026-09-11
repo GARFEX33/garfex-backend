@@ -9,9 +9,10 @@ import (
 )
 
 // CatalogWriter is the narrow Core capability required by the catalog
-// create route.
+// create and update routes.
 type CatalogWriter interface {
 	CreateCatalog(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error)
+	UpdateCatalog(context.Context, resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error)
 }
 
 type catalogCreateRequest struct {
