@@ -169,7 +169,7 @@ paths:
         '500': { $ref: '#/components/responses/Internal' }
     delete:
       summary: Permanently delete a catalog record
-      description: Irreversibly removes one existing catalog record under optimistic concurrency. Unlike deactivate, there is no idempotent no-op target and no record left to read back.
+      description: Irreversibly removes one existing catalog record under optimistic concurrency. Unlike deactivate, there is no idempotent no-op target and no record left to read back. The record must already be inactive (deactivate it first) — deleting an active record fails with 409 Conflict.
       parameters:
         - name: kind
           in: path
@@ -788,7 +788,7 @@ components:
         actor: { type: string }
         active: { type: boolean }
         values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
-        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' }, description: 'For kind APLICABILIDAD this field is required and must be present as an array even when the binding is non-conditional: omitting it fails with "applicability rules are omitted", and sending a non-empty array on a non-conditional binding fails with "non-conditional applicability has rules". Send an explicit empty array ([]) for the common non-conditional case.' }
     CatalogUpdateRequest:
       type: object
       additionalProperties: false
@@ -798,7 +798,7 @@ components:
         expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
         active: { type: boolean }
         values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
-        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' }, description: 'For kind APLICABILIDAD this field is required and must be present as an array even when the binding is non-conditional: omitting it fails with "applicability rules are omitted", and sending a non-empty array on a non-conditional binding fails with "non-conditional applicability has rules". Send an explicit empty array ([]) for the common non-conditional case.' }
     CatalogLifecycleRequest:
       type: object
       additionalProperties: false
