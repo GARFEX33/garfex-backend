@@ -114,6 +114,7 @@ func TestOpenAPIDescribesOnlyImplementedBusinessPath(t *testing.T) {
 	body := r.Body.String()
 	for _, path := range []string{
 		"  /healthz:\n", "  /v1/catalog/descriptors:\n", "  /v1/catalog/{kind}:\n", "  /v1/catalog/{kind}/{id}:\n",
+		"  /v1/catalog/{kind}/{id}/deactivate:\n", "  /v1/catalog/{kind}/{id}/reactivate:\n",
 		"  /v1/suppliers:\n", "  /v1/suppliers/{id}:\n", "  /v1/resources:\n", "  /v1/resources/{classCode}/{identityV1}:\n",
 		"  /v1/resources/{id}:\n", "  /v1/resources/{id}/deactivate:\n", "  /v1/resources/{id}/reactivate:\n",
 		"  /openapi.yaml:\n", "  /docs:\n",

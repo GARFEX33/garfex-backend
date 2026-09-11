@@ -155,6 +155,66 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/{kind}/{id}/deactivate:
+    post:
+      summary: Deactivate a catalog record
+      description: Deactivates one existing catalog record under optimistic concurrency.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogLifecycleRequest'
+      responses:
+        '200':
+          description: Deactivated catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/{kind}/{id}/reactivate:
+    post:
+      summary: Reactivate a catalog record
+      description: Reactivates one existing catalog record under optimistic concurrency.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogLifecycleRequest'
+      responses:
+        '200':
+          description: Reactivated catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/suppliers:
     get:
       summary: Search suppliers
@@ -570,6 +630,13 @@ components:
         active: { type: boolean }
         values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
         rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
+    CatalogLifecycleRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedRevision]
+      properties:
+        actor: { type: string }
+        expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
     CatalogDescriptorsResponse:
       type: object
       required: [descriptors]

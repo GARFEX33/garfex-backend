@@ -30,6 +30,10 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 	case "/docs":
 		serveGet(w, r, serveDocs)
 	default:
+		if kind, id, action, ok := catalogLifecyclePath(r.URL.Path); ok {
+			serveCatalogLifecycle(w, r, catalogWriter, kind, id, action)
+			return
+		}
 		if kind, id, ok := catalogDetailPath(r.URL.Path); ok {
 			serveCatalogDetail(w, r, reader, catalogWriter, kind, id)
 			return
@@ -102,6 +106,31 @@ func resourceDetailPath(path string) (classCode, identityV1 string, ok bool) {
 	}
 	classCode, identityV1, ok = strings.Cut(remainder, "/")
 	return classCode, identityV1, ok && classCode != "" && identityV1 != "" && !strings.Contains(identityV1, "/")
+}
+
+// catalogLifecyclePath matches the reserved deactivate/reactivate action
+// paths, a three-segment shape (kind/id/action) that catalogDetailPath's
+// two-segment Cut already rejects, so no ordering is required between them.
+func catalogLifecyclePath(path string) (kind, id, action string, ok bool) {
+	const prefix = "/v1/catalog/"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", "", "", false
+	}
+	kind, rest, ok := strings.Cut(remainder, "/")
+	if !ok || kind == "" {
+		return "", "", "", false
+	}
+	id, action, ok = strings.Cut(rest, "/")
+	if !ok || id == "" {
+		return "", "", "", false
+	}
+	switch action {
+	case "deactivate", "reactivate":
+		return kind, id, action, true
+	default:
+		return "", "", "", false
+	}
 }
 
 func catalogDetailPath(path string) (kind, id string, ok bool) {

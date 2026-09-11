@@ -14,8 +14,10 @@ import (
 )
 
 type catalogWriterFuncs struct {
-	create func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error)
-	update func(context.Context, resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error)
+	create     func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error)
+	update     func(context.Context, resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error)
+	deactivate func(context.Context, resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error)
+	reactivate func(context.Context, resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error)
 }
 
 func (f catalogWriterFuncs) CreateCatalog(ctx context.Context, req resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
@@ -24,6 +26,14 @@ func (f catalogWriterFuncs) CreateCatalog(ctx context.Context, req resourcecore.
 
 func (f catalogWriterFuncs) UpdateCatalog(ctx context.Context, req resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error) {
 	return f.update(ctx, req)
+}
+
+func (f catalogWriterFuncs) DeactivateCatalog(ctx context.Context, req resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error) {
+	return f.deactivate(ctx, req)
+}
+
+func (f catalogWriterFuncs) ReactivateCatalog(ctx context.Context, req resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error) {
+	return f.reactivate(ctx, req)
 }
 
 func TestCreateCatalogMapsRequestAndResponse(t *testing.T) {
