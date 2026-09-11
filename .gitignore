@@ -1,2 +1,5 @@
 # Local Pi runtime state
 .atl/
+
+# Local dev convenience script (reads secrets from the sibling Core .env)
+run-dev.sh
