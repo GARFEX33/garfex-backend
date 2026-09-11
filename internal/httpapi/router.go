@@ -7,13 +7,13 @@ import (
 )
 
 // NewRouter returns the complete public HTTP surface for this unit.
-func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader) http.Handler {
+func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		route(w, r, reader, supplierWriter, resourceWriter, supplierReader)
+		route(w, r, reader, supplierWriter, resourceWriter, supplierReader, resourceReader)
 	})
 }
 
-func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader) {
+func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	switch r.URL.Path {
@@ -24,7 +24,7 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 	case "/v1/suppliers":
 		serveSuppliers(w, r, supplierWriter, supplierReader)
 	case "/v1/resources":
-		serveCreateResource(w, r, resourceWriter)
+		serveResources(w, r, resourceWriter, resourceReader)
 	case "/openapi.yaml":
 		serveGet(w, r, serveOpenAPI)
 	case "/docs":
@@ -42,6 +42,10 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveSupplierDetail(w, r, supplierReader, id)
 			return
 		}
+		if classCode, identityV1, ok := resourceDetailPath(r.URL.Path); ok {
+			serveResourceDetail(w, r, resourceReader, classCode, identityV1)
+			return
+		}
 		writeText(w, http.StatusNotFound, "404 not found\n")
 	}
 }
@@ -50,6 +54,16 @@ func supplierDetailPath(path string) (id string, ok bool) {
 	const prefix = "/v1/suppliers/"
 	id, ok = strings.CutPrefix(path, prefix)
 	return id, ok && id != "" && !strings.Contains(id, "/")
+}
+
+func resourceDetailPath(path string) (classCode, identityV1 string, ok bool) {
+	const prefix = "/v1/resources/"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", "", false
+	}
+	classCode, identityV1, ok = strings.Cut(remainder, "/")
+	return classCode, identityV1, ok && classCode != "" && identityV1 != "" && !strings.Contains(identityV1, "/")
 }
 
 func catalogDetailPath(path string) (kind, id string, ok bool) {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestPublicEndpoints(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil)
 
 	tests := []struct {
 		name        string
@@ -70,7 +70,7 @@ func TestPublicEndpoints(t *testing.T) {
 }
 
 func TestRouterRejectsUnexpectedRequestsWithoutReflection(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil)
 
 	tests := []struct {
 		name   string
@@ -107,12 +107,12 @@ func TestRouterRejectsUnexpectedRequestsWithoutReflection(t *testing.T) {
 }
 
 func TestOpenAPIDescribesOnlyImplementedBusinessPath(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
 
 	body := r.Body.String()
-	for _, path := range []string{"  /healthz:\n", "  /v1/catalog/descriptors:\n", "  /v1/catalog/{kind}:\n", "  /v1/catalog/{kind}/{id}:\n", "  /v1/suppliers:\n", "  /v1/suppliers/{id}:\n", "  /v1/resources:\n", "  /openapi.yaml:\n", "  /docs:\n"} {
+	for _, path := range []string{"  /healthz:\n", "  /v1/catalog/descriptors:\n", "  /v1/catalog/{kind}:\n", "  /v1/catalog/{kind}/{id}:\n", "  /v1/suppliers:\n", "  /v1/suppliers/{id}:\n", "  /v1/resources:\n", "  /v1/resources/{classCode}/{identityV1}:\n", "  /openapi.yaml:\n", "  /docs:\n"} {
 		if !strings.Contains(body, path) {
 			t.Errorf("OpenAPI document does not contain %q", path)
 		}
@@ -125,7 +125,7 @@ func TestOpenAPIDescribesOnlyImplementedBusinessPath(t *testing.T) {
 }
 
 func TestDocsUsesScalarDeclarativeCDNInitialization(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/docs", nil))
 

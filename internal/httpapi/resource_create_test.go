@@ -28,7 +28,7 @@ func TestCreateResourceMapsRequestAndResponse(t *testing.T) {
 			Scope: req.Scope, NaturalUnit: req.NaturalUnit, Active: true, Revision: 3,
 			Attributes: req.Attributes,
 		}, nil
-	}), nil)
+	}), nil, nil)
 	body := `{
 		"actor": "tester",
 		"scope": {"classCode": "C1", "familyCode": "F1", "typeCode": "T1"},
@@ -93,19 +93,19 @@ func TestCreateResourceMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
-func TestCreateResourceRequiresPOST(t *testing.T) {
+func TestResourcesRejectsUnsupportedMethod(t *testing.T) {
 	called := false
 	h := NewRouter(nil, nil, resourceWriterFunc(func(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
 		called = true
 		return resourcecore.Resource{}, nil
-	}), nil)
+	}), nil, nil)
 	r := httptest.NewRecorder()
-	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/resources", nil))
+	h.ServeHTTP(r, httptest.NewRequest(http.MethodPatch, "/v1/resources", nil))
 	var got errorResponse
 	if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
-	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodPost || got.Error != "method not allowed" || called {
+	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != "GET, POST" || got.Error != "method not allowed" || called {
 		t.Fatalf("status/allow/error/called = %d/%q/%q/%t", r.Code, r.Header().Get("Allow"), got.Error, called)
 	}
 }
@@ -127,7 +127,7 @@ func TestCreateResourceRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 			h := NewRouter(nil, nil, resourceWriterFunc(func(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
 				called = true
 				return resourcecore.Resource{}, nil
-			}), nil)
+			}), nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources", strings.NewReader(tc.body)))
 			var got errorResponse
@@ -142,7 +142,7 @@ func TestCreateResourceRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestCreateResourceSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources", strings.NewReader(`{"actor":"tester","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG"}`)))
 	var got errorResponse
@@ -168,7 +168,7 @@ func TestCreateResourceMapsAndSanitizesCoreErrors(t *testing.T) {
 		t.Run(string(tc.code), func(t *testing.T) {
 			h := NewRouter(nil, nil, resourceWriterFunc(func(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
 				return resourcecore.Resource{}, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
-			}), nil)
+			}), nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources", strings.NewReader(`{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG"}`)))
 			var got errorResponse

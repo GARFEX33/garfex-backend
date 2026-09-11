@@ -40,7 +40,7 @@ func TestCatalogDescriptorsMapsCompleteMetadata(t *testing.T) {
 			t.Error("request context was not propagated")
 		}
 		return descriptors, nil
-	}), nil, nil, nil)
+	}), nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/catalog/descriptors", nil).WithContext(context.WithValue(context.Background(), key, "propagated"))
 	h.ServeHTTP(r, req)
@@ -65,7 +65,7 @@ func TestCatalogDescriptorsMapsCompleteMetadata(t *testing.T) {
 }
 
 func TestCatalogDescriptorsNormalizesNilSlice(t *testing.T) {
-	h := NewRouter(catalogReaderFunc(func(context.Context) ([]resourcecore.CatalogDescriptor, error) { return nil, nil }), nil, nil, nil)
+	h := NewRouter(catalogReaderFunc(func(context.Context) ([]resourcecore.CatalogDescriptor, error) { return nil, nil }), nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/descriptors", nil))
 	var got catalogDescriptorsResponse
@@ -93,7 +93,7 @@ func TestCatalogDescriptorsMapsAndSanitizesCoreErrors(t *testing.T) {
 		t.Run(string(tc.code), func(t *testing.T) {
 			h := NewRouter(catalogReaderFunc(func(context.Context) ([]resourcecore.CatalogDescriptor, error) {
 				return nil, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
-			}), nil, nil, nil)
+			}), nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/descriptors", nil))
 			var got errorResponse
@@ -112,7 +112,7 @@ func TestCatalogDescriptorsMapsAndSanitizesCoreErrors(t *testing.T) {
 
 func TestCatalogDescriptorsRequiresGET(t *testing.T) {
 	called := false
-	h := NewRouter(catalogReaderFunc(func(context.Context) ([]resourcecore.CatalogDescriptor, error) { called = true; return nil, nil }), nil, nil, nil)
+	h := NewRouter(catalogReaderFunc(func(context.Context) ([]resourcecore.CatalogDescriptor, error) { called = true; return nil, nil }), nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/descriptors", nil))
 	var got errorResponse

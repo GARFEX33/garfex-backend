@@ -165,6 +165,40 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
   /v1/resources:
+    get:
+      summary: Search resources
+      description: Returns a page of resources matching the query.
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: classCode
+          in: query
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          schema: { type: string }
+        - name: typeCode
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Resource page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourcePage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
     post:
       summary: Create a resource
       description: Creates one resource under a class/family/type scope.
@@ -186,6 +220,29 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{classCode}/{identityV1}:
+    get:
+      summary: Get a resource
+      description: Returns one resource by class code and durable identity-v1.
+      parameters:
+        - name: classCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: identityV1
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
   /openapi.yaml:
     get:
@@ -434,3 +491,11 @@ components:
         active: { type: boolean }
         revision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
         attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    ResourcePage:
+      type: object
+      additionalProperties: false
+      required: [resources, hasPrevious, hasNext]
+      properties:
+        resources: { type: array, items: { $ref: '#/components/schemas/Resource' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
