@@ -37,6 +37,18 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/classes:
+    get:
+      summary: List active classes
+      description: Returns every active CLASE record, unpaginated.
+      responses:
+        '200':
+          description: Active CLASE records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveClassesResponse'
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/catalog/{kind}:
     get:
       summary: List catalog records
@@ -798,6 +810,10 @@ components:
       type: object
       required: [descriptors]
       properties: { descriptors: { type: array, items: { $ref: '#/components/schemas/CatalogDescriptor' } } }
+    ActiveClassesResponse:
+      type: object
+      required: [records]
+      properties: { records: { type: array, items: { $ref: '#/components/schemas/CatalogRecord' } } }
     CatalogDescriptor:
       type: object
       required: [kind, singular, plural, fields, identityFields, parentKind, parentField]

@@ -36,6 +36,10 @@ func (r *listCatalogReader) GetCatalog(ctx context.Context, key resourcecore.Cat
 	return r.get(ctx, key)
 }
 
+func (r *listCatalogReader) ActiveClasses(context.Context) ([]resourcecore.CatalogRecord, error) {
+	return nil, resourcecore.NewError(resourcecore.Internal, "active classes unavailable")
+}
+
 func TestCatalogListPassesPublicQueryToCore(t *testing.T) {
 	reader := &listCatalogReader{list: func(context.Context, resourcecore.CatalogQuery) (resourcecore.CatalogPage, error) {
 		return resourcecore.CatalogPage{}, nil

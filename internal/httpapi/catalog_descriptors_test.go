@@ -26,6 +26,10 @@ func (catalogReaderFunc) GetCatalog(context.Context, resourcecore.CatalogKey) (r
 	return resourcecore.CatalogRecord{}, resourcecore.NewError(resourcecore.Internal, "get catalog unavailable")
 }
 
+func (catalogReaderFunc) ActiveClasses(context.Context) ([]resourcecore.CatalogRecord, error) {
+	return nil, resourcecore.NewError(resourcecore.Internal, "active classes unavailable")
+}
+
 func TestCatalogDescriptorsMapsCompleteMetadata(t *testing.T) {
 	key := struct{}{}
 	descriptors := []resourcecore.CatalogDescriptor{{

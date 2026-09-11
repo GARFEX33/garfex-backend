@@ -18,10 +18,15 @@ type CatalogReader interface {
 	CatalogDescriptorReader
 	ListCatalog(context.Context, resourcecore.CatalogQuery) (resourcecore.CatalogPage, error)
 	GetCatalog(context.Context, resourcecore.CatalogKey) (resourcecore.CatalogRecord, error)
+	ActiveClasses(context.Context) ([]resourcecore.CatalogRecord, error)
 }
 
 type catalogDescriptorsResponse struct {
 	Descriptors []catalogDescriptorResponse `json:"descriptors"`
+}
+
+type activeClassesResponse struct {
+	Records []catalogRecordResponse `json:"records"`
 }
 
 type catalogDescriptorResponse struct {
@@ -71,6 +76,33 @@ func serveCatalogDescriptors(w http.ResponseWriter, r *http.Request, reader Cata
 	response := catalogDescriptorsResponse{Descriptors: make([]catalogDescriptorResponse, len(descriptors))}
 	for i, descriptor := range descriptors {
 		response.Descriptors[i] = mapCatalogDescriptor(descriptor)
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func serveActiveClasses(w http.ResponseWriter, r *http.Request, reader CatalogReader) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+		return
+	}
+	if reader == nil {
+		writeCatalogError(w, resourcecore.NewError(resourcecore.Internal, "catalog reader unavailable"))
+		return
+	}
+	records, err := reader.ActiveClasses(r.Context())
+	if err != nil {
+		writeCatalogError(w, err)
+		return
+	}
+	response := activeClassesResponse{Records: make([]catalogRecordResponse, len(records))}
+	for i, record := range records {
+		mapped, err := mapCatalogRecord(record)
+		if err != nil {
+			writeCatalogError(w, err)
+			return
+		}
+		response.Records[i] = mapped
 	}
 	writeJSON(w, http.StatusOK, response)
 }

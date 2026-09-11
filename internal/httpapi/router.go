@@ -21,6 +21,8 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 		serveGet(w, r, serveHealth)
 	case "/v1/catalog/descriptors":
 		serveCatalogDescriptors(w, r, reader)
+	case "/v1/catalog/classes":
+		serveActiveClasses(w, r, reader)
 	case "/v1/suppliers":
 		serveSuppliers(w, r, supplierWriter, supplierReader)
 	case "/v1/resources":
