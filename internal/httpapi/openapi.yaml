@@ -64,6 +64,14 @@ paths:
         - name: text
           in: query
           schema: { type: string }
+        - name: classCode
+          in: query
+          description: Scopes results to records whose parent CLASE has this code (e.g. listing FAMILIA or TIPO under one class). Silently ignored by a kind whose descriptor has no class parent field.
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          description: Scopes results to records whose parent FAMILIA has this code (e.g. listing TIPO under one family). Silently ignored by a kind whose descriptor has no family parent field.
+          schema: { type: string }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
