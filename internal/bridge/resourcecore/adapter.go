@@ -123,6 +123,7 @@ func (a *Adapter) ListCatalog(ctx context.Context, q public.CatalogQuery) (publi
 	filter := domain.CatalogFilter{
 		Status: catalogStatusFromPublic(q.Scope),
 		Text:   q.Text,
+		Parent: catalogParentFilter(q),
 		Limit:  q.Limit + 1,
 		Offset: q.Offset,
 	}
@@ -131,6 +132,24 @@ func (a *Adapter) ListCatalog(ctx context.Context, q public.CatalogQuery) (publi
 		return public.CatalogPage{}, mapError(err)
 	}
 	return a.buildCatalogPage(q, recs), nil
+}
+
+// catalogParentFilter builds the internal Parent scoping map from the
+// public query's ClassCode/FamilyCode. A kind whose descriptor does not
+// name that parent field silently ignores the corresponding key (see
+// parentRefCode in internal/postgres) — never an error.
+func catalogParentFilter(q public.CatalogQuery) map[string]domain.CatalogValue {
+	if q.ClassCode == "" && q.FamilyCode == "" {
+		return nil
+	}
+	parent := map[string]domain.CatalogValue{}
+	if q.ClassCode != "" {
+		parent["class"] = domain.CatalogValue{Ref: domain.CatalogRef{Kind: domain.KindClass, Code: q.ClassCode}}
+	}
+	if q.FamilyCode != "" {
+		parent["family"] = domain.CatalogValue{Ref: domain.CatalogRef{Kind: domain.KindFamily, Code: q.FamilyCode}}
+	}
+	return parent
 }
 
 // GetCatalog returns one catalog record by kind and id.
@@ -376,11 +395,13 @@ func (a *Adapter) buildCatalogPage(q public.CatalogQuery, recs []domain.CatalogR
 	}
 	return public.CatalogPage{
 		Query: public.CatalogQuery{
-			Kind:   q.Kind,
-			Scope:  q.Scope,
-			Text:   q.Text,
-			Limit:  q.Limit,
-			Offset: q.Offset,
+			Kind:       q.Kind,
+			Scope:      q.Scope,
+			Text:       q.Text,
+			ClassCode:  q.ClassCode,
+			FamilyCode: q.FamilyCode,
+			Limit:      q.Limit,
+			Offset:     q.Offset,
 		},
 		Records:     a.mapCatalogRecordSlice(domain.CatalogKindCode(q.Kind), recs[:end]),
 		HasPrevious: q.Offset > 0,

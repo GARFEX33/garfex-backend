@@ -209,6 +209,45 @@ func TestAdapter_ListCatalogPagination(t *testing.T) {
 	}
 }
 
+func TestAdapter_ListCatalogParentFilter(t *testing.T) {
+	catalog := &fakeCatalogReader{
+		kinds: []domain.CatalogKind{classKind()},
+		list: func(ctx context.Context, kind domain.CatalogKindCode, filter domain.CatalogFilter) ([]domain.CatalogRecord, error) {
+			if filter.Parent["class"].Ref.Code != "MAT" {
+				t.Fatalf("expected class parent code MAT, got %+v", filter.Parent["class"])
+			}
+			if filter.Parent["family"].Ref.Code != "FAM" {
+				t.Fatalf("expected family parent code FAM, got %+v", filter.Parent["family"])
+			}
+			return nil, nil
+		},
+	}
+	adapter := newTestAdapter(catalog, nil)
+	page, err := adapter.ListCatalog(context.Background(), public.CatalogQuery{Kind: public.KindType, ClassCode: "MAT", FamilyCode: "FAM"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if page.Query.ClassCode != "MAT" || page.Query.FamilyCode != "FAM" {
+		t.Fatalf("query echo lost parent filter: %+v", page.Query)
+	}
+}
+
+func TestAdapter_ListCatalogWithoutParentFilterOmitsParentMap(t *testing.T) {
+	catalog := &fakeCatalogReader{
+		kinds: []domain.CatalogKind{classKind()},
+		list: func(ctx context.Context, kind domain.CatalogKindCode, filter domain.CatalogFilter) ([]domain.CatalogRecord, error) {
+			if filter.Parent != nil {
+				t.Fatalf("expected nil parent filter, got %+v", filter.Parent)
+			}
+			return nil, nil
+		},
+	}
+	adapter := newTestAdapter(catalog, nil)
+	if _, err := adapter.ListCatalog(context.Background(), public.CatalogQuery{Kind: public.KindClass}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestAdapter_GetCatalog(t *testing.T) {
 	catalog := &fakeCatalogReader{
 		kinds: []domain.CatalogKind{classKind()},
