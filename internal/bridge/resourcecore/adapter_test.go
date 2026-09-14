@@ -255,6 +255,26 @@ func TestAdapter_ListCatalogTypeAndOptionSetFilter(t *testing.T) {
 	}
 }
 
+func TestAdapter_ListCatalogCharacteristicFilter(t *testing.T) {
+	catalog := &fakeCatalogReader{
+		kinds: []domain.CatalogKind{classKind()},
+		list: func(ctx context.Context, kind domain.CatalogKindCode, filter domain.CatalogFilter) ([]domain.CatalogRecord, error) {
+			if filter.Parent["characteristic"].Ref.Code != "COLOR" {
+				t.Fatalf("expected characteristic parent code COLOR, got %+v", filter.Parent["characteristic"])
+			}
+			return nil, nil
+		},
+	}
+	adapter := newTestAdapter(catalog, nil)
+	page, err := adapter.ListCatalog(context.Background(), public.CatalogQuery{Kind: public.KindAttributeBinding, CharacteristicCode: "COLOR"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if page.Query.CharacteristicCode != "COLOR" {
+		t.Fatalf("query echo lost characteristic filter: %+v", page.Query)
+	}
+}
+
 func TestAdapter_ListCatalogWithoutParentFilterOmitsParentMap(t *testing.T) {
 	catalog := &fakeCatalogReader{
 		kinds: []domain.CatalogKind{classKind()},
