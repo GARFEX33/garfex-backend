@@ -135,11 +135,12 @@ func (a *Adapter) ListCatalog(ctx context.Context, q public.CatalogQuery) (publi
 }
 
 // catalogParentFilter builds the internal Parent scoping map from the
-// public query's ClassCode/FamilyCode. A kind whose descriptor does not
-// name that parent field silently ignores the corresponding key (see
-// parentRefCode in internal/postgres) — never an error.
+// public query's ClassCode/FamilyCode/TypeCode/OptionSetCode. A kind whose
+// descriptor does not name that parent field silently ignores the
+// corresponding key (see parentRefCode in internal/postgres) — never an
+// error.
 func catalogParentFilter(q public.CatalogQuery) map[string]domain.CatalogValue {
-	if q.ClassCode == "" && q.FamilyCode == "" {
+	if q.ClassCode == "" && q.FamilyCode == "" && q.TypeCode == "" && q.OptionSetCode == "" {
 		return nil
 	}
 	parent := map[string]domain.CatalogValue{}
@@ -148,6 +149,12 @@ func catalogParentFilter(q public.CatalogQuery) map[string]domain.CatalogValue {
 	}
 	if q.FamilyCode != "" {
 		parent["family"] = domain.CatalogValue{Ref: domain.CatalogRef{Kind: domain.KindFamily, Code: q.FamilyCode}}
+	}
+	if q.TypeCode != "" {
+		parent["type"] = domain.CatalogValue{Ref: domain.CatalogRef{Kind: domain.KindType, Code: q.TypeCode}}
+	}
+	if q.OptionSetCode != "" {
+		parent["optionSet"] = domain.CatalogValue{Ref: domain.CatalogRef{Kind: domain.KindOptionSet, Code: q.OptionSetCode}}
 	}
 	return parent
 }
@@ -395,13 +402,15 @@ func (a *Adapter) buildCatalogPage(q public.CatalogQuery, recs []domain.CatalogR
 	}
 	return public.CatalogPage{
 		Query: public.CatalogQuery{
-			Kind:       q.Kind,
-			Scope:      q.Scope,
-			Text:       q.Text,
-			ClassCode:  q.ClassCode,
-			FamilyCode: q.FamilyCode,
-			Limit:      q.Limit,
-			Offset:     q.Offset,
+			Kind:          q.Kind,
+			Scope:         q.Scope,
+			Text:          q.Text,
+			ClassCode:     q.ClassCode,
+			FamilyCode:    q.FamilyCode,
+			TypeCode:      q.TypeCode,
+			OptionSetCode: q.OptionSetCode,
+			Limit:         q.Limit,
+			Offset:        q.Offset,
 		},
 		Records:     a.mapCatalogRecordSlice(domain.CatalogKindCode(q.Kind), recs[:end]),
 		HasPrevious: q.Offset > 0,

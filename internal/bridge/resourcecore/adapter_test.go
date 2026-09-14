@@ -232,6 +232,29 @@ func TestAdapter_ListCatalogParentFilter(t *testing.T) {
 	}
 }
 
+func TestAdapter_ListCatalogTypeAndOptionSetFilter(t *testing.T) {
+	catalog := &fakeCatalogReader{
+		kinds: []domain.CatalogKind{classKind()},
+		list: func(ctx context.Context, kind domain.CatalogKindCode, filter domain.CatalogFilter) ([]domain.CatalogRecord, error) {
+			if filter.Parent["type"].Ref.Code != "TIPO1" {
+				t.Fatalf("expected type parent code TIPO1, got %+v", filter.Parent["type"])
+			}
+			if filter.Parent["optionSet"].Ref.Code != "OPTS1" {
+				t.Fatalf("expected optionSet parent code OPTS1, got %+v", filter.Parent["optionSet"])
+			}
+			return nil, nil
+		},
+	}
+	adapter := newTestAdapter(catalog, nil)
+	page, err := adapter.ListCatalog(context.Background(), public.CatalogQuery{Kind: public.KindAttributeBinding, TypeCode: "TIPO1", OptionSetCode: "OPTS1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if page.Query.TypeCode != "TIPO1" || page.Query.OptionSetCode != "OPTS1" {
+		t.Fatalf("query echo lost type/optionSet filter: %+v", page.Query)
+	}
+}
+
 func TestAdapter_ListCatalogWithoutParentFilterOmitsParentMap(t *testing.T) {
 	catalog := &fakeCatalogReader{
 		kinds: []domain.CatalogKind{classKind()},
