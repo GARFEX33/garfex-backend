@@ -480,6 +480,154 @@ func TestCatalogAdminRepositoryIntegration(t *testing.T) {
 	})
 }
 
+// TestCatalogAdminRepositoryAttributeBindingParentFilterIntegration proves
+// List(KindAttributeBinding, ...) actually scopes by the type and optionSet
+// parent filters (listAttributeBindings previously built its WHERE clause
+// from only class/family/characteristic, silently ignoring type/optionSet —
+// caught live via garfex-api's ?typeCode=/?optionSetCode= query params
+// returning every record regardless of the filter value).
+func TestCatalogAdminRepositoryAttributeBindingParentFilterIntegration(t *testing.T) {
+	dsn := os.Getenv("GARFEX_TEST_DSN")
+	if dsn == "" {
+		t.Skip("GARFEX_TEST_DSN not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect to PostgreSQL: %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	repo := NewCatalogAdminRepository(pool)
+
+	must := func(label string, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("%s: %v", label, err)
+		}
+	}
+
+	classID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindClass, Active: true,
+		Values: map[string]domain.CatalogValue{
+			"code": {Text: "TEST_FILTER_CLASS"}, "name": {Text: "Test Filter Clase"}, "plural": {Text: "Test Filter Clases"},
+			"slug": {Text: "test-filter-clase"}, "order": {Int: 99},
+		},
+	})
+	must("insert class", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindClass, classID) })
+
+	famID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindFamily, Active: true,
+		Values: map[string]domain.CatalogValue{
+			"class": {Ref: domain.CatalogRef{Kind: domain.KindClass, Code: "TEST_FILTER_CLASS"}},
+			"code":  {Text: "TEST_FILTER_FAM"}, "name": {Text: "Test Filter Familia"},
+		},
+	})
+	must("insert family", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindFamily, famID) })
+
+	typeAID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindType, Active: true,
+		Values: map[string]domain.CatalogValue{
+			"class":  {Ref: domain.CatalogRef{Kind: domain.KindClass, Code: "TEST_FILTER_CLASS"}},
+			"family": {Ref: domain.CatalogRef{Kind: domain.KindFamily, Code: "TEST_FILTER_FAM"}},
+			"code":   {Text: "TEST_FILTER_TYPE_A"}, "name": {Text: "Test Filter Tipo A"},
+		},
+	})
+	must("insert type A", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindType, typeAID) })
+
+	typeBID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindType, Active: true,
+		Values: map[string]domain.CatalogValue{
+			"class":  {Ref: domain.CatalogRef{Kind: domain.KindClass, Code: "TEST_FILTER_CLASS"}},
+			"family": {Ref: domain.CatalogRef{Kind: domain.KindFamily, Code: "TEST_FILTER_FAM"}},
+			"code":   {Text: "TEST_FILTER_TYPE_B"}, "name": {Text: "Test Filter Tipo B"},
+		},
+	})
+	must("insert type B", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindType, typeBID) })
+
+	definitionID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindAttributeDefinition, Active: true,
+		Values: map[string]domain.CatalogValue{
+			"code": {Text: "test_filter_caract"}, "name": {Text: "Test Filter Característica"},
+			"valueType": {Text: "CONTROLLED_OPTION"}, "dimension": {Text: ""}, "defaultIdentityParticipates": {Bool: true},
+		},
+	})
+	must("insert attribute definition", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindAttributeDefinition, definitionID) })
+
+	optSetAID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindOptionSet, Active: true,
+		Values: map[string]domain.CatalogValue{"code": {Text: "TEST_FILTER_OPTSET_A"}, "name": {Text: "Test Filter Conjunto A"}},
+	})
+	must("insert option set A", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindOptionSet, optSetAID) })
+
+	optSetBID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindOptionSet, Active: true,
+		Values: map[string]domain.CatalogValue{"code": {Text: "TEST_FILTER_OPTSET_B"}, "name": {Text: "Test Filter Conjunto B"}},
+	})
+	must("insert option set B", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindOptionSet, optSetBID) })
+
+	bindingAID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindAttributeBinding, Active: true,
+		Values: map[string]domain.CatalogValue{
+			"class":                {Ref: domain.CatalogRef{Kind: domain.KindClass, Code: "TEST_FILTER_CLASS"}},
+			"family":               {Ref: domain.CatalogRef{Kind: domain.KindFamily, Code: "TEST_FILTER_FAM"}},
+			"type":                 {Ref: domain.CatalogRef{Kind: domain.KindType, Code: "TEST_FILTER_TYPE_A"}},
+			"characteristic":       {Ref: domain.CatalogRef{Kind: domain.KindAttributeDefinition, Code: "test_filter_caract"}},
+			"optionSet":            {Ref: domain.CatalogRef{Kind: domain.KindOptionSet, Code: "TEST_FILTER_OPTSET_A"}},
+			"mode":                 {Text: "REQUIRED"},
+			"identityParticipates": {Bool: true},
+		},
+	})
+	must("insert attribute binding A", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindAttributeBinding, bindingAID) })
+
+	bindingBID, err := repo.Insert(ctx, domain.CatalogRecord{
+		Kind: domain.KindAttributeBinding, Active: true,
+		Values: map[string]domain.CatalogValue{
+			"class":                {Ref: domain.CatalogRef{Kind: domain.KindClass, Code: "TEST_FILTER_CLASS"}},
+			"family":               {Ref: domain.CatalogRef{Kind: domain.KindFamily, Code: "TEST_FILTER_FAM"}},
+			"type":                 {Ref: domain.CatalogRef{Kind: domain.KindType, Code: "TEST_FILTER_TYPE_B"}},
+			"characteristic":       {Ref: domain.CatalogRef{Kind: domain.KindAttributeDefinition, Code: "test_filter_caract"}},
+			"optionSet":            {Ref: domain.CatalogRef{Kind: domain.KindOptionSet, Code: "TEST_FILTER_OPTSET_B"}},
+			"mode":                 {Text: "REQUIRED"},
+			"identityParticipates": {Bool: true},
+		},
+	})
+	must("insert attribute binding B", err)
+	t.Cleanup(func() { _ = repo.Delete(ctx, domain.KindAttributeBinding, bindingBID) })
+
+	byType, err := repo.List(ctx, domain.KindAttributeBinding, domain.CatalogFilter{Parent: map[string]domain.CatalogValue{
+		"type": {Ref: domain.CatalogRef{Kind: domain.KindType, Code: "TEST_FILTER_TYPE_A"}},
+	}})
+	must("list by type", err)
+	if len(byType) != 1 || byType[0].ID != bindingAID {
+		t.Fatalf("List() by type = %+v, want exactly binding A", byType)
+	}
+
+	byOptionSet, err := repo.List(ctx, domain.KindAttributeBinding, domain.CatalogFilter{Parent: map[string]domain.CatalogValue{
+		"optionSet": {Ref: domain.CatalogRef{Kind: domain.KindOptionSet, Code: "TEST_FILTER_OPTSET_B"}},
+	}})
+	must("list by option set", err)
+	if len(byOptionSet) != 1 || byOptionSet[0].ID != bindingBID {
+		t.Fatalf("List() by option set = %+v, want exactly binding B", byOptionSet)
+	}
+
+	byNonexistentType, err := repo.List(ctx, domain.KindAttributeBinding, domain.CatalogFilter{Parent: map[string]domain.CatalogValue{
+		"type": {Ref: domain.CatalogRef{Kind: domain.KindType, Code: "TEST_FILTER_TYPE_NONE"}},
+	}})
+	must("list by nonexistent type", err)
+	if len(byNonexistentType) != 0 {
+		t.Fatalf("List() by nonexistent type = %+v, want empty", byNonexistentType)
+	}
+}
+
 func depCount(deps []domain.CatalogDependency, kind domain.CatalogKindCode) int {
 	for _, d := range deps {
 		if d.Kind == kind {

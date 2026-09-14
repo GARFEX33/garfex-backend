@@ -1179,7 +1179,9 @@ func listAttributeBindings(ctx context.Context, q querier, f domain.CatalogFilte
 	conditions = appendActiveFilter(conditions, f.Status, "ra.active")
 	conditions, args = appendEqualsFilter(conditions, args, "cl.code", parentRefCode(f, "class"))
 	conditions, args = appendEqualsFilter(conditions, args, "f.code", parentRefCode(f, "family"))
+	conditions, args = appendEqualsFilter(conditions, args, "t.code", parentRefCode(f, "type"))
 	conditions, args = appendEqualsFilter(conditions, args, "d.code", parentRefCode(f, "characteristic"))
+	conditions, args = appendEqualsFilter(conditions, args, "ra.option_set", parentRefCode(f, "optionSet"))
 	sql := finalizeQuery(`
 		SELECT ra.id, cl.code, f.code, COALESCE(t.code, ''), d.code, ra.option_set, ra.mode, ra.identity_participates, ra.active, ra.revision
 		FROM public.resource_attributes ra
