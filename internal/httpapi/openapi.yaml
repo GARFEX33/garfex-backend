@@ -72,6 +72,14 @@ paths:
           in: query
           description: Scopes results to records whose parent FAMILIA has this code (e.g. listing TIPO under one family). Silently ignored by a kind whose descriptor has no family parent field.
           schema: { type: string }
+        - name: typeCode
+          in: query
+          description: Scopes results to records whose parent TIPO has this code (e.g. listing APLICABILIDAD or PRESENTACION under one type). Silently ignored by a kind whose descriptor has no type parent field.
+          schema: { type: string }
+        - name: optionSetCode
+          in: query
+          description: Scopes results to records whose parent CONJUNTO_OPCIONES has this code (e.g. listing OPCION under one option set). Silently ignored by a kind whose descriptor has no option-set parent field.
+          schema: { type: string }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
