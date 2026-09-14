@@ -54,18 +54,23 @@ contrato y las restricciones completas en
 
 ## Preparación de versión
 
-No hay una versión semver seleccionada ni publicada. Para desarrollo local, un
-consumidor puede usar un `replace` local en `go.mod`:
+Primera versión publicada: `v0.1.0`. Un consumidor externo la referencia
+directamente, sin `replace` local:
+
+```go
+require github.com/GARFEX33/garfex-costos-unitarios v0.1.0
+```
+
+Para desarrollo local contra un checkout sin publicar, seguí usando un
+`replace` local en `go.mod`:
 
 ```go
 replace github.com/GARFEX33/garfex-costos-unitarios => ../garfex-costos-unitarios-workspace
 ```
 
 Ese reemplazo es local y no portable como mecanismo de release. Los consumidores
-externos reproducibles deben fijar un commit publicado o una pseudo-versión, no
-una referencia móvil a `main`.
-
-TODO: seleccionar la primera versión semver; esto no bloquea el consumo local de la API separada.
+externos reproducibles deben fijar una versión publicada, no una referencia
+móvil a `main`.
 
 ## Repositorios y remotos Git
 
