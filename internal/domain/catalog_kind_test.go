@@ -163,6 +163,37 @@ func TestCatalogRegistry_KindsReturnsAnIndependentCopy(t *testing.T) {
 	}
 }
 
+// TestCatalogRegistry_AplicabilidadModeEnumMatchesValidatedModes catches the
+// APLICABILIDAD "mode" field's EnumValues drifting from the modes
+// ApplyCatalogMutation actually accepts (validAttributeMode in
+// catalog_mutation.go): a descriptor missing a valid mode silently hides it
+// from every /docs-driven UI even though the backend allows it.
+func TestCatalogRegistry_AplicabilidadModeEnumMatchesValidatedModes(t *testing.T) {
+	registry := NewCatalogRegistry()
+	kind, ok := registry.Kind(KindAttributeBinding)
+	if !ok {
+		t.Fatalf("KindAttributeBinding is not registered")
+	}
+	var modeField *FieldDescriptor
+	for i, field := range kind.Fields {
+		if field.Name == "mode" {
+			modeField = &kind.Fields[i]
+		}
+	}
+	if modeField == nil {
+		t.Fatalf("KindAttributeBinding has no %q field", "mode")
+	}
+	enumValues := map[string]bool{}
+	for _, v := range modeField.EnumValues {
+		enumValues[v.Value] = true
+	}
+	for _, mode := range []AttributeMode{ModeRequired, ModeOptional, ModeConditional, ModeForbidden} {
+		if !enumValues[string(mode)] {
+			t.Errorf("mode field EnumValues %+v is missing %q, which validAttributeMode accepts", modeField.EnumValues, mode)
+		}
+	}
+}
+
 func TestCatalogKindRegistry_AllRegisteredKindsAreLifecycleCapable(t *testing.T) {
 	want := []CatalogKindCode{
 		KindClass, KindFamily, KindType, KindAttributeDefinition, KindOptionSet,

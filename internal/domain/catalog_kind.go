@@ -143,6 +143,7 @@ func attributeModeEnum() []EnumValue {
 	return []EnumValue{
 		{Value: "REQUIRED", Label: "Requerido"},
 		{Value: "OPTIONAL", Label: "Opcional"},
+		{Value: "CONDITIONAL", Label: "Condicional"},
 		{Value: "FORBIDDEN", Label: "Prohibido"},
 	}
 }
