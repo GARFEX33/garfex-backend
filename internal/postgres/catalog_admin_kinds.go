@@ -13,18 +13,12 @@ import (
 // through — design §3's explicit "kindTables map[CatalogKindCode]
 // tableMapping (table name, column names, parent join, dependency-probe
 // SQL, resource-reference-probe SQL). No table introspection — only
-// registered kinds are administrable." Four kinds have no BIGSERIAL id
-// column in their underlying table (OptionSet: resource_option_sets PK is
-// code; Option: attribute_options composite PK; UnitPolicy:
-// resource_unit_policies composite PK; PresentationField:
-// resource_type_presentation_fields composite PK) — CatalogRecord.ID for
-// those is a stable Postgres-computed hashtextextended() of the row's own
-// natural key, resolved back to the real row via the same expression in
-// every read/write WHERE clause (no application-side table scan). This is a
-// deliberate resolution of a real schema/port mismatch design left open
-// (CatalogAdminRepository is keyed by int64 id for every kind; 4 of the 11
-// underlying tables were never given a serial id) — flagged for
-// sdd-verify/reviewer confirmation same as PR3's own documented gap-fills.
+// registered kinds are administrable." Four kinds (OptionSet:
+// resource_option_sets, Option: attribute_options, UnitPolicy:
+// resource_unit_policies, PresentationField:
+// resource_type_presentation_fields) have their own natural composite PK
+// alongside a real BIGSERIAL id column added by migration 000009 — every
+// kind now addresses by id, never by a hashed natural key.
 var kindTables = map[domain.CatalogKindCode]kindHandlers{
 	domain.KindClass: {
 		list: listClasses, get: getClass, insert: insertClass, update: updateClass,
@@ -73,11 +67,11 @@ var kindTables = map[domain.CatalogKindCode]kindHandlers{
 			{kind: domain.KindOption, blocking: true, query: `
 				SELECT count(*) FROM public.attribute_options ao
 				JOIN public.resource_option_sets os ON os.code = ao.option_set
-				WHERE hashtextextended(os.code, 0) = $1`},
+				WHERE os.id = $1`},
 			{kind: domain.KindOptionRelation, blocking: true, query: `
 				SELECT count(*) FROM public.attribute_option_relations ar
 				JOIN public.resource_option_sets os ON os.code = ar.option_set
-				WHERE hashtextextended(os.code, 0) = $1`},
+				WHERE os.id = $1`},
 		},
 		referencedByResources: optionSetReferencedByResources,
 	},
@@ -89,8 +83,7 @@ var kindTables = map[domain.CatalogKindCode]kindHandlers{
 				WITH target AS (
 					SELECT ao.option_set, ao.attribute_definition_id, ao.code
 					FROM public.attribute_options ao
-					JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id
-					WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1
+					WHERE ao.id = $1
 				)
 				SELECT count(*) FROM public.attribute_option_relations ar, target t
 				WHERE (ar.option_set = t.option_set AND ar.from_attribute_definition_id = t.attribute_definition_id AND ar.from_option_code = t.code)
@@ -293,7 +286,7 @@ func listFamilies(ctx context.Context, q querier, f domain.CatalogFilter) ([]dom
 	conditions = appendActiveFilter(conditions, f.Status, "f.active")
 	conditions, args = appendEqualsFilter(conditions, args, "cl.code", parentRefCode(f, "class"))
 	sql := finalizeQuery(`
-		SELECT f.id, cl.code, cl.name, f.code, f.name, f.active, f.revision
+		SELECT f.id, cl.id, cl.code, cl.name, f.code, f.name, f.active, f.revision
 		FROM public.resource_families f
 		JOIN public.resource_classes cl ON cl.id = f.class_id`, conditions, "cl.id, f.id", f)
 
@@ -304,38 +297,39 @@ func listFamilies(ctx context.Context, q querier, f domain.CatalogFilter) ([]dom
 	defer rows.Close()
 	var out []domain.CatalogRecord
 	for rows.Next() {
-		var id int64
+		var id, classID int64
 		var classCode, className, code, name string
 		var active bool
 		var revision uint64
-		if err := rows.Scan(&id, &classCode, &className, &code, &name, &active, &revision); err != nil {
+		if err := rows.Scan(&id, &classID, &classCode, &className, &code, &name, &active, &revision); err != nil {
 			return nil, fmt.Errorf("scan resource_families: %w", err)
 		}
-		out = append(out, catalogRecordWithRevision(familyRecord(id, classCode, className, code, name, active), revision))
+		out = append(out, catalogRecordWithRevision(familyRecord(id, classID, classCode, className, code, name, active), revision))
 	}
 	return out, rows.Err()
 }
 
 func getFamily(ctx context.Context, q querier, id int64) (domain.CatalogRecord, error) {
+	var classID int64
 	var classCode, className, code, name string
 	var active bool
 	var revision uint64
 	err := q.QueryRow(ctx, `
-		SELECT cl.code, cl.name, f.code, f.name, f.active, f.revision
+		SELECT cl.id, cl.code, cl.name, f.code, f.name, f.active, f.revision
 		FROM public.resource_families f JOIN public.resource_classes cl ON cl.id = f.class_id
-		WHERE f.id=$1`, id).Scan(&classCode, &className, &code, &name, &active, &revision)
+		WHERE f.id=$1`, id).Scan(&classID, &classCode, &className, &code, &name, &active, &revision)
 	if isNoRows(err) {
 		return domain.CatalogRecord{}, domain.ErrCatalogRecordNotFound
 	}
 	if err != nil {
 		return domain.CatalogRecord{}, fmt.Errorf("get resource_families: %w", err)
 	}
-	return catalogRecordWithRevision(familyRecord(id, classCode, className, code, name, active), revision), nil
+	return catalogRecordWithRevision(familyRecord(id, classID, classCode, className, code, name, active), revision), nil
 }
 
-func familyRecord(id int64, classCode, className, code, name string, active bool) domain.CatalogRecord {
+func familyRecord(id, classID int64, classCode, className, code, name string, active bool) domain.CatalogRecord {
 	return domain.CatalogRecord{Kind: domain.KindFamily, ID: id, Active: active, Values: map[string]domain.CatalogValue{
-		"class": refValueLabel(domain.KindClass, classCode, className), "code": textValue(code), "name": textValue(name),
+		"class": refValueLabel(domain.KindClass, classCode, className, classID), "code": textValue(code), "name": textValue(name),
 	}}
 }
 
@@ -393,7 +387,7 @@ func listTypes(ctx context.Context, q querier, f domain.CatalogFilter) ([]domain
 	conditions, args = appendEqualsFilter(conditions, args, "cl.code", parentRefCode(f, "class"))
 	conditions, args = appendEqualsFilter(conditions, args, "f.code", parentRefCode(f, "family"))
 	sql := finalizeQuery(`
-		SELECT t.id, cl.code, cl.name, f.code, f.name, t.code, t.name, t.active, t.revision
+		SELECT t.id, cl.id, cl.code, cl.name, f.id, f.code, f.name, t.code, t.name, t.active, t.revision
 		FROM public.resource_types t
 		JOIN public.resource_families f ON f.id = t.family_id
 		JOIN public.resource_classes cl ON cl.id = t.class_id`, conditions, "f.id, t.id", f)
@@ -405,40 +399,41 @@ func listTypes(ctx context.Context, q querier, f domain.CatalogFilter) ([]domain
 	defer rows.Close()
 	var out []domain.CatalogRecord
 	for rows.Next() {
-		var id int64
+		var id, classID, familyID int64
 		var classCode, className, familyCode, familyName, code, name string
 		var active bool
 		var revision uint64
-		if err := rows.Scan(&id, &classCode, &className, &familyCode, &familyName, &code, &name, &active, &revision); err != nil {
+		if err := rows.Scan(&id, &classID, &classCode, &className, &familyID, &familyCode, &familyName, &code, &name, &active, &revision); err != nil {
 			return nil, fmt.Errorf("scan resource_types: %w", err)
 		}
-		out = append(out, catalogRecordWithRevision(typeRecord(id, classCode, className, familyCode, familyName, code, name, active), revision))
+		out = append(out, catalogRecordWithRevision(typeRecord(id, classID, classCode, className, familyID, familyCode, familyName, code, name, active), revision))
 	}
 	return out, rows.Err()
 }
 
 func getType(ctx context.Context, q querier, id int64) (domain.CatalogRecord, error) {
+	var classID, familyID int64
 	var classCode, className, familyCode, familyName, code, name string
 	var active bool
 	var revision uint64
 	err := q.QueryRow(ctx, `
-		SELECT cl.code, cl.name, f.code, f.name, t.code, t.name, t.active, t.revision
+		SELECT cl.id, cl.code, cl.name, f.id, f.code, f.name, t.code, t.name, t.active, t.revision
 		FROM public.resource_types t
 		JOIN public.resource_families f ON f.id = t.family_id
 		JOIN public.resource_classes cl ON cl.id = t.class_id
-		WHERE t.id=$1`, id).Scan(&classCode, &className, &familyCode, &familyName, &code, &name, &active, &revision)
+		WHERE t.id=$1`, id).Scan(&classID, &classCode, &className, &familyID, &familyCode, &familyName, &code, &name, &active, &revision)
 	if isNoRows(err) {
 		return domain.CatalogRecord{}, domain.ErrCatalogRecordNotFound
 	}
 	if err != nil {
 		return domain.CatalogRecord{}, fmt.Errorf("get resource_types: %w", err)
 	}
-	return catalogRecordWithRevision(typeRecord(id, classCode, className, familyCode, familyName, code, name, active), revision), nil
+	return catalogRecordWithRevision(typeRecord(id, classID, classCode, className, familyID, familyCode, familyName, code, name, active), revision), nil
 }
 
-func typeRecord(id int64, classCode, className, familyCode, familyName, code, name string, active bool) domain.CatalogRecord {
+func typeRecord(id, classID int64, classCode, className string, familyID int64, familyCode, familyName, code, name string, active bool) domain.CatalogRecord {
 	return domain.CatalogRecord{Kind: domain.KindType, ID: id, Active: active, Values: map[string]domain.CatalogValue{
-		"class": refValueLabel(domain.KindClass, classCode, className), "family": refValueLabel(domain.KindFamily, familyCode, familyName),
+		"class": refValueLabel(domain.KindClass, classCode, className, classID), "family": refValueLabel(domain.KindFamily, familyCode, familyName, familyID),
 		"code": textValue(code), "name": textValue(name),
 	}}
 }
@@ -580,18 +575,16 @@ func definitionReferencedByResources(ctx context.Context, q querier, id int64) (
 
 // --- KindOptionSet ("Conjunto de Opciones") ------------------------------
 //
-// resource_option_sets has no BIGSERIAL id (PK is code itself) — see
-// kindTables' doc comment. hashtextextended(code, 0) is Postgres's own
-// deterministic 64-bit hash, used both to synthesize CatalogRecord.ID and to
-// resolve it straight back to the row in every subsequent query, with no
-// application-side scan.
+// resource_option_sets' natural PK is code itself; migration 000009 added a
+// real BIGSERIAL id column (UNIQUE, additive) so every kind addresses
+// consistently by id, never by a hashed natural key.
 
 func listOptionSets(ctx context.Context, q querier, f domain.CatalogFilter) ([]domain.CatalogRecord, error) {
 	var conditions []string
 	var args []any
 	conditions, args = appendTextFilter(conditions, args, f.Text, "code", "name")
 	conditions = appendActiveFilter(conditions, f.Status, "active")
-	sql := finalizeQuery(`SELECT hashtextextended(code, 0), code, name, active, revision FROM public.resource_option_sets`, conditions, "code", f)
+	sql := finalizeQuery(`SELECT id, code, name, active, revision FROM public.resource_option_sets`, conditions, "code", f)
 
 	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
@@ -616,7 +609,7 @@ func getOptionSet(ctx context.Context, q querier, id int64) (domain.CatalogRecor
 	var code, name string
 	var active bool
 	var revision uint64
-	err := q.QueryRow(ctx, `SELECT code, name, active, revision FROM public.resource_option_sets WHERE hashtextextended(code, 0) = $1`, id).Scan(&code, &name, &active, &revision)
+	err := q.QueryRow(ctx, `SELECT code, name, active, revision FROM public.resource_option_sets WHERE id = $1`, id).Scan(&code, &name, &active, &revision)
 	if isNoRows(err) {
 		return domain.CatalogRecord{}, domain.ErrCatalogRecordNotFound
 	}
@@ -636,7 +629,7 @@ func insertOptionSet(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (
 	var id int64
 	err := tx.QueryRow(ctx, `
 		INSERT INTO public.resource_option_sets (code, name, active) VALUES ($1,$2,$3)
-		RETURNING hashtextextended(code, 0)`, fieldText(rec, "code"), fieldText(rec, "name"), rec.Active).Scan(&id)
+		RETURNING id`, fieldText(rec, "code"), fieldText(rec, "name"), rec.Active).Scan(&id)
 	if err != nil {
 		return 0, mapCatalogWriteError(fmt.Errorf("insert resource_option_sets: %w", err))
 	}
@@ -645,7 +638,7 @@ func insertOptionSet(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (
 
 func updateOptionSet(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) error {
 	var currentCode string
-	err := tx.QueryRow(ctx, `SELECT code FROM public.resource_option_sets WHERE hashtextextended(code, 0) = $1`, rec.ID).Scan(&currentCode)
+	err := tx.QueryRow(ctx, `SELECT code FROM public.resource_option_sets WHERE id = $1`, rec.ID).Scan(&currentCode)
 	if isNoRows(err) {
 		return domain.ErrCatalogRecordNotFound
 	}
@@ -669,7 +662,7 @@ func updateOptionSet(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) e
 }
 
 func setActiveOptionSet(ctx context.Context, tx pgx.Tx, id int64, active bool) error {
-	tag, err := tx.Exec(ctx, `UPDATE public.resource_option_sets SET active=$1 WHERE hashtextextended(code, 0) = $2`, active, id)
+	tag, err := tx.Exec(ctx, `UPDATE public.resource_option_sets SET active=$1 WHERE id = $2`, active, id)
 	if err != nil {
 		return mapCatalogWriteError(fmt.Errorf("set active on resource_option_sets: %w", err))
 	}
@@ -677,7 +670,7 @@ func setActiveOptionSet(ctx context.Context, tx pgx.Tx, id int64, active bool) e
 }
 
 func deleteOptionSet(ctx context.Context, tx pgx.Tx, id int64) error {
-	tag, err := tx.Exec(ctx, `DELETE FROM public.resource_option_sets WHERE hashtextextended(code, 0) = $1`, id)
+	tag, err := tx.Exec(ctx, `DELETE FROM public.resource_option_sets WHERE id = $1`, id)
 	if err != nil {
 		return mapCatalogDeleteError(fmt.Errorf("delete from resource_option_sets: %w", err))
 	}
@@ -696,7 +689,7 @@ func optionSetReferencedByResources(ctx context.Context, q querier, id int64) (b
 		SELECT EXISTS(
 			SELECT 1 FROM public.resource_option_sets os
 			JOIN public.resource_attribute_values v ON v.option_set = os.code
-			WHERE hashtextextended(os.code, 0) = $1
+			WHERE os.id = $1
 		)`, id).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("check option set referenced by resources: %w", err)
@@ -706,10 +699,9 @@ func optionSetReferencedByResources(ctx context.Context, q querier, id int64) (b
 
 // --- KindOption -----------------------------------------------------------
 //
-// attribute_options' PK is (option_set, attribute_definition_id, code) — no
-// BIGSERIAL id either; same hashtextextended() convention as KindOptionSet,
-// this time over the 3-part natural key (option_set, characteristic código,
-// código).
+// attribute_options' natural PK is (option_set, attribute_definition_id,
+// code); migration 000009 added a real BIGSERIAL id column (UNIQUE,
+// additive) so this kind addresses by id like every other kind.
 
 func listOptions(ctx context.Context, q querier, f domain.CatalogFilter) ([]domain.CatalogRecord, error) {
 	var conditions []string
@@ -719,9 +711,10 @@ func listOptions(ctx context.Context, q querier, f domain.CatalogFilter) ([]doma
 	conditions, args = appendEqualsFilter(conditions, args, "ao.option_set", parentRefCode(f, "optionSet"))
 	conditions, args = appendEqualsFilter(conditions, args, "d.code", parentRefCode(f, "characteristic"))
 	sql := finalizeQuery(`
-		SELECT hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0), ao.option_set, d.code, ao.code, ao.label, ao.active, ao.revision
+		SELECT ao.id, os.id, ao.option_set, d.id, d.code, ao.code, ao.label, ao.active, ao.revision
 		FROM public.attribute_options ao
-		JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id`, conditions, "d.id, ao.display_order", f)
+		JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id
+		JOIN public.resource_option_sets os ON os.code = ao.option_set`, conditions, "d.id, ao.display_order", f)
 
 	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
@@ -730,39 +723,42 @@ func listOptions(ctx context.Context, q querier, f domain.CatalogFilter) ([]doma
 	defer rows.Close()
 	var out []domain.CatalogRecord
 	for rows.Next() {
-		var id int64
+		var id, optionSetID, definitionID int64
 		var optionSet, characteristic, code, label string
 		var active bool
 		var revision uint64
-		if err := rows.Scan(&id, &optionSet, &characteristic, &code, &label, &active, &revision); err != nil {
+		if err := rows.Scan(&id, &optionSetID, &optionSet, &definitionID, &characteristic, &code, &label, &active, &revision); err != nil {
 			return nil, fmt.Errorf("scan attribute_options: %w", err)
 		}
-		out = append(out, catalogRecordWithRevision(optionRecord(id, optionSet, characteristic, code, label, active), revision))
+		out = append(out, catalogRecordWithRevision(optionRecord(id, optionSetID, optionSet, definitionID, characteristic, code, label, active), revision))
 	}
 	return out, rows.Err()
 }
 
 func getOption(ctx context.Context, q querier, id int64) (domain.CatalogRecord, error) {
+	var optionSetID, definitionID int64
 	var optionSet, characteristic, code, label string
 	var active bool
 	var revision uint64
 	err := q.QueryRow(ctx, `
-		SELECT ao.option_set, d.code, ao.code, ao.label, ao.active, ao.revision
-		FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id
-		WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1`, id).
-		Scan(&optionSet, &characteristic, &code, &label, &active, &revision)
+		SELECT os.id, ao.option_set, d.id, d.code, ao.code, ao.label, ao.active, ao.revision
+		FROM public.attribute_options ao
+		JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id
+		JOIN public.resource_option_sets os ON os.code = ao.option_set
+		WHERE ao.id = $1`, id).
+		Scan(&optionSetID, &optionSet, &definitionID, &characteristic, &code, &label, &active, &revision)
 	if isNoRows(err) {
 		return domain.CatalogRecord{}, domain.ErrCatalogRecordNotFound
 	}
 	if err != nil {
 		return domain.CatalogRecord{}, fmt.Errorf("get attribute_options: %w", err)
 	}
-	return catalogRecordWithRevision(optionRecord(id, optionSet, characteristic, code, label, active), revision), nil
+	return catalogRecordWithRevision(optionRecord(id, optionSetID, optionSet, definitionID, characteristic, code, label, active), revision), nil
 }
 
-func optionRecord(id int64, optionSet, characteristic, code, label string, active bool) domain.CatalogRecord {
+func optionRecord(id, optionSetID int64, optionSet string, definitionID int64, characteristic, code, label string, active bool) domain.CatalogRecord {
 	return domain.CatalogRecord{Kind: domain.KindOption, ID: id, Active: active, Values: map[string]domain.CatalogValue{
-		"optionSet": refValue(domain.KindOptionSet, optionSet), "characteristic": refValue(domain.KindAttributeDefinition, characteristic),
+		"optionSet": refValue(domain.KindOptionSet, optionSet, optionSetID), "characteristic": refValue(domain.KindAttributeDefinition, characteristic, definitionID),
 		"code": textValue(code), "label": textValue(label),
 	}}
 }
@@ -774,7 +770,7 @@ func insertOption(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (int
 		SELECT $1, d.id, $3, $4, $5,
 		       COALESCE((SELECT MAX(display_order)+1 FROM public.attribute_options WHERE option_set=$1 AND attribute_definition_id=d.id), 0)
 		FROM public.attribute_definitions d WHERE d.code=$2
-		RETURNING hashtextextended(option_set || '|' || $2::text || '|' || code, 0)`,
+		RETURNING id`,
 		fieldRef(rec, "optionSet"), fieldRef(rec, "characteristic"), fieldText(rec, "code"), fieldText(rec, "label"), rec.Active).Scan(&id)
 	if isNoRows(err) {
 		return 0, fmt.Errorf("%w: characteristic %q or option set %q", domain.ErrCatalogReference, fieldRef(rec, "characteristic"), fieldRef(rec, "optionSet"))
@@ -790,7 +786,7 @@ func updateOption(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) erro
 	err := tx.QueryRow(ctx, `
 		SELECT ao.option_set, d.code, ao.code
 		FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id
-		WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1`, rec.ID).Scan(&optionSet, &defCode, &code)
+		WHERE ao.id = $1`, rec.ID).Scan(&optionSet, &defCode, &code)
 	if isNoRows(err) {
 		return domain.ErrCatalogRecordNotFound
 	}
@@ -820,10 +816,7 @@ func updateOption(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) erro
 }
 
 func setActiveOption(ctx context.Context, tx pgx.Tx, id int64, active bool) error {
-	tag, err := tx.Exec(ctx, `
-		UPDATE public.attribute_options ao SET active=$1
-		FROM public.attribute_definitions d
-		WHERE d.id = ao.attribute_definition_id AND hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $2`, active, id)
+	tag, err := tx.Exec(ctx, `UPDATE public.attribute_options SET active=$1 WHERE id = $2`, active, id)
 	if err != nil {
 		return mapCatalogWriteError(fmt.Errorf("set active on attribute_options: %w", err))
 	}
@@ -831,9 +824,7 @@ func setActiveOption(ctx context.Context, tx pgx.Tx, id int64, active bool) erro
 }
 
 func deleteOption(ctx context.Context, tx pgx.Tx, id int64) error {
-	tag, err := tx.Exec(ctx, `
-		DELETE FROM public.attribute_options ao USING public.attribute_definitions d
-		WHERE d.id = ao.attribute_definition_id AND hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1`, id)
+	tag, err := tx.Exec(ctx, `DELETE FROM public.attribute_options WHERE id = $1`, id)
 	if err != nil {
 		return mapCatalogDeleteError(fmt.Errorf("delete from attribute_options: %w", err))
 	}
@@ -845,10 +836,9 @@ func optionReferencedByResources(ctx context.Context, q querier, id int64) (bool
 	err := q.QueryRow(ctx, `
 		SELECT EXISTS(
 			SELECT 1 FROM public.attribute_options ao
-			JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id
 			JOIN public.resource_attribute_values v ON v.option_set = ao.option_set
 				AND v.attribute_definition_id = ao.attribute_definition_id AND v.option_code = ao.code
-			WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1
+			WHERE ao.id = $1
 		)`, id).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("check option referenced by resources: %w", err)
@@ -864,10 +854,13 @@ func listOptionRelations(ctx context.Context, q querier, f domain.CatalogFilter)
 	conditions = appendActiveFilter(conditions, f.Status, "ar.active")
 	conditions, args = appendEqualsFilter(conditions, args, "ar.option_set", parentRefCode(f, "optionSet"))
 	sql := finalizeQuery(`
-		SELECT ar.id, ar.option_set, fd.code, ar.from_option_code, td.code, ar.to_option_code, ar.active, ar.revision
+		SELECT ar.id, os.id, ar.option_set, fd.id, fd.code, fo.id, ar.from_option_code, td.id, td.code, too.id, ar.to_option_code, ar.active, ar.revision
 		FROM public.attribute_option_relations ar
+		JOIN public.resource_option_sets os ON os.code = ar.option_set
 		JOIN public.attribute_definitions fd ON fd.id = ar.from_attribute_definition_id
-		JOIN public.attribute_definitions td ON td.id = ar.to_attribute_definition_id`, conditions, "ar.id", f)
+		JOIN public.attribute_definitions td ON td.id = ar.to_attribute_definition_id
+		JOIN public.attribute_options fo ON fo.option_set = ar.option_set AND fo.attribute_definition_id = fd.id AND fo.code = ar.from_option_code
+		JOIN public.attribute_options too ON too.option_set = ar.option_set AND too.attribute_definition_id = td.id AND too.code = ar.to_option_code`, conditions, "ar.id", f)
 
 	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
@@ -876,44 +869,53 @@ func listOptionRelations(ctx context.Context, q querier, f domain.CatalogFilter)
 	defer rows.Close()
 	var out []domain.CatalogRecord
 	for rows.Next() {
-		var id int64
+		var id, optionSetID, fromDefinitionID, fromOptionID, toDefinitionID, toOptionID int64
 		var optionSet, fromCharacteristic, fromOption, toCharacteristic, toOption string
 		var active bool
 		var revision uint64
-		if err := rows.Scan(&id, &optionSet, &fromCharacteristic, &fromOption, &toCharacteristic, &toOption, &active, &revision); err != nil {
+		if err := rows.Scan(&id, &optionSetID, &optionSet, &fromDefinitionID, &fromCharacteristic, &fromOptionID, &fromOption,
+			&toDefinitionID, &toCharacteristic, &toOptionID, &toOption, &active, &revision); err != nil {
 			return nil, fmt.Errorf("scan attribute_option_relations: %w", err)
 		}
-		out = append(out, catalogRecordWithRevision(optionRelationRecord(id, optionSet, fromCharacteristic, fromOption, toCharacteristic, toOption, active), revision))
+		out = append(out, catalogRecordWithRevision(optionRelationRecord(id, optionSetID, optionSet, fromDefinitionID, fromCharacteristic, fromOptionID, fromOption,
+			toDefinitionID, toCharacteristic, toOptionID, toOption, active), revision))
 	}
 	return out, rows.Err()
 }
 
 func getOptionRelation(ctx context.Context, q querier, id int64) (domain.CatalogRecord, error) {
+	var optionSetID, fromDefinitionID, fromOptionID, toDefinitionID, toOptionID int64
 	var optionSet, fromCharacteristic, fromOption, toCharacteristic, toOption string
 	var active bool
 	var revision uint64
 	err := q.QueryRow(ctx, `
-		SELECT ar.option_set, fd.code, ar.from_option_code, td.code, ar.to_option_code, ar.active, ar.revision
+		SELECT os.id, ar.option_set, fd.id, fd.code, fo.id, ar.from_option_code, td.id, td.code, too.id, ar.to_option_code, ar.active, ar.revision
 		FROM public.attribute_option_relations ar
+		JOIN public.resource_option_sets os ON os.code = ar.option_set
 		JOIN public.attribute_definitions fd ON fd.id = ar.from_attribute_definition_id
 		JOIN public.attribute_definitions td ON td.id = ar.to_attribute_definition_id
-		WHERE ar.id=$1`, id).Scan(&optionSet, &fromCharacteristic, &fromOption, &toCharacteristic, &toOption, &active, &revision)
+		JOIN public.attribute_options fo ON fo.option_set = ar.option_set AND fo.attribute_definition_id = fd.id AND fo.code = ar.from_option_code
+		JOIN public.attribute_options too ON too.option_set = ar.option_set AND too.attribute_definition_id = td.id AND too.code = ar.to_option_code
+		WHERE ar.id=$1`, id).Scan(&optionSetID, &optionSet, &fromDefinitionID, &fromCharacteristic, &fromOptionID, &fromOption,
+		&toDefinitionID, &toCharacteristic, &toOptionID, &toOption, &active, &revision)
 	if isNoRows(err) {
 		return domain.CatalogRecord{}, domain.ErrCatalogRecordNotFound
 	}
 	if err != nil {
 		return domain.CatalogRecord{}, fmt.Errorf("get attribute_option_relations: %w", err)
 	}
-	return catalogRecordWithRevision(optionRelationRecord(id, optionSet, fromCharacteristic, fromOption, toCharacteristic, toOption, active), revision), nil
+	return catalogRecordWithRevision(optionRelationRecord(id, optionSetID, optionSet, fromDefinitionID, fromCharacteristic, fromOptionID, fromOption,
+		toDefinitionID, toCharacteristic, toOptionID, toOption, active), revision), nil
 }
 
-func optionRelationRecord(id int64, optionSet, fromCharacteristic, fromOption, toCharacteristic, toOption string, active bool) domain.CatalogRecord {
+func optionRelationRecord(id, optionSetID int64, optionSet string, fromDefinitionID int64, fromCharacteristic string, fromOptionID int64, fromOption string,
+	toDefinitionID int64, toCharacteristic string, toOptionID int64, toOption string, active bool) domain.CatalogRecord {
 	return domain.CatalogRecord{Kind: domain.KindOptionRelation, ID: id, Active: active, Values: map[string]domain.CatalogValue{
-		"optionSet":          refValue(domain.KindOptionSet, optionSet),
-		"fromCharacteristic": refValue(domain.KindAttributeDefinition, fromCharacteristic),
-		"fromOption":         refValue(domain.KindOption, fromOption),
-		"toCharacteristic":   refValue(domain.KindAttributeDefinition, toCharacteristic),
-		"toOption":           refValue(domain.KindOption, toOption),
+		"optionSet":          refValue(domain.KindOptionSet, optionSet, optionSetID),
+		"fromCharacteristic": refValue(domain.KindAttributeDefinition, fromCharacteristic, fromDefinitionID),
+		"fromOption":         refValue(domain.KindOption, fromOption, fromOptionID),
+		"toCharacteristic":   refValue(domain.KindAttributeDefinition, toCharacteristic, toDefinitionID),
+		"toOption":           refValue(domain.KindOption, toOption, toOptionID),
 	}}
 }
 
@@ -1040,9 +1042,8 @@ func unitReferencedByResources(ctx context.Context, q querier, id int64) (bool, 
 
 // --- KindUnitPolicy ("Política de Unidad") -------------------------------
 //
-// resource_unit_policies' PK is (family_id, unit_id) — no BIGSERIAL id;
-// same hashtextextended() convention, over (class código|family
-// código|unit código).
+// resource_unit_policies' natural PK is (family_id, unit_id); migration
+// 000009 added a real BIGSERIAL id column (UNIQUE, additive).
 
 func listUnitPolicies(ctx context.Context, q querier, f domain.CatalogFilter) ([]domain.CatalogRecord, error) {
 	var conditions []string
@@ -1051,7 +1052,7 @@ func listUnitPolicies(ctx context.Context, q querier, f domain.CatalogFilter) ([
 	conditions, args = appendEqualsFilter(conditions, args, "cl.code", parentRefCode(f, "class"))
 	conditions, args = appendEqualsFilter(conditions, args, "f.code", parentRefCode(f, "family"))
 	sql := finalizeQuery(`
-		SELECT hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0), cl.code, f.code, u.code, p.allowed, p.suggested, p.active, p.revision
+		SELECT p.id, cl.id, cl.code, f.id, f.code, u.id, u.code, p.allowed, p.suggested, p.active, p.revision
 		FROM public.resource_unit_policies p
 		JOIN public.resource_families f ON f.id = p.family_id
 		JOIN public.resource_classes cl ON cl.id = f.class_id
@@ -1064,42 +1065,43 @@ func listUnitPolicies(ctx context.Context, q querier, f domain.CatalogFilter) ([
 	defer rows.Close()
 	var out []domain.CatalogRecord
 	for rows.Next() {
-		var id int64
+		var id, classID, familyID, unitID int64
 		var classCode, familyCode, unitCode string
 		var allowed, suggested, active bool
 		var revision uint64
-		if err := rows.Scan(&id, &classCode, &familyCode, &unitCode, &allowed, &suggested, &active, &revision); err != nil {
+		if err := rows.Scan(&id, &classID, &classCode, &familyID, &familyCode, &unitID, &unitCode, &allowed, &suggested, &active, &revision); err != nil {
 			return nil, fmt.Errorf("scan resource_unit_policies: %w", err)
 		}
-		out = append(out, catalogRecordWithRevision(unitPolicyRecord(id, classCode, familyCode, unitCode, allowed, suggested, active), revision))
+		out = append(out, catalogRecordWithRevision(unitPolicyRecord(id, classID, classCode, familyID, familyCode, unitID, unitCode, allowed, suggested, active), revision))
 	}
 	return out, rows.Err()
 }
 
 func getUnitPolicy(ctx context.Context, q querier, id int64) (domain.CatalogRecord, error) {
+	var classID, familyID, unitID int64
 	var classCode, familyCode, unitCode string
 	var allowed, suggested, active bool
 	var revision uint64
 	err := q.QueryRow(ctx, `
-		SELECT cl.code, f.code, u.code, p.allowed, p.suggested, p.active, p.revision
+		SELECT cl.id, cl.code, f.id, f.code, u.id, u.code, p.allowed, p.suggested, p.active, p.revision
 		FROM public.resource_unit_policies p
 		JOIN public.resource_families f ON f.id = p.family_id
 		JOIN public.resource_classes cl ON cl.id = f.class_id
 		JOIN public.unit_definitions u ON u.id = p.unit_id
-		WHERE hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $1`, id).
-		Scan(&classCode, &familyCode, &unitCode, &allowed, &suggested, &active, &revision)
+		WHERE p.id = $1`, id).
+		Scan(&classID, &classCode, &familyID, &familyCode, &unitID, &unitCode, &allowed, &suggested, &active, &revision)
 	if isNoRows(err) {
 		return domain.CatalogRecord{}, domain.ErrCatalogRecordNotFound
 	}
 	if err != nil {
 		return domain.CatalogRecord{}, fmt.Errorf("get resource_unit_policies: %w", err)
 	}
-	return catalogRecordWithRevision(unitPolicyRecord(id, classCode, familyCode, unitCode, allowed, suggested, active), revision), nil
+	return catalogRecordWithRevision(unitPolicyRecord(id, classID, classCode, familyID, familyCode, unitID, unitCode, allowed, suggested, active), revision), nil
 }
 
-func unitPolicyRecord(id int64, classCode, familyCode, unitCode string, allowed, suggested, active bool) domain.CatalogRecord {
+func unitPolicyRecord(id, classID int64, classCode string, familyID int64, familyCode string, unitID int64, unitCode string, allowed, suggested, active bool) domain.CatalogRecord {
 	return domain.CatalogRecord{Kind: domain.KindUnitPolicy, ID: id, Active: active, Values: map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "unit": refValue(domain.KindUnit, unitCode),
+		"class": refValue(domain.KindClass, classCode, classID), "family": refValue(domain.KindFamily, familyCode, familyID), "unit": refValue(domain.KindUnit, unitCode, unitID),
 		"allowed": boolValue(allowed), "suggested": boolValue(suggested),
 	}}
 }
@@ -1111,7 +1113,7 @@ func insertUnitPolicy(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) 
 		SELECT f.id, u.id, $4, $5, $6
 		FROM public.resource_families f JOIN public.resource_classes cl ON cl.id = f.class_id, public.unit_definitions u
 		WHERE cl.code=$1 AND f.code=$2 AND u.code=$3
-		RETURNING hashtextextended($1::text || '|' || $2::text || '|' || $3::text, 0)`,
+		RETURNING id`,
 		fieldRef(rec, "class"), fieldRef(rec, "family"), fieldRef(rec, "unit"), fieldBool(rec, "allowed"), fieldBool(rec, "suggested"), rec.Active).Scan(&id)
 	if isNoRows(err) {
 		return 0, fmt.Errorf("%w: class %q, family %q, or unit %q", domain.ErrCatalogReference, fieldRef(rec, "class"), fieldRef(rec, "family"), fieldRef(rec, "unit"))
@@ -1127,12 +1129,7 @@ func insertUnitPolicy(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) 
 // delete+insert, not an update (same rationale as Option/PresentationField).
 func updateUnitPolicy(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) error {
 	var familyID, unitID int64
-	err := tx.QueryRow(ctx, `
-		SELECT p.family_id, p.unit_id FROM public.resource_unit_policies p
-		JOIN public.resource_families f ON f.id = p.family_id
-		JOIN public.resource_classes cl ON cl.id = f.class_id
-		JOIN public.unit_definitions u ON u.id = p.unit_id
-		WHERE hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $1`, rec.ID).Scan(&familyID, &unitID)
+	err := tx.QueryRow(ctx, `SELECT family_id, unit_id FROM public.resource_unit_policies WHERE id = $1`, rec.ID).Scan(&familyID, &unitID)
 	if isNoRows(err) {
 		return domain.ErrCatalogRecordNotFound
 	}
@@ -1148,11 +1145,7 @@ func updateUnitPolicy(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) 
 }
 
 func setActiveUnitPolicy(ctx context.Context, tx pgx.Tx, id int64, active bool) error {
-	tag, err := tx.Exec(ctx, `
-		UPDATE public.resource_unit_policies p SET active=$1
-		FROM public.resource_families f, public.resource_classes cl, public.unit_definitions u
-		WHERE f.id = p.family_id AND cl.id = f.class_id AND u.id = p.unit_id
-		  AND hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $2`, active, id)
+	tag, err := tx.Exec(ctx, `UPDATE public.resource_unit_policies SET active=$1 WHERE id = $2`, active, id)
 	if err != nil {
 		return mapCatalogWriteError(fmt.Errorf("set active on resource_unit_policies: %w", err))
 	}
@@ -1160,11 +1153,7 @@ func setActiveUnitPolicy(ctx context.Context, tx pgx.Tx, id int64, active bool) 
 }
 
 func deleteUnitPolicy(ctx context.Context, tx pgx.Tx, id int64) error {
-	tag, err := tx.Exec(ctx, `
-		DELETE FROM public.resource_unit_policies p
-		USING public.resource_families f, public.resource_classes cl, public.unit_definitions u
-		WHERE f.id = p.family_id AND cl.id = f.class_id AND u.id = p.unit_id
-		  AND hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $1`, id)
+	tag, err := tx.Exec(ctx, `DELETE FROM public.resource_unit_policies WHERE id = $1`, id)
 	if err != nil {
 		return mapCatalogDeleteError(fmt.Errorf("delete from resource_unit_policies: %w", err))
 	}
@@ -1183,12 +1172,13 @@ func listAttributeBindings(ctx context.Context, q querier, f domain.CatalogFilte
 	conditions, args = appendEqualsFilter(conditions, args, "d.code", parentRefCode(f, "characteristic"))
 	conditions, args = appendEqualsFilter(conditions, args, "ra.option_set", parentRefCode(f, "optionSet"))
 	sql := finalizeQuery(`
-		SELECT ra.id, cl.code, f.code, COALESCE(t.code, ''), d.code, ra.option_set, ra.mode, ra.identity_participates, ra.active, ra.revision
+		SELECT ra.id, cl.id, cl.code, f.id, f.code, COALESCE(t.id, 0), COALESCE(t.code, ''), d.id, d.code, COALESCE(os.id, 0), ra.option_set, ra.mode, ra.identity_participates, ra.active, ra.revision
 		FROM public.resource_attributes ra
 		JOIN public.resource_families f ON f.id = ra.family_id
 		JOIN public.resource_classes cl ON cl.id = ra.class_id
 		LEFT JOIN public.resource_types t ON t.id = ra.type_id
-		JOIN public.attribute_definitions d ON d.id = ra.definition_id`, conditions, "f.id, COALESCE(t.id, 0), ra.display_order", f)
+		JOIN public.attribute_definitions d ON d.id = ra.definition_id
+		LEFT JOIN public.resource_option_sets os ON os.code = ra.option_set`, conditions, "f.id, COALESCE(t.id, 0), ra.display_order", f)
 
 	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
@@ -1197,43 +1187,46 @@ func listAttributeBindings(ctx context.Context, q querier, f domain.CatalogFilte
 	defer rows.Close()
 	var out []domain.CatalogRecord
 	for rows.Next() {
-		var id int64
+		var id, classID, familyID, typeID, definitionID, optionSetID int64
 		var classCode, familyCode, typeCode, characteristic, optionSet, mode string
 		var identityParticipates, active bool
 		var revision uint64
-		if err := rows.Scan(&id, &classCode, &familyCode, &typeCode, &characteristic, &optionSet, &mode, &identityParticipates, &active, &revision); err != nil {
+		if err := rows.Scan(&id, &classID, &classCode, &familyID, &familyCode, &typeID, &typeCode, &definitionID, &characteristic, &optionSetID, &optionSet, &mode, &identityParticipates, &active, &revision); err != nil {
 			return nil, fmt.Errorf("scan resource_attributes: %w", err)
 		}
-		out = append(out, catalogRecordWithRevision(attributeBindingRecord(id, classCode, familyCode, typeCode, characteristic, optionSet, mode, identityParticipates, active), revision))
+		out = append(out, catalogRecordWithRevision(attributeBindingRecord(id, classID, classCode, familyID, familyCode, typeID, typeCode, definitionID, characteristic, optionSetID, optionSet, mode, identityParticipates, active), revision))
 	}
 	return out, rows.Err()
 }
 
 func getAttributeBinding(ctx context.Context, q querier, id int64) (domain.CatalogRecord, error) {
+	var classID, familyID, typeID, definitionID, optionSetID int64
 	var classCode, familyCode, typeCode, characteristic, optionSet, mode string
 	var identityParticipates, active bool
 	var revision uint64
 	err := q.QueryRow(ctx, `
-		SELECT cl.code, f.code, COALESCE(t.code, ''), d.code, ra.option_set, ra.mode, ra.identity_participates, ra.active, ra.revision
+		SELECT cl.id, cl.code, f.id, f.code, COALESCE(t.id, 0), COALESCE(t.code, ''), d.id, d.code, COALESCE(os.id, 0), ra.option_set, ra.mode, ra.identity_participates, ra.active, ra.revision
 		FROM public.resource_attributes ra
 		JOIN public.resource_families f ON f.id = ra.family_id
 		JOIN public.resource_classes cl ON cl.id = ra.class_id
 		LEFT JOIN public.resource_types t ON t.id = ra.type_id
 		JOIN public.attribute_definitions d ON d.id = ra.definition_id
-		WHERE ra.id=$1`, id).Scan(&classCode, &familyCode, &typeCode, &characteristic, &optionSet, &mode, &identityParticipates, &active, &revision)
+		LEFT JOIN public.resource_option_sets os ON os.code = ra.option_set
+		WHERE ra.id=$1`, id).Scan(&classID, &classCode, &familyID, &familyCode, &typeID, &typeCode, &definitionID, &characteristic, &optionSetID, &optionSet, &mode, &identityParticipates, &active, &revision)
 	if isNoRows(err) {
 		return domain.CatalogRecord{}, domain.ErrCatalogRecordNotFound
 	}
 	if err != nil {
 		return domain.CatalogRecord{}, fmt.Errorf("get resource_attributes: %w", err)
 	}
-	return catalogRecordWithRevision(attributeBindingRecord(id, classCode, familyCode, typeCode, characteristic, optionSet, mode, identityParticipates, active), revision), nil
+	return catalogRecordWithRevision(attributeBindingRecord(id, classID, classCode, familyID, familyCode, typeID, typeCode, definitionID, characteristic, optionSetID, optionSet, mode, identityParticipates, active), revision), nil
 }
 
-func attributeBindingRecord(id int64, classCode, familyCode, typeCode, characteristic, optionSet, mode string, identityParticipates, active bool) domain.CatalogRecord {
+func attributeBindingRecord(id, classID int64, classCode string, familyID int64, familyCode string, typeID int64, typeCode string,
+	definitionID int64, characteristic string, optionSetID int64, optionSet, mode string, identityParticipates, active bool) domain.CatalogRecord {
 	return domain.CatalogRecord{Kind: domain.KindAttributeBinding, ID: id, Active: active, Values: map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "type": refValue(domain.KindType, typeCode),
-		"characteristic": refValue(domain.KindAttributeDefinition, characteristic), "optionSet": refValue(domain.KindOptionSet, optionSet),
+		"class": refValue(domain.KindClass, classCode, classID), "family": refValue(domain.KindFamily, familyCode, familyID), "type": refValue(domain.KindType, typeCode, typeID),
+		"characteristic": refValue(domain.KindAttributeDefinition, characteristic, definitionID), "optionSet": refValue(domain.KindOptionSet, optionSet, optionSetID),
 		"mode": textValue(mode), "identityParticipates": boolValue(identityParticipates),
 	}}
 }
@@ -1316,9 +1309,9 @@ func updateAttributeBinding(ctx context.Context, tx pgx.Tx, rec domain.CatalogRe
 
 // --- KindPresentationField ("Campo de Presentación") ---------------------
 //
-// resource_type_presentation_fields' PK is (type_id, attribute_definition_id)
-// — no BIGSERIAL id; same hashtextextended() convention, over (class
-// código|family código|type código|characteristic código).
+// resource_type_presentation_fields' natural PK is (type_id,
+// attribute_definition_id); migration 000009 added a real BIGSERIAL id
+// column (UNIQUE, additive).
 
 func listPresentationFields(ctx context.Context, q querier, f domain.CatalogFilter) ([]domain.CatalogRecord, error) {
 	var conditions []string
@@ -1328,7 +1321,7 @@ func listPresentationFields(ctx context.Context, q querier, f domain.CatalogFilt
 	conditions, args = appendEqualsFilter(conditions, args, "f.code", parentRefCode(f, "family"))
 	conditions, args = appendEqualsFilter(conditions, args, "t.code", parentRefCode(f, "type"))
 	sql := finalizeQuery(`
-		SELECT hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0), cl.code, f.code, t.code, d.code, pf.position, pf.active, pf.revision
+		SELECT pf.id, cl.id, cl.code, f.id, f.code, t.id, t.code, d.id, d.code, pf.position, pf.active, pf.revision
 		FROM public.resource_type_presentation_fields pf
 		JOIN public.resource_types t ON t.id = pf.type_id
 		JOIN public.resource_families f ON f.id = t.family_id
@@ -1342,46 +1335,48 @@ func listPresentationFields(ctx context.Context, q querier, f domain.CatalogFilt
 	defer rows.Close()
 	var out []domain.CatalogRecord
 	for rows.Next() {
-		var id int64
+		var id, classID, familyID, typeID, definitionID int64
 		var classCode, familyCode, typeCode, characteristic string
 		var position int
 		var active bool
 		var revision uint64
-		if err := rows.Scan(&id, &classCode, &familyCode, &typeCode, &characteristic, &position, &active, &revision); err != nil {
+		if err := rows.Scan(&id, &classID, &classCode, &familyID, &familyCode, &typeID, &typeCode, &definitionID, &characteristic, &position, &active, &revision); err != nil {
 			return nil, fmt.Errorf("scan resource_type_presentation_fields: %w", err)
 		}
-		out = append(out, catalogRecordWithRevision(presentationFieldRecord(id, classCode, familyCode, typeCode, characteristic, position, active), revision))
+		out = append(out, catalogRecordWithRevision(presentationFieldRecord(id, classID, classCode, familyID, familyCode, typeID, typeCode, definitionID, characteristic, position, active), revision))
 	}
 	return out, rows.Err()
 }
 
 func getPresentationField(ctx context.Context, q querier, id int64) (domain.CatalogRecord, error) {
+	var classID, familyID, typeID, definitionID int64
 	var classCode, familyCode, typeCode, characteristic string
 	var position int
 	var active bool
 	var revision uint64
 	err := q.QueryRow(ctx, `
-		SELECT cl.code, f.code, t.code, d.code, pf.position, pf.active, pf.revision
+		SELECT cl.id, cl.code, f.id, f.code, t.id, t.code, d.id, d.code, pf.position, pf.active, pf.revision
 		FROM public.resource_type_presentation_fields pf
 		JOIN public.resource_types t ON t.id = pf.type_id
 		JOIN public.resource_families f ON f.id = t.family_id
 		JOIN public.resource_classes cl ON cl.id = t.class_id
 		JOIN public.attribute_definitions d ON d.id = pf.attribute_definition_id
-		WHERE hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $1`, id).
-		Scan(&classCode, &familyCode, &typeCode, &characteristic, &position, &active, &revision)
+		WHERE pf.id = $1`, id).
+		Scan(&classID, &classCode, &familyID, &familyCode, &typeID, &typeCode, &definitionID, &characteristic, &position, &active, &revision)
 	if isNoRows(err) {
 		return domain.CatalogRecord{}, domain.ErrCatalogRecordNotFound
 	}
 	if err != nil {
 		return domain.CatalogRecord{}, fmt.Errorf("get resource_type_presentation_fields: %w", err)
 	}
-	return catalogRecordWithRevision(presentationFieldRecord(id, classCode, familyCode, typeCode, characteristic, position, active), revision), nil
+	return catalogRecordWithRevision(presentationFieldRecord(id, classID, classCode, familyID, familyCode, typeID, typeCode, definitionID, characteristic, position, active), revision), nil
 }
 
-func presentationFieldRecord(id int64, classCode, familyCode, typeCode, characteristic string, position int, active bool) domain.CatalogRecord {
+func presentationFieldRecord(id, classID int64, classCode string, familyID int64, familyCode string, typeID int64, typeCode string,
+	definitionID int64, characteristic string, position int, active bool) domain.CatalogRecord {
 	return domain.CatalogRecord{Kind: domain.KindPresentationField, ID: id, Active: active, Values: map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "type": refValue(domain.KindType, typeCode),
-		"characteristic": refValue(domain.KindAttributeDefinition, characteristic), "position": intValue(position),
+		"class": refValue(domain.KindClass, classCode, classID), "family": refValue(domain.KindFamily, familyCode, familyID), "type": refValue(domain.KindType, typeCode, typeID),
+		"characteristic": refValue(domain.KindAttributeDefinition, characteristic, definitionID), "position": intValue(position),
 	}}
 }
 
@@ -1394,7 +1389,7 @@ func insertPresentationField(ctx context.Context, tx pgx.Tx, rec domain.CatalogR
 		JOIN public.resource_families f ON f.id = t.family_id
 		JOIN public.resource_classes cl ON cl.id = t.class_id, public.attribute_definitions d
 		WHERE cl.code=$1 AND f.code=$2 AND t.code=$3 AND d.code=$4
-		RETURNING hashtextextended($1::text || '|' || $2::text || '|' || $3::text || '|' || $4::text, 0)`,
+		RETURNING id`,
 		fieldRef(rec, "class"), fieldRef(rec, "family"), fieldRef(rec, "type"), fieldRef(rec, "characteristic"), fieldInt(rec, "position"), rec.Active).Scan(&id)
 	if isNoRows(err) {
 		return 0, fmt.Errorf("%w: type %q or characteristic %q", domain.ErrCatalogReference, fieldRef(rec, "type"), fieldRef(rec, "characteristic"))
@@ -1410,14 +1405,7 @@ func insertPresentationField(ctx context.Context, tx pgx.Tx, rec domain.CatalogR
 // updateUnitPolicy/updateOption).
 func updatePresentationField(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) error {
 	var typeID, definitionID int64
-	err := tx.QueryRow(ctx, `
-		SELECT pf.type_id, pf.attribute_definition_id
-		FROM public.resource_type_presentation_fields pf
-		JOIN public.resource_types t ON t.id = pf.type_id
-		JOIN public.resource_families f ON f.id = t.family_id
-		JOIN public.resource_classes cl ON cl.id = t.class_id
-		JOIN public.attribute_definitions d ON d.id = pf.attribute_definition_id
-		WHERE hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $1`, rec.ID).Scan(&typeID, &definitionID)
+	err := tx.QueryRow(ctx, `SELECT type_id, attribute_definition_id FROM public.resource_type_presentation_fields WHERE id = $1`, rec.ID).Scan(&typeID, &definitionID)
 	if isNoRows(err) {
 		return domain.ErrCatalogRecordNotFound
 	}
@@ -1433,11 +1421,7 @@ func updatePresentationField(ctx context.Context, tx pgx.Tx, rec domain.CatalogR
 }
 
 func setActivePresentationField(ctx context.Context, tx pgx.Tx, id int64, active bool) error {
-	tag, err := tx.Exec(ctx, `
-		UPDATE public.resource_type_presentation_fields pf SET active=$1
-		FROM public.resource_types t, public.resource_families f, public.resource_classes cl, public.attribute_definitions d
-		WHERE t.id = pf.type_id AND f.id = t.family_id AND cl.id = t.class_id AND d.id = pf.attribute_definition_id
-		  AND hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $2`, active, id)
+	tag, err := tx.Exec(ctx, `UPDATE public.resource_type_presentation_fields SET active=$1 WHERE id = $2`, active, id)
 	if err != nil {
 		return mapCatalogWriteError(fmt.Errorf("set active on resource_type_presentation_fields: %w", err))
 	}
@@ -1445,11 +1429,7 @@ func setActivePresentationField(ctx context.Context, tx pgx.Tx, id int64, active
 }
 
 func deletePresentationField(ctx context.Context, tx pgx.Tx, id int64) error {
-	tag, err := tx.Exec(ctx, `
-		DELETE FROM public.resource_type_presentation_fields pf
-		USING public.resource_types t, public.resource_families f, public.resource_classes cl, public.attribute_definitions d
-		WHERE t.id = pf.type_id AND f.id = t.family_id AND cl.id = t.class_id AND d.id = pf.attribute_definition_id
-		  AND hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $1`, id)
+	tag, err := tx.Exec(ctx, `DELETE FROM public.resource_type_presentation_fields WHERE id = $1`, id)
 	if err != nil {
 		return mapCatalogDeleteError(fmt.Errorf("delete from resource_type_presentation_fields: %w", err))
 	}

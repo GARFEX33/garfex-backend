@@ -215,12 +215,17 @@ func intValue(i int) domain.CatalogValue     { return domain.CatalogValue{Int: i
 func listValue(l []string) domain.CatalogValue {
 	return domain.CatalogValue{List: l}
 }
-func refValue(kind domain.CatalogKindCode, code string) domain.CatalogValue {
-	return domain.CatalogValue{Ref: domain.CatalogRef{Kind: kind, Code: code}}
+
+// refValue builds a reference value carrying the referenced record's own
+// database id (resolved by the caller's query), so a public API consumer
+// can address that record directly (PUT/deactivate/reactivate) without a
+// separate lookup — never a placeholder 0.
+func refValue(kind domain.CatalogKindCode, code string, id int64) domain.CatalogValue {
+	return domain.CatalogValue{Ref: domain.CatalogRef{Kind: kind, Code: code, ID: id}}
 }
 
-func refValueLabel(kind domain.CatalogKindCode, code, label string) domain.CatalogValue {
-	return domain.CatalogValue{Ref: domain.CatalogRef{Kind: kind, Code: code, Label: label}}
+func refValueLabel(kind domain.CatalogKindCode, code, label string, id int64) domain.CatalogValue {
+	return domain.CatalogValue{Ref: domain.CatalogRef{Kind: kind, Code: code, Label: label, ID: id}}
 }
 
 // --- error mapping ---------------------------------------------------------

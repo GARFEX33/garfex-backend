@@ -16,6 +16,13 @@ type CatalogRef struct {
 	// Label is the human-readable identity resolved by the repository for UI
 	// presentation. Code remains the stable mutation/reference key.
 	Label string
+	// ID is the referenced record's own database identity, resolved by the
+	// repository for public API addressing (so a client can PUT/deactivate/
+	// reactivate the referenced record without a separate lookup) — the same
+	// repository-resolved-presentation-data pattern as Label. Code remains
+	// the stable mutation/reference key; ID is 0 when unresolved (e.g. a
+	// pure in-memory ResourceCatalog snapshot with no repository behind it).
+	ID int64
 }
 
 // CatalogValue is one field's value inside a CatalogRecord (design D8) — a

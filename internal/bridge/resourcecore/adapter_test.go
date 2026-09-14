@@ -317,6 +317,31 @@ func TestAdapter_GetCatalog(t *testing.T) {
 	}
 }
 
+// TestAdapter_GetCatalogReferenceCarriesRealID proves a FieldRef value's
+// domain.CatalogRef.ID (resolved by the repository) crosses the public
+// boundary as public.Reference.ID — never a hardcoded placeholder 0, which
+// would leave a client unable to PUT/deactivate/reactivate the referenced
+// record without a separate lookup.
+func TestAdapter_GetCatalogReferenceCarriesRealID(t *testing.T) {
+	catalog := &fakeCatalogReader{
+		kinds: []domain.CatalogKind{allFieldKindsKind()},
+		get: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (domain.CatalogRecord, error) {
+			return domain.CatalogRecord{Kind: domain.KindFamily, ID: id, Active: true, Values: map[string]domain.CatalogValue{
+				"class": {Ref: domain.CatalogRef{Kind: domain.KindClass, Code: "MAT", ID: 42}},
+			}}, nil
+		},
+	}
+	adapter := newTestAdapter(catalog, nil)
+	rec, err := adapter.GetCatalog(context.Background(), public.CatalogKey{Kind: public.KindFamily, ID: 5})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ref := rec.Values["class"].Reference
+	if ref == nil || ref.ID != 42 || ref.Code != "MAT" {
+		t.Fatalf("unexpected reference: %+v", ref)
+	}
+}
+
 func TestAdapter_GetResource(t *testing.T) {
 	resources := &fakeResourceReader{
 		get: func(ctx context.Context, classCode, identityKey string) (domain.Resource, error) {
@@ -749,6 +774,9 @@ func TestWriteBridge_CatalogPort_FakeAdapted(t *testing.T) {
 			rec.ID, rec.Revision = 1, 1
 			return rec, nil
 		},
+		get: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (domain.CatalogRecord, error) {
+			return domain.CatalogRecord{Kind: kind, ID: id, Revision: 1}, nil
+		},
 	}
 	adapter := newTestAdapter(catalog, nil)
 	rec, err := adapter.CreateCatalog(context.Background(), public.CatalogWriteRequest{
@@ -772,6 +800,9 @@ func TestWriteBridge_CatalogCreate_FieldCompleteness(t *testing.T) {
 			capturedKind, captured = kind, rec
 			rec.Kind, rec.ID, rec.Revision = kind, 3, 1
 			return rec, nil
+		},
+		get: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (domain.CatalogRecord, error) {
+			return domain.CatalogRecord{Kind: kind, ID: id, Revision: 1}, nil
 		},
 	}
 	adapter := newTestAdapter(catalog, nil)
@@ -821,6 +852,9 @@ func TestCatalogCreate_ValueMapping_InverseRoundTrip(t *testing.T) {
 					captured = rec
 					return rec, nil
 				},
+				get: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (domain.CatalogRecord, error) {
+					return captured, nil
+				},
 			}
 			adapter := newTestAdapter(catalog, nil)
 			_, err := adapter.CreateCatalog(context.Background(), public.CatalogWriteRequest{
@@ -846,6 +880,9 @@ func TestCatalogCreate_RuleMapping_AllSixFieldsMapped(t *testing.T) {
 		create: func(ctx context.Context, kind domain.CatalogKindCode, rec domain.CatalogRecord) (domain.CatalogRecord, error) {
 			captured = rec
 			return rec, nil
+		},
+		get: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (domain.CatalogRecord, error) {
+			return captured, nil
 		},
 	}
 	adapter := newTestAdapter(catalog, nil)
@@ -931,6 +968,9 @@ func TestWriteBridge_CatalogWriter_UpdateRevisionFakeAdapted(t *testing.T) {
 			rec.Revision = expectedRevision + 1
 			return rec, nil
 		},
+		get: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (domain.CatalogRecord, error) {
+			return domain.CatalogRecord{Kind: kind, ID: id, Revision: 2}, nil
+		},
 	}
 	adapter := newTestAdapter(catalog, nil)
 	rec, err := adapter.UpdateCatalog(context.Background(), public.CatalogUpdateRequest{
@@ -954,6 +994,9 @@ func TestCatalogUpdate_FieldCompleteness_IDAndExpectedRevision(t *testing.T) {
 			capturedRec, capturedExpected = rec, expectedRevision
 			rec.Revision = expectedRevision + 1
 			return rec, nil
+		},
+		get: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (domain.CatalogRecord, error) {
+			return domain.CatalogRecord{Kind: kind, ID: id, Revision: 8}, nil
 		},
 	}
 	adapter := newTestAdapter(catalog, nil)

@@ -45,8 +45,8 @@ func TestApplicabilityAggregateV2Integration(t *testing.T) {
 		return domain.CatalogRecord{
 			Kind: domain.KindAttributeBinding, Active: true,
 			Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0),
 				"mode":           textValue(string(mode)), "identityParticipates": boolValue(true),
 			},
 			Rules: rules,
@@ -54,7 +54,7 @@ func TestApplicabilityAggregateV2Integration(t *testing.T) {
 	}
 	condRule := domain.CatalogRuleRecord{When: domain.AttributeCondition{AttributeCode: whenCode, Equals: "X"}, Mode: domain.ModeForbidden, NotApplicable: true, Active: true}
 	badFamily := rec(domain.ModeConditional, []domain.CatalogRuleRecord{condRule})
-	badFamily.Values["family"] = refValue(domain.KindFamily, "TEST_3E_NO_SUCH_FAMILY")
+	badFamily.Values["family"] = refValue(domain.KindFamily, "TEST_3E_NO_SUCH_FAMILY", 0)
 	badRule := domain.CatalogRuleRecord{When: domain.AttributeCondition{AttributeCode: "TEST_3E_NO_SUCH_WHEN", Equals: "X"}, Mode: domain.ModeForbidden, Active: true}
 	badMode := domain.CatalogRuleRecord{When: domain.AttributeCondition{AttributeCode: whenCode, Equals: "X"}, Mode: domain.AttributeMode("BOGUS"), Active: true}
 	forceReloadFailure := func() {
@@ -229,8 +229,8 @@ func TestCoherentResultRollbackIntegration(t *testing.T) {
 		_, err := repo.Insert(ctx, domain.CatalogRecord{
 			Kind: domain.KindAttributeBinding, Active: true,
 			Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0),
 				"mode":           textValue(string(domain.ModeConditional)), "identityParticipates": boolValue(true),
 			},
 			Rules: []domain.CatalogRuleRecord{ruleA, ruleB},
@@ -268,7 +268,7 @@ func setupApplicabilityFixture(t *testing.T, ctx context.Context, pool *pgxpool.
 		"aliases": {List: []string{}}, "keywords": {List: []string{}},
 	})
 	insert(domain.KindFamily, map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, "TEST_3E_CLASS"), "code": {Text: "TEST_3E_FAM"}, "name": {Text: "Test 3E Familia"},
+		"class": refValue(domain.KindClass, "TEST_3E_CLASS", 0), "code": {Text: "TEST_3E_FAM"}, "name": {Text: "Test 3E Familia"},
 	})
 	insert(domain.KindAttributeDefinition, map[string]domain.CatalogValue{
 		"code": {Text: "test_3e_char"}, "name": {Text: "Test 3E Característica"}, "valueType": {Text: string(domain.ValueTypeControlledText)},
@@ -339,7 +339,7 @@ func TestCatalogCASCreateUpdateIntegration(t *testing.T) {
 			name: "FAMILIA", insert: insertFamilyV2, update: updateFamilyV2,
 			rec: func(code string) domain.CatalogRecord {
 				return domain.CatalogRecord{Kind: domain.KindFamily, Active: true, Values: map[string]domain.CatalogValue{
-					"class": refValue(domain.KindClass, classCode), "code": textValue(code), "name": textValue("Test 3F " + code),
+					"class": refValue(domain.KindClass, classCode, 0), "code": textValue(code), "name": textValue("Test 3F " + code),
 				}}
 			},
 			rowsQuery: `SELECT count(*) FROM public.resource_families WHERE id=$1`,
@@ -349,7 +349,7 @@ func TestCatalogCASCreateUpdateIntegration(t *testing.T) {
 			name: "TIPO", insert: insertTypeV2, update: updateTypeV2,
 			rec: func(code string) domain.CatalogRecord {
 				return domain.CatalogRecord{Kind: domain.KindType, Active: true, Values: map[string]domain.CatalogValue{
-					"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
+					"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
 					"code": textValue(code), "name": textValue("Test 3F " + code),
 				}}
 			},
@@ -373,8 +373,8 @@ func TestCatalogCASCreateUpdateIntegration(t *testing.T) {
 					"code": textValue(code), "name": textValue("Test 3F " + code),
 				}}
 			},
-			rowsQuery: `SELECT count(*) FROM public.resource_option_sets WHERE hashtextextended(code, 0)=$1`,
-			cleanup:   `DELETE FROM public.resource_option_sets WHERE hashtextextended(code, 0)=$1`,
+			rowsQuery: `SELECT count(*) FROM public.resource_option_sets WHERE id=$1`,
+			cleanup:   `DELETE FROM public.resource_option_sets WHERE id=$1`,
 		},
 	}
 
@@ -390,16 +390,6 @@ func TestCatalogCASCreateUpdateIntegration(t *testing.T) {
 					t.Errorf("cleanup %s fixture: %v", tc.name, err)
 				}
 			})
-			if tc.name == "CONJUNTO_OPCIONES" {
-				var wantID int64
-				if err := pool.QueryRow(ctx, `SELECT hashtextextended($1::text, 0)`, code).Scan(&wantID); err != nil {
-					t.Fatalf("compute expected hash id: %v", err)
-				}
-				if id != wantID {
-					t.Fatalf("option set id = %d, want hashtextextended(code,0) = %d", id, wantID)
-				}
-			}
-
 			updated := tc.rec(code)
 			updated.ID = id
 			updated.Values["name"] = textValue("Test 3F " + code + " Renamed")
@@ -434,7 +424,7 @@ func TestCatalogCASCreateUpdateIntegration(t *testing.T) {
 
 	t.Run("FAMILIA insert rejects missing class reference", func(t *testing.T) {
 		_, _, err := runInsert(insertFamilyV2, domain.CatalogRecord{Kind: domain.KindFamily, Active: true, Values: map[string]domain.CatalogValue{
-			"class": refValue(domain.KindClass, "TEST_3F_NO_SUCH_CLASS"), "code": textValue("TEST_3F_FAM_BADREF"), "name": textValue("x"),
+			"class": refValue(domain.KindClass, "TEST_3F_NO_SUCH_CLASS", 0), "code": textValue("TEST_3F_FAM_BADREF"), "name": textValue("x"),
 		}})
 		if !errors.Is(err, domain.ErrCatalogReference) {
 			t.Fatalf("error = %v, want ErrCatalogReference", err)
@@ -442,7 +432,7 @@ func TestCatalogCASCreateUpdateIntegration(t *testing.T) {
 	})
 	t.Run("TIPO insert rejects missing family reference", func(t *testing.T) {
 		_, _, err := runInsert(insertTypeV2, domain.CatalogRecord{Kind: domain.KindType, Active: true, Values: map[string]domain.CatalogValue{
-			"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, "TEST_3F_NO_SUCH_FAM"),
+			"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, "TEST_3F_NO_SUCH_FAM", 0),
 			"code": textValue("TEST_3F_TIPO_BADREF"), "name": textValue("x"),
 		}})
 		if !errors.Is(err, domain.ErrCatalogReference) {
@@ -486,10 +476,10 @@ func TestCatalogCASImmutableCodeOnceReferencedIntegration(t *testing.T) {
 		"slug": textValue("x"), "aliases": listValue([]string{}), "keywords": listValue([]string{}),
 	})
 	familyID := insert(domain.KindFamily, map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, "TEST_3F_IMM_CLASS"), "code": textValue("TEST_3F_IMM_FAM"), "name": textValue("X"),
+		"class": refValue(domain.KindClass, "TEST_3F_IMM_CLASS", 0), "code": textValue("TEST_3F_IMM_FAM"), "name": textValue("X"),
 	})
 	typeID := insert(domain.KindType, map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, "TEST_3F_IMM_CLASS"), "family": refValue(domain.KindFamily, "TEST_3F_IMM_FAM"),
+		"class": refValue(domain.KindClass, "TEST_3F_IMM_CLASS", 0), "family": refValue(domain.KindFamily, "TEST_3F_IMM_FAM", 0),
 		"code": textValue("TEST_3F_IMM_TIPO"), "name": textValue("X"),
 	})
 	definitionID := insert(domain.KindAttributeDefinition, map[string]domain.CatalogValue{
@@ -562,14 +552,14 @@ func TestCatalogCASImmutableCodeOnceReferencedIntegration(t *testing.T) {
 		assertCode(t, `SELECT name FROM public.resource_classes WHERE id=$1`, classID, "Y")
 
 		if _, err := run(t, updateFamilyV2, domain.CatalogRecord{Kind: domain.KindFamily, ID: familyID, Active: true, Values: map[string]domain.CatalogValue{
-			"class": refValue(domain.KindClass, "TEST_3F_IMM_CLASS"), "code": textValue("TEST_3F_IMM_FAM_X"), "name": textValue("Y"),
+			"class": refValue(domain.KindClass, "TEST_3F_IMM_CLASS", 0), "code": textValue("TEST_3F_IMM_FAM_X"), "name": textValue("Y"),
 		}}, 1); err != nil {
 			t.Fatalf("FAMILIA update: %v", err)
 		}
 		assertCode(t, `SELECT code FROM public.resource_families WHERE id=$1`, familyID, "TEST_3F_IMM_FAM")
 
 		if _, err := run(t, updateTypeV2, domain.CatalogRecord{Kind: domain.KindType, ID: typeID, Active: true, Values: map[string]domain.CatalogValue{
-			"class": refValue(domain.KindClass, "TEST_3F_IMM_CLASS"), "family": refValue(domain.KindFamily, "TEST_3F_IMM_FAM"),
+			"class": refValue(domain.KindClass, "TEST_3F_IMM_CLASS", 0), "family": refValue(domain.KindFamily, "TEST_3F_IMM_FAM", 0),
 			"code": textValue("TEST_3F_IMM_TIPO_X"), "name": textValue("Y"),
 		}}, 1); err != nil {
 			t.Fatalf("TIPO update: %v", err)
@@ -588,7 +578,7 @@ func TestCatalogCASImmutableCodeOnceReferencedIntegration(t *testing.T) {
 		}}, 1); err != nil {
 			t.Fatalf("CONJUNTO_OPCIONES update: %v", err)
 		}
-		assertCode(t, `SELECT code FROM public.resource_option_sets WHERE hashtextextended(code, 0)=$1`, optionSetID, "TEST_3F_IMM_OPTSET")
+		assertCode(t, `SELECT code FROM public.resource_option_sets WHERE id=$1`, optionSetID, "TEST_3F_IMM_OPTSET")
 	})
 
 	t.Run("CLASE triangulation: unreferenced still editable, CAS guard unaffected", func(t *testing.T) {
@@ -670,7 +660,7 @@ func TestCatalogCASCreateUpdateRemainingIntegration(t *testing.T) {
 			name: "OPCION", insert: insertOptionV2, update: updateOptionV2,
 			rec: func() domain.CatalogRecord {
 				return domain.CatalogRecord{Kind: domain.KindOption, Active: true, Values: map[string]domain.CatalogValue{
-					"optionSet": refValue(domain.KindOptionSet, optionSet), "characteristic": refValue(domain.KindAttributeDefinition, characteristic),
+					"optionSet": refValue(domain.KindOptionSet, optionSet, 0), "characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0),
 					"code": textValue("TEST_3G1_OPT"), "label": textValue("Test 3G1 Option"),
 				}}
 			},
@@ -678,18 +668,16 @@ func TestCatalogCASCreateUpdateRemainingIntegration(t *testing.T) {
 				r.Values["label"] = textValue("Test 3G1 Option Renamed")
 				return r
 			},
-			rowsQuery: `SELECT count(*) FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id=ao.attribute_definition_id
-				WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0)=$1`,
-			cleanup: `DELETE FROM public.attribute_options ao USING public.attribute_definitions d
-				WHERE d.id=ao.attribute_definition_id AND hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0)=$1`,
+			rowsQuery: `SELECT count(*) FROM public.attribute_options WHERE id=$1`,
+			cleanup:   `DELETE FROM public.attribute_options WHERE id=$1`,
 		},
 		{
 			name: "RELACION_OPCIONES", insert: insertOptionRelationV2, update: updateOptionRelationV2,
 			rec: func() domain.CatalogRecord {
 				return domain.CatalogRecord{Kind: domain.KindOptionRelation, Active: true, Values: map[string]domain.CatalogValue{
-					"optionSet":          refValue(domain.KindOptionSet, optionSet),
-					"fromCharacteristic": refValue(domain.KindAttributeDefinition, characteristic), "fromOption": refValue(domain.KindOption, fromOption),
-					"toCharacteristic": refValue(domain.KindAttributeDefinition, characteristic2), "toOption": refValue(domain.KindOption, toOption),
+					"optionSet":          refValue(domain.KindOptionSet, optionSet, 0),
+					"fromCharacteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "fromOption": refValue(domain.KindOption, fromOption, 0),
+					"toCharacteristic": refValue(domain.KindAttributeDefinition, characteristic2, 0), "toOption": refValue(domain.KindOption, toOption, 0),
 				}}
 			},
 			mutate:    func(r domain.CatalogRecord) domain.CatalogRecord { r.Active = false; return r },
@@ -700,33 +688,25 @@ func TestCatalogCASCreateUpdateRemainingIntegration(t *testing.T) {
 			name: "POLITICA_UNIDAD", insert: insertUnitPolicyV2, update: updateUnitPolicyV2,
 			rec: func() domain.CatalogRecord {
 				return domain.CatalogRecord{Kind: domain.KindUnitPolicy, Active: true, Values: map[string]domain.CatalogValue{
-					"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "unit": refValue(domain.KindUnit, unitCode),
+					"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0), "unit": refValue(domain.KindUnit, unitCode, 0),
 					"allowed": boolValue(true), "suggested": boolValue(false),
 				}}
 			},
-			mutate: func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["suggested"] = boolValue(true); return r },
-			rowsQuery: `SELECT count(*) FROM public.resource_unit_policies p JOIN public.resource_families f ON f.id=p.family_id
-				JOIN public.resource_classes cl ON cl.id=f.class_id JOIN public.unit_definitions u ON u.id=p.unit_id
-				WHERE hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0)=$1`,
-			cleanup: `DELETE FROM public.resource_unit_policies p USING public.resource_families f, public.resource_classes cl, public.unit_definitions u
-				WHERE f.id=p.family_id AND cl.id=f.class_id AND u.id=p.unit_id AND hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0)=$1`,
+			mutate:    func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["suggested"] = boolValue(true); return r },
+			rowsQuery: `SELECT count(*) FROM public.resource_unit_policies WHERE id=$1`,
+			cleanup:   `DELETE FROM public.resource_unit_policies WHERE id=$1`,
 		},
 		{
 			name: "PRESENTACION", insert: insertPresentationFieldV2, update: updatePresentationFieldV2,
 			rec: func() domain.CatalogRecord {
 				return domain.CatalogRecord{Kind: domain.KindPresentationField, Active: true, Values: map[string]domain.CatalogValue{
-					"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "type": refValue(domain.KindType, typeCode),
-					"characteristic": refValue(domain.KindAttributeDefinition, characteristic), "position": intValue(0),
+					"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0), "type": refValue(domain.KindType, typeCode, 0),
+					"characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "position": intValue(0),
 				}}
 			},
-			mutate: func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["position"] = intValue(1); return r },
-			rowsQuery: `SELECT count(*) FROM public.resource_type_presentation_fields pf JOIN public.resource_types t ON t.id=pf.type_id
-				JOIN public.resource_families f ON f.id=t.family_id JOIN public.resource_classes cl ON cl.id=t.class_id
-				JOIN public.attribute_definitions d ON d.id=pf.attribute_definition_id
-				WHERE hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0)=$1`,
-			cleanup: `DELETE FROM public.resource_type_presentation_fields pf USING public.resource_types t, public.resource_families f, public.resource_classes cl, public.attribute_definitions d
-				WHERE t.id=pf.type_id AND f.id=t.family_id AND cl.id=t.class_id AND d.id=pf.attribute_definition_id
-				AND hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0)=$1`,
+			mutate:    func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["position"] = intValue(1); return r },
+			rowsQuery: `SELECT count(*) FROM public.resource_type_presentation_fields WHERE id=$1`,
+			cleanup:   `DELETE FROM public.resource_type_presentation_fields WHERE id=$1`,
 		},
 	}
 
@@ -783,16 +763,14 @@ func TestCatalogCASCreateUpdateRemainingIntegration(t *testing.T) {
 		assertText(t, ctx, pool, `SELECT name FROM public.unit_definitions WHERE id=$1`, unitID, "Renamed Unit")
 
 		_, optRevision, err := runUpdate(updateOptionV2, domain.CatalogRecord{Kind: domain.KindOption, ID: optionID, Active: true, Values: map[string]domain.CatalogValue{
-			"optionSet": refValue(domain.KindOptionSet, optionSet), "characteristic": refValue(domain.KindAttributeDefinition, characteristic),
+			"optionSet": refValue(domain.KindOptionSet, optionSet, 0), "characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0),
 			"code": textValue(fromOption + "_X"), "label": textValue("Renamed Option"),
 		}}, 1)
 		if err != nil || optRevision != 2 {
 			t.Fatalf("OPCION referenced update = rev:%d err:%v, want revision 2", optRevision, err)
 		}
-		optionCodeQuery := `SELECT ao.code FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id=ao.attribute_definition_id
-			WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0)=$1`
-		optionLabelQuery := `SELECT ao.label FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id=ao.attribute_definition_id
-			WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0)=$1`
+		optionCodeQuery := `SELECT code FROM public.attribute_options WHERE id=$1`
+		optionLabelQuery := `SELECT label FROM public.attribute_options WHERE id=$1`
 		assertText(t, ctx, pool, optionCodeQuery, optionID, fromOption)
 		assertText(t, ctx, pool, optionLabelQuery, optionID, "Renamed Option")
 	})
@@ -825,8 +803,8 @@ func referenceUnitAndOptionFixture(t *testing.T, ctx context.Context, pool *pgxp
 	typeID := resolve(`SELECT id FROM public.resource_types WHERE code=$1`, typeCode)
 	unitID = resolve(`SELECT id FROM public.unit_definitions WHERE code=$1`, unitCode)
 	definitionID := resolve(`SELECT id FROM public.attribute_definitions WHERE code=$1`, characteristic)
-	if err := pool.QueryRow(ctx, `SELECT hashtextextended(option_set || '|' || $2 || '|' || code, 0) FROM public.attribute_options WHERE option_set=$1 AND attribute_definition_id=$3 AND code=$4`,
-		optionSet, characteristic, definitionID, fromOption).Scan(&optionID); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT id FROM public.attribute_options WHERE option_set=$1 AND attribute_definition_id=$2 AND code=$3`,
+		optionSet, definitionID, fromOption).Scan(&optionID); err != nil {
 		t.Fatalf("resolve option id: %v", err)
 	}
 	var resourceID int64
@@ -870,10 +848,10 @@ func setupCAS2Fixture(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (cl
 		"slug": textValue("test-3g1-clase"), "aliases": listValue([]string{}), "keywords": listValue([]string{}),
 	})
 	insert(domain.KindFamily, map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, "TEST_3G1_CLASS"), "code": textValue("TEST_3G1_FAM"), "name": textValue("Test 3G1 Familia"),
+		"class": refValue(domain.KindClass, "TEST_3G1_CLASS", 0), "code": textValue("TEST_3G1_FAM"), "name": textValue("Test 3G1 Familia"),
 	})
 	insert(domain.KindType, map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, "TEST_3G1_CLASS"), "family": refValue(domain.KindFamily, "TEST_3G1_FAM"),
+		"class": refValue(domain.KindClass, "TEST_3G1_CLASS", 0), "family": refValue(domain.KindFamily, "TEST_3G1_FAM", 0),
 		"code": textValue("TEST_3G1_TIPO"), "name": textValue("Test 3G1 Tipo"),
 	})
 	insert(domain.KindUnit, map[string]domain.CatalogValue{
@@ -893,11 +871,11 @@ func setupCAS2Fixture(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (cl
 		"code": textValue("TEST_3G1_OPTSET"), "name": textValue("Test 3G1 Conjunto"),
 	})
 	insert(domain.KindOption, map[string]domain.CatalogValue{
-		"optionSet": refValue(domain.KindOptionSet, "TEST_3G1_OPTSET"), "characteristic": refValue(domain.KindAttributeDefinition, "test_3g1_char"),
+		"optionSet": refValue(domain.KindOptionSet, "TEST_3G1_OPTSET", 0), "characteristic": refValue(domain.KindAttributeDefinition, "test_3g1_char", 0),
 		"code": textValue("TEST_3G1_FROM"), "label": textValue("From"),
 	})
 	insert(domain.KindOption, map[string]domain.CatalogValue{
-		"optionSet": refValue(domain.KindOptionSet, "TEST_3G1_OPTSET"), "characteristic": refValue(domain.KindAttributeDefinition, "test_3g1_char2"),
+		"optionSet": refValue(domain.KindOptionSet, "TEST_3G1_OPTSET", 0), "characteristic": refValue(domain.KindAttributeDefinition, "test_3g1_char2", 0),
 		"code": textValue("TEST_3G1_TO"), "label": textValue("To"),
 	})
 	return "TEST_3G1_CLASS", "TEST_3G1_FAM", "TEST_3G1_TIPO", "TEST_3G1_BASEUNIT", "test_3g1_char", "test_3g1_char2", "TEST_3G1_OPTSET", "TEST_3G1_FROM", "TEST_3G1_TO"
@@ -959,12 +937,12 @@ func TestCatalogCASLifecycleDeleteIntegration(t *testing.T) {
 		}},
 		{"FAMILIA", domain.KindFamily, insertFamilyV2, setActiveFamilyV2, deleteFamilyV2, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindFamily, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "code": textValue("TEST_3G2_FAM"), "name": textValue("Test 3G2 Familia"),
+				"class": refValue(domain.KindClass, classCode, 0), "code": textValue("TEST_3G2_FAM"), "name": textValue("Test 3G2 Familia"),
 			}}
 		}},
 		{"TIPO", domain.KindType, insertTypeV2, setActiveTypeV2, deleteTypeV2, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindType, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
 				"code": textValue("TEST_3G2_TIPO"), "name": textValue("Test 3G2 Tipo"),
 			}}
 		}},
@@ -980,15 +958,15 @@ func TestCatalogCASLifecycleDeleteIntegration(t *testing.T) {
 		}},
 		{"OPCION", domain.KindOption, insertOptionV2, setActiveOptionV2, deleteOptionV2, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindOption, Active: true, Values: map[string]domain.CatalogValue{
-				"optionSet": refValue(domain.KindOptionSet, optionSet), "characteristic": refValue(domain.KindAttributeDefinition, characteristic),
+				"optionSet": refValue(domain.KindOptionSet, optionSet, 0), "characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0),
 				"code": textValue("TEST_3G2_OPT"), "label": textValue("Test 3G2 Option"),
 			}}
 		}},
 		{"RELACION_OPCIONES", domain.KindOptionRelation, insertOptionRelationV2, setActiveOptionRelationV2, deleteOptionRelationV2, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindOptionRelation, Active: true, Values: map[string]domain.CatalogValue{
-				"optionSet":          refValue(domain.KindOptionSet, optionSet),
-				"fromCharacteristic": refValue(domain.KindAttributeDefinition, characteristic), "fromOption": refValue(domain.KindOption, fromOption),
-				"toCharacteristic": refValue(domain.KindAttributeDefinition, characteristic2), "toOption": refValue(domain.KindOption, toOption),
+				"optionSet":          refValue(domain.KindOptionSet, optionSet, 0),
+				"fromCharacteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "fromOption": refValue(domain.KindOption, fromOption, 0),
+				"toCharacteristic": refValue(domain.KindAttributeDefinition, characteristic2, 0), "toOption": refValue(domain.KindOption, toOption, 0),
 			}}
 		}},
 		{"UNIDAD", domain.KindUnit, insertUnitV2, setActiveUnitV2, deleteUnitV2, func() domain.CatalogRecord {
@@ -998,20 +976,20 @@ func TestCatalogCASLifecycleDeleteIntegration(t *testing.T) {
 		}},
 		{"POLITICA_UNIDAD", domain.KindUnitPolicy, insertUnitPolicyV2, setActiveUnitPolicyV2, deleteUnitPolicyV2, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindUnitPolicy, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "unit": refValue(domain.KindUnit, unitCode),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0), "unit": refValue(domain.KindUnit, unitCode, 0),
 				"allowed": boolValue(true), "suggested": boolValue(false),
 			}}
 		}},
 		{"APLICABILIDAD", domain.KindAttributeBinding, insertApplicabilityParentV2, setActiveApplicabilityV2, deleteApplicabilityV2, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindAttributeBinding, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic), "mode": textValue(string(domain.ModeOptional)), "identityParticipates": boolValue(false),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "mode": textValue(string(domain.ModeOptional)), "identityParticipates": boolValue(false),
 			}}
 		}},
 		{"PRESENTACION", domain.KindPresentationField, insertPresentationFieldV2, setActivePresentationFieldV2, deletePresentationFieldV2, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindPresentationField, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "type": refValue(domain.KindType, typeCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic), "position": intValue(0),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0), "type": refValue(domain.KindType, typeCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "position": intValue(0),
 			}}
 		}},
 	}
@@ -1066,8 +1044,8 @@ func TestCatalogCASLifecycleDeleteIntegration(t *testing.T) {
 		ruleRec := domain.CatalogRecord{
 			Kind: domain.KindAttributeBinding, Active: true,
 			Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic2),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic2, 0),
 				"mode":           textValue(string(domain.ModeConditional)), "identityParticipates": boolValue(true),
 			},
 			Rules: []domain.CatalogRuleRecord{{When: domain.AttributeCondition{AttributeCode: characteristic2, Equals: "X"}, Mode: domain.ModeForbidden, Active: true}},
@@ -1134,7 +1112,7 @@ func setupCASFixture(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (cla
 		"slug": textValue("test-3f-clase"), "aliases": listValue([]string{}), "keywords": listValue([]string{}),
 	})
 	insert(domain.KindFamily, map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, "TEST_3F_CLASS"), "code": textValue("TEST_3F_FAM"), "name": textValue("Test 3F Familia"),
+		"class": refValue(domain.KindClass, "TEST_3F_CLASS", 0), "code": textValue("TEST_3F_FAM"), "name": textValue("Test 3F Familia"),
 	})
 	return "TEST_3F_CLASS", "TEST_3F_FAM"
 }
@@ -1187,12 +1165,12 @@ func TestCatalogCASConcreteRepositoryV2Integration(t *testing.T) {
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
 		{"FAMILIA", domain.KindFamily, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindFamily, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "code": textValue("TEST_3G3_FAM"), "name": textValue("Test 3G3 Familia"),
+				"class": refValue(domain.KindClass, classCode, 0), "code": textValue("TEST_3G3_FAM"), "name": textValue("Test 3G3 Familia"),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
 		{"TIPO", domain.KindType, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindType, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
 				"code": textValue("TEST_3G3_TIPO"), "name": textValue("Test 3G3 Tipo"),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
@@ -1208,15 +1186,15 @@ func TestCatalogCASConcreteRepositoryV2Integration(t *testing.T) {
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
 		{"OPCION", domain.KindOption, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindOption, Active: true, Values: map[string]domain.CatalogValue{
-				"optionSet": refValue(domain.KindOptionSet, optionSet), "characteristic": refValue(domain.KindAttributeDefinition, characteristic),
+				"optionSet": refValue(domain.KindOptionSet, optionSet, 0), "characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0),
 				"code": textValue("TEST_3G3_OPT"), "label": textValue("Test 3G3 Option"),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["label"] = textValue("Renamed"); return r }},
 		{"RELACION_OPCIONES", domain.KindOptionRelation, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindOptionRelation, Active: true, Values: map[string]domain.CatalogValue{
-				"optionSet":          refValue(domain.KindOptionSet, optionSet),
-				"fromCharacteristic": refValue(domain.KindAttributeDefinition, characteristic), "fromOption": refValue(domain.KindOption, fromOption),
-				"toCharacteristic": refValue(domain.KindAttributeDefinition, characteristic2), "toOption": refValue(domain.KindOption, toOption),
+				"optionSet":          refValue(domain.KindOptionSet, optionSet, 0),
+				"fromCharacteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "fromOption": refValue(domain.KindOption, fromOption, 0),
+				"toCharacteristic": refValue(domain.KindAttributeDefinition, characteristic2, 0), "toOption": refValue(domain.KindOption, toOption, 0),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Active = false; return r }},
 		{"UNIDAD", domain.KindUnit, func() domain.CatalogRecord {
@@ -1226,14 +1204,14 @@ func TestCatalogCASConcreteRepositoryV2Integration(t *testing.T) {
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
 		{"POLITICA_UNIDAD", domain.KindUnitPolicy, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindUnitPolicy, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "unit": refValue(domain.KindUnit, unitCode),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0), "unit": refValue(domain.KindUnit, unitCode, 0),
 				"allowed": boolValue(true), "suggested": boolValue(false),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["suggested"] = boolValue(true); return r }},
 		{"APLICABILIDAD", domain.KindAttributeBinding, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindAttributeBinding, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic2), "mode": textValue(string(domain.ModeConditional)), "identityParticipates": boolValue(true),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic2, 0), "mode": textValue(string(domain.ModeConditional)), "identityParticipates": boolValue(true),
 			}, Rules: []domain.CatalogRuleRecord{rule}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord {
 			r.Rules = []domain.CatalogRuleRecord{rule}
@@ -1241,8 +1219,8 @@ func TestCatalogCASConcreteRepositoryV2Integration(t *testing.T) {
 		}},
 		{"PRESENTACION", domain.KindPresentationField, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindPresentationField, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "type": refValue(domain.KindType, typeCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic), "position": intValue(0),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0), "type": refValue(domain.KindType, typeCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "position": intValue(0),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["position"] = intValue(1); return r }},
 	}
@@ -1343,8 +1321,8 @@ func TestCatalogCASConcreteRepositoryV2Integration(t *testing.T) {
 		insertResult, err := repo.Insert(ctx, domain.CatalogRecord{
 			Kind: domain.KindAttributeBinding, Active: true,
 			Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic), "mode": textValue(string(domain.ModeConditional)), "identityParticipates": boolValue(true),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "mode": textValue(string(domain.ModeConditional)), "identityParticipates": boolValue(true),
 			},
 			Rules: []domain.CatalogRuleRecord{rule},
 		})
@@ -1490,7 +1468,7 @@ func TestCatalogConcurrentDependencyDeleteRaceIntegration(t *testing.T) {
 
 	repo2 := NewCatalogAdminRepositoryV2(pool2)
 	familyRec := domain.CatalogRecord{Kind: domain.KindFamily, Active: true, Values: map[string]domain.CatalogValue{
-		"class": refValue(domain.KindClass, "TEST_3I_RACE_CLASS"), "code": textValue("TEST_3I_RACE_FAM"), "name": textValue("Test 3I Race Familia"),
+		"class": refValue(domain.KindClass, "TEST_3I_RACE_CLASS", 0), "code": textValue("TEST_3I_RACE_FAM"), "name": textValue("Test 3I Race Familia"),
 	}}
 
 	start := make(chan struct{})
@@ -1609,12 +1587,12 @@ func TestAll11KindsAuthorityOracleIntegration(t *testing.T) {
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
 		{"FAMILIA", domain.KindFamily, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindFamily, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "code": textValue("TEST_4E_FAM"), "name": textValue("Test 4E Familia"),
+				"class": refValue(domain.KindClass, classCode, 0), "code": textValue("TEST_4E_FAM"), "name": textValue("Test 4E Familia"),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
 		{"TIPO", domain.KindType, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindType, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
 				"code": textValue("TEST_4E_TIPO"), "name": textValue("Test 4E Tipo"),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
@@ -1630,15 +1608,15 @@ func TestAll11KindsAuthorityOracleIntegration(t *testing.T) {
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
 		{"OPCION", domain.KindOption, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindOption, Active: true, Values: map[string]domain.CatalogValue{
-				"optionSet": refValue(domain.KindOptionSet, optionSet), "characteristic": refValue(domain.KindAttributeDefinition, characteristic),
+				"optionSet": refValue(domain.KindOptionSet, optionSet, 0), "characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0),
 				"code": textValue("TEST_4E_OPT"), "label": textValue("Test 4E Option"),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["label"] = textValue("Renamed"); return r }},
 		{"RELACION_OPCIONES", domain.KindOptionRelation, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindOptionRelation, Active: true, Values: map[string]domain.CatalogValue{
-				"optionSet":          refValue(domain.KindOptionSet, optionSet),
-				"fromCharacteristic": refValue(domain.KindAttributeDefinition, characteristic), "fromOption": refValue(domain.KindOption, fromOption),
-				"toCharacteristic": refValue(domain.KindAttributeDefinition, characteristic2), "toOption": refValue(domain.KindOption, toOption),
+				"optionSet":          refValue(domain.KindOptionSet, optionSet, 0),
+				"fromCharacteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "fromOption": refValue(domain.KindOption, fromOption, 0),
+				"toCharacteristic": refValue(domain.KindAttributeDefinition, characteristic2, 0), "toOption": refValue(domain.KindOption, toOption, 0),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { return r }},
 		{"UNIDAD", domain.KindUnit, func() domain.CatalogRecord {
@@ -1648,14 +1626,14 @@ func TestAll11KindsAuthorityOracleIntegration(t *testing.T) {
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["name"] = textValue("Renamed"); return r }},
 		{"POLITICA_UNIDAD", domain.KindUnitPolicy, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindUnitPolicy, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "unit": refValue(domain.KindUnit, unitCode),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0), "unit": refValue(domain.KindUnit, unitCode, 0),
 				"allowed": boolValue(true), "suggested": boolValue(false),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["suggested"] = boolValue(true); return r }},
 		{"APLICABILIDAD", domain.KindAttributeBinding, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindAttributeBinding, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic2), "mode": textValue(string(domain.ModeConditional)), "identityParticipates": boolValue(true),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic2, 0), "mode": textValue(string(domain.ModeConditional)), "identityParticipates": boolValue(true),
 			}, Rules: []domain.CatalogRuleRecord{rule}}
 			// mutate deliberately never touches Rules: the legacy (non-CAS)
 			// updateAttributeBinding never rewrites resource_attribute_rules,
@@ -1668,8 +1646,8 @@ func TestAll11KindsAuthorityOracleIntegration(t *testing.T) {
 		}},
 		{"PRESENTACION", domain.KindPresentationField, func() domain.CatalogRecord {
 			return domain.CatalogRecord{Kind: domain.KindPresentationField, Active: true, Values: map[string]domain.CatalogValue{
-				"class": refValue(domain.KindClass, classCode), "family": refValue(domain.KindFamily, familyCode), "type": refValue(domain.KindType, typeCode),
-				"characteristic": refValue(domain.KindAttributeDefinition, characteristic), "position": intValue(0),
+				"class": refValue(domain.KindClass, classCode, 0), "family": refValue(domain.KindFamily, familyCode, 0), "type": refValue(domain.KindType, typeCode, 0),
+				"characteristic": refValue(domain.KindAttributeDefinition, characteristic, 0), "position": intValue(0),
 			}}
 		}, func(r domain.CatalogRecord) domain.CatalogRecord { r.Values["position"] = intValue(1); return r }},
 	}

@@ -412,16 +412,14 @@ func updateDefinitionV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord
 
 // --- CONJUNTO_OPCIONES ----------------------------------------------------
 //
-// resource_option_sets has no BIGSERIAL id (PK is code) — same
-// hashtextextended(code, 0) convention as the legacy insertOptionSet/
-// getOptionSet (catalog_admin_kinds.go). The WHERE clause's
-// hashtextextended(code, 0)=$id evaluates against the row's pre-update code,
-// so it stays correct even in the same statement that also SETs a new code.
+// resource_option_sets' natural PK is code; migration 000009 added a real
+// BIGSERIAL id column (UNIQUE, additive), so id stays a stable predicate
+// even in the same statement that also SETs a new code.
 
 func insertOptionSetV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (id int64, revision uint64, err error) {
 	err = tx.QueryRow(ctx, `
 		INSERT INTO public.resource_option_sets (code, name, active) VALUES ($1,$2,$3)
-		RETURNING hashtextextended(code, 0), revision`,
+		RETURNING id, revision`,
 		fieldText(rec, "code"), fieldText(rec, "name"), rec.Active).Scan(&id, &revision)
 	if err != nil {
 		return 0, 0, mapCatalogWriteError(fmt.Errorf("insert resource_option_sets: %w", err))
@@ -439,15 +437,15 @@ func updateOptionSetV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord,
 	if referenced {
 		return casUpdateRevision(ctx, tx, `
 			UPDATE public.resource_option_sets SET name=$1, active=$2, revision = revision + 1, updated_at = NOW()
-			WHERE hashtextextended(code, 0)=$3 AND revision=$4 RETURNING revision`,
+			WHERE id=$3 AND revision=$4 RETURNING revision`,
 			[]any{fieldText(rec, "name"), rec.Active, rec.ID, expectedRevision},
-			`SELECT revision FROM public.resource_option_sets WHERE hashtextextended(code, 0)=$1 FOR UPDATE`, rec.ID, expectedRevision)
+			`SELECT revision FROM public.resource_option_sets WHERE id=$1 FOR UPDATE`, rec.ID, expectedRevision)
 	}
 	return casUpdateRevision(ctx, tx, `
 		UPDATE public.resource_option_sets SET code=$1, name=$2, active=$3, revision = revision + 1, updated_at = NOW()
-		WHERE hashtextextended(code, 0)=$4 AND revision=$5 RETURNING revision`,
+		WHERE id=$4 AND revision=$5 RETURNING revision`,
 		[]any{fieldText(rec, "code"), fieldText(rec, "name"), rec.Active, rec.ID, expectedRevision},
-		`SELECT revision FROM public.resource_option_sets WHERE hashtextextended(code, 0)=$1 FOR UPDATE`, rec.ID, expectedRevision)
+		`SELECT revision FROM public.resource_option_sets WHERE id=$1 FOR UPDATE`, rec.ID, expectedRevision)
 }
 
 // --- stage-3G1 dormant CAS helpers for OPCION, RELACION_OPCIONES, UNIDAD,
@@ -490,8 +488,9 @@ func updateUnitV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord, expe
 
 // --- OPCION -------------------------------------------------------------
 //
-// attribute_options has no BIGSERIAL id — same hashtextextended()
-// convention as CONJUNTO_OPCIONES, over (option_set, característica, código).
+// attribute_options' natural PK is (option_set, characteristic código,
+// código); migration 000009 added a real BIGSERIAL id column (UNIQUE,
+// additive).
 
 func insertOptionV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (id int64, revision uint64, err error) {
 	err = tx.QueryRow(ctx, `
@@ -499,7 +498,7 @@ func insertOptionV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (i
 		SELECT $1, d.id, $3, $4, $5,
 		       COALESCE((SELECT MAX(display_order)+1 FROM public.attribute_options WHERE option_set=$1 AND attribute_definition_id=d.id), 0)
 		FROM public.attribute_definitions d WHERE d.code=$2
-		RETURNING hashtextextended(option_set || '|' || $2::text || '|' || code, 0), revision`,
+		RETURNING id, revision`,
 		fieldRef(rec, "optionSet"), fieldRef(rec, "characteristic"), fieldText(rec, "code"), fieldText(rec, "label"), rec.Active).Scan(&id, &revision)
 	if isNoRows(err) {
 		return 0, 0, fmt.Errorf("%w: characteristic %q or option set %q", domain.ErrCatalogReference, fieldRef(rec, "characteristic"), fieldRef(rec, "optionSet"))
@@ -511,13 +510,13 @@ func insertOptionV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (i
 }
 
 // updateOptionV2 mirrors updateOption's D11-layer-2 código guard; the CAS
-// predicate/row-lock resolve through the same hash-ID as CONJUNTO_OPCIONES.
+// predicate/row-lock resolve through the real id column.
 func updateOptionV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord, expectedRevision uint64) (uint64, error) {
 	var optionSet, defCode, code string
 	err := tx.QueryRow(ctx, `
 		SELECT ao.option_set, d.code, ao.code
 		FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id
-		WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1`, rec.ID).Scan(&optionSet, &defCode, &code)
+		WHERE ao.id = $1`, rec.ID).Scan(&optionSet, &defCode, &code)
 	if isNoRows(err) {
 		return 0, domain.ErrCatalogRecordNotFound
 	}
@@ -528,9 +527,7 @@ func updateOptionV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord, ex
 	if err != nil {
 		return 0, err
 	}
-	selectRevisionSQL := `
-		SELECT ao.revision FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id = ao.attribute_definition_id
-		WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1 FOR UPDATE`
+	selectRevisionSQL := `SELECT revision FROM public.attribute_options WHERE id = $1 FOR UPDATE`
 	if referenced {
 		return casUpdateRevision(ctx, tx, `
 			UPDATE public.attribute_options SET label=$1, active=$2, revision = revision + 1, updated_at = NOW()
@@ -582,8 +579,8 @@ func updateOptionRelationV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRe
 }
 
 // --- POLITICA_UNIDAD ("Política de Unidad") -------------------------------
-// PK is (family_id, unit_id) — hashtextextended() over (class|family|unit
-// código), same convention as legacy. No código field (junction kind).
+// Natural PK is (family_id, unit_id); migration 000009 added a real
+// BIGSERIAL id column (UNIQUE, additive). No código field (junction kind).
 
 func insertUnitPolicyV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (id int64, revision uint64, err error) {
 	err = tx.QueryRow(ctx, `
@@ -591,7 +588,7 @@ func insertUnitPolicyV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord
 		SELECT f.id, u.id, $4, $5, $6
 		FROM public.resource_families f JOIN public.resource_classes cl ON cl.id = f.class_id, public.unit_definitions u
 		WHERE cl.code=$1 AND f.code=$2 AND u.code=$3
-		RETURNING hashtextextended($1::text || '|' || $2::text || '|' || $3::text, 0), revision`,
+		RETURNING id, revision`,
 		fieldRef(rec, "class"), fieldRef(rec, "family"), fieldRef(rec, "unit"), fieldBool(rec, "allowed"), fieldBool(rec, "suggested"), rec.Active).Scan(&id, &revision)
 	if isNoRows(err) {
 		return 0, 0, fmt.Errorf("%w: class %q, family %q, or unit %q", domain.ErrCatalogReference, fieldRef(rec, "class"), fieldRef(rec, "family"), fieldRef(rec, "unit"))
@@ -606,12 +603,7 @@ func insertUnitPolicyV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord
 // legacy updateUnitPolicy (composite PK; re-scoping is delete+insert).
 func updateUnitPolicyV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord, expectedRevision uint64) (uint64, error) {
 	var familyID, unitID int64
-	err := tx.QueryRow(ctx, `
-		SELECT p.family_id, p.unit_id FROM public.resource_unit_policies p
-		JOIN public.resource_families f ON f.id = p.family_id
-		JOIN public.resource_classes cl ON cl.id = f.class_id
-		JOIN public.unit_definitions u ON u.id = p.unit_id
-		WHERE hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $1`, rec.ID).Scan(&familyID, &unitID)
+	err := tx.QueryRow(ctx, `SELECT family_id, unit_id FROM public.resource_unit_policies WHERE id = $1`, rec.ID).Scan(&familyID, &unitID)
 	if isNoRows(err) {
 		return 0, domain.ErrCatalogRecordNotFound
 	}
@@ -622,14 +614,12 @@ func updateUnitPolicyV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord
 		UPDATE public.resource_unit_policies SET allowed=$1, suggested=$2, active=$3, revision = revision + 1, updated_at = NOW()
 		WHERE family_id=$4 AND unit_id=$5 AND revision=$6 RETURNING revision`,
 		[]any{fieldBool(rec, "allowed"), fieldBool(rec, "suggested"), rec.Active, familyID, unitID, expectedRevision},
-		`SELECT p.revision FROM public.resource_unit_policies p
-		JOIN public.resource_families f ON f.id=p.family_id JOIN public.resource_classes cl ON cl.id=f.class_id JOIN public.unit_definitions u ON u.id=p.unit_id
-		WHERE hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $1 FOR UPDATE`, rec.ID, expectedRevision)
+		`SELECT revision FROM public.resource_unit_policies WHERE id = $1 FOR UPDATE`, rec.ID, expectedRevision)
 }
 
 // --- PRESENTACION ("Campo de Presentación") -------------------------------
-// PK is (type_id, attribute_definition_id) — hashtextextended() over (class|
-// family|type|característica código). No código field.
+// Natural PK is (type_id, attribute_definition_id); migration 000009 added
+// a real BIGSERIAL id column (UNIQUE, additive). No código field.
 
 func insertPresentationFieldV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord) (id int64, revision uint64, err error) {
 	err = tx.QueryRow(ctx, `
@@ -639,7 +629,7 @@ func insertPresentationFieldV2(ctx context.Context, tx pgx.Tx, rec domain.Catalo
 		JOIN public.resource_families f ON f.id = t.family_id
 		JOIN public.resource_classes cl ON cl.id = t.class_id, public.attribute_definitions d
 		WHERE cl.code=$1 AND f.code=$2 AND t.code=$3 AND d.code=$4
-		RETURNING hashtextextended($1::text || '|' || $2::text || '|' || $3::text || '|' || $4::text, 0), revision`,
+		RETURNING id, revision`,
 		fieldRef(rec, "class"), fieldRef(rec, "family"), fieldRef(rec, "type"), fieldRef(rec, "characteristic"), fieldInt(rec, "position"), rec.Active).Scan(&id, &revision)
 	if isNoRows(err) {
 		return 0, 0, fmt.Errorf("%w: type %q or characteristic %q", domain.ErrCatalogReference, fieldRef(rec, "type"), fieldRef(rec, "characteristic"))
@@ -654,14 +644,7 @@ func insertPresentationFieldV2(ctx context.Context, tx pgx.Tx, rec domain.Catalo
 // updatePresentationField (composite PK).
 func updatePresentationFieldV2(ctx context.Context, tx pgx.Tx, rec domain.CatalogRecord, expectedRevision uint64) (uint64, error) {
 	var typeID, definitionID int64
-	err := tx.QueryRow(ctx, `
-		SELECT pf.type_id, pf.attribute_definition_id
-		FROM public.resource_type_presentation_fields pf
-		JOIN public.resource_types t ON t.id = pf.type_id
-		JOIN public.resource_families f ON f.id = t.family_id
-		JOIN public.resource_classes cl ON cl.id = t.class_id
-		JOIN public.attribute_definitions d ON d.id = pf.attribute_definition_id
-		WHERE hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $1`, rec.ID).Scan(&typeID, &definitionID)
+	err := tx.QueryRow(ctx, `SELECT type_id, attribute_definition_id FROM public.resource_type_presentation_fields WHERE id = $1`, rec.ID).Scan(&typeID, &definitionID)
 	if isNoRows(err) {
 		return 0, domain.ErrCatalogRecordNotFound
 	}
@@ -672,10 +655,7 @@ func updatePresentationFieldV2(ctx context.Context, tx pgx.Tx, rec domain.Catalo
 		UPDATE public.resource_type_presentation_fields SET position=$1, active=$2, revision = revision + 1, updated_at = NOW()
 		WHERE type_id=$3 AND attribute_definition_id=$4 AND revision=$5 RETURNING revision`,
 		[]any{fieldInt(rec, "position"), rec.Active, typeID, definitionID, expectedRevision},
-		`SELECT pf.revision FROM public.resource_type_presentation_fields pf
-		JOIN public.resource_types t ON t.id=pf.type_id JOIN public.resource_families f ON f.id=t.family_id JOIN public.resource_classes cl ON cl.id=t.class_id
-		JOIN public.attribute_definitions d ON d.id=pf.attribute_definition_id
-		WHERE hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $1 FOR UPDATE`, rec.ID, expectedRevision)
+		`SELECT revision FROM public.resource_type_presentation_fields WHERE id = $1 FOR UPDATE`, rec.ID, expectedRevision)
 }
 
 // --- stage-3G2 dormant lifecycle (SetActive) and delete CAS helpers for all
@@ -757,96 +737,67 @@ var (
 )
 
 // CONJUNTO_OPCIONES / OPCION / POLITICA_UNIDAD / PRESENTACION lifecycle and
-// delete: composite/hash-derived keys, mirroring legacy setActiveOptionSet/
-// deleteOptionSet/setActiveOption/deleteOption/setActiveUnitPolicy/
-// deleteUnitPolicy/setActivePresentationField/deletePresentationField's
-// exact join/hash predicate shapes, plus the revision predicate.
+// delete: migration 000009 gave each a real BIGSERIAL id column, so these
+// now address by id like every other kind, plus the revision predicate.
 
 func setActiveOptionSetV2(ctx context.Context, tx pgx.Tx, id int64, active bool, expectedRevision uint64) (uint64, error) {
 	return casUpdateRevision(ctx, tx,
 		`UPDATE public.resource_option_sets SET active=$1, revision=revision+1, updated_at=NOW()
-		 WHERE hashtextextended(code, 0)=$2 AND revision=$3 RETURNING revision`,
+		 WHERE id=$2 AND revision=$3 RETURNING revision`,
 		[]any{active, id, expectedRevision},
-		`SELECT revision FROM public.resource_option_sets WHERE hashtextextended(code, 0)=$1 FOR UPDATE`, id, expectedRevision)
+		`SELECT revision FROM public.resource_option_sets WHERE id=$1 FOR UPDATE`, id, expectedRevision)
 }
 
 func deleteOptionSetV2(ctx context.Context, tx pgx.Tx, id int64, expectedRevision uint64) error {
 	return casDeleteRevision(ctx, tx,
-		`DELETE FROM public.resource_option_sets WHERE hashtextextended(code, 0)=$1 AND revision=$2`,
+		`DELETE FROM public.resource_option_sets WHERE id=$1 AND revision=$2`,
 		[]any{id, expectedRevision},
-		`SELECT revision FROM public.resource_option_sets WHERE hashtextextended(code, 0)=$1 FOR UPDATE`, id, expectedRevision)
+		`SELECT revision FROM public.resource_option_sets WHERE id=$1 FOR UPDATE`, id, expectedRevision)
 }
 
 func setActiveOptionV2(ctx context.Context, tx pgx.Tx, id int64, active bool, expectedRevision uint64) (uint64, error) {
 	return casUpdateRevision(ctx, tx,
-		`UPDATE public.attribute_options ao SET active=$1, revision=ao.revision+1, updated_at=NOW()
-		 FROM public.attribute_definitions d
-		 WHERE d.id = ao.attribute_definition_id AND hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $2 AND ao.revision=$3
-		 RETURNING ao.revision`,
+		`UPDATE public.attribute_options SET active=$1, revision=revision+1, updated_at=NOW()
+		 WHERE id=$2 AND revision=$3 RETURNING revision`,
 		[]any{active, id, expectedRevision},
-		`SELECT ao.revision FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id=ao.attribute_definition_id
-		 WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1 FOR UPDATE`, id, expectedRevision)
+		`SELECT revision FROM public.attribute_options WHERE id=$1 FOR UPDATE`, id, expectedRevision)
 }
 
 func deleteOptionV2(ctx context.Context, tx pgx.Tx, id int64, expectedRevision uint64) error {
 	return casDeleteRevision(ctx, tx,
-		`DELETE FROM public.attribute_options ao USING public.attribute_definitions d
-		 WHERE d.id = ao.attribute_definition_id AND hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1 AND ao.revision=$2`,
+		`DELETE FROM public.attribute_options WHERE id=$1 AND revision=$2`,
 		[]any{id, expectedRevision},
-		`SELECT ao.revision FROM public.attribute_options ao JOIN public.attribute_definitions d ON d.id=ao.attribute_definition_id
-		 WHERE hashtextextended(ao.option_set || '|' || d.code || '|' || ao.code, 0) = $1 FOR UPDATE`, id, expectedRevision)
+		`SELECT revision FROM public.attribute_options WHERE id=$1 FOR UPDATE`, id, expectedRevision)
 }
 
 func setActiveUnitPolicyV2(ctx context.Context, tx pgx.Tx, id int64, active bool, expectedRevision uint64) (uint64, error) {
 	return casUpdateRevision(ctx, tx,
-		`UPDATE public.resource_unit_policies p SET active=$1, revision=p.revision+1, updated_at=NOW()
-		 FROM public.resource_families f, public.resource_classes cl, public.unit_definitions u
-		 WHERE f.id = p.family_id AND cl.id = f.class_id AND u.id = p.unit_id
-		   AND hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $2 AND p.revision=$3
-		 RETURNING p.revision`,
+		`UPDATE public.resource_unit_policies SET active=$1, revision=revision+1, updated_at=NOW()
+		 WHERE id=$2 AND revision=$3 RETURNING revision`,
 		[]any{active, id, expectedRevision},
-		`SELECT p.revision FROM public.resource_unit_policies p
-		 JOIN public.resource_families f ON f.id=p.family_id JOIN public.resource_classes cl ON cl.id=f.class_id JOIN public.unit_definitions u ON u.id=p.unit_id
-		 WHERE hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $1 FOR UPDATE`, id, expectedRevision)
+		`SELECT revision FROM public.resource_unit_policies WHERE id=$1 FOR UPDATE`, id, expectedRevision)
 }
 
 func deleteUnitPolicyV2(ctx context.Context, tx pgx.Tx, id int64, expectedRevision uint64) error {
 	return casDeleteRevision(ctx, tx,
-		`DELETE FROM public.resource_unit_policies p
-		 USING public.resource_families f, public.resource_classes cl, public.unit_definitions u
-		 WHERE f.id = p.family_id AND cl.id = f.class_id AND u.id = p.unit_id
-		   AND hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $1 AND p.revision=$2`,
+		`DELETE FROM public.resource_unit_policies WHERE id=$1 AND revision=$2`,
 		[]any{id, expectedRevision},
-		`SELECT p.revision FROM public.resource_unit_policies p
-		 JOIN public.resource_families f ON f.id=p.family_id JOIN public.resource_classes cl ON cl.id=f.class_id JOIN public.unit_definitions u ON u.id=p.unit_id
-		 WHERE hashtextextended(cl.code || '|' || f.code || '|' || u.code, 0) = $1 FOR UPDATE`, id, expectedRevision)
+		`SELECT revision FROM public.resource_unit_policies WHERE id=$1 FOR UPDATE`, id, expectedRevision)
 }
 
 func setActivePresentationFieldV2(ctx context.Context, tx pgx.Tx, id int64, active bool, expectedRevision uint64) (uint64, error) {
 	return casUpdateRevision(ctx, tx,
-		`UPDATE public.resource_type_presentation_fields pf SET active=$1, revision=pf.revision+1, updated_at=NOW()
-		 FROM public.resource_types t, public.resource_families f, public.resource_classes cl, public.attribute_definitions d
-		 WHERE t.id = pf.type_id AND f.id = t.family_id AND cl.id = t.class_id AND d.id = pf.attribute_definition_id
-		   AND hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $2 AND pf.revision=$3
-		 RETURNING pf.revision`,
+		`UPDATE public.resource_type_presentation_fields SET active=$1, revision=revision+1, updated_at=NOW()
+		 WHERE id=$2 AND revision=$3 RETURNING revision`,
 		[]any{active, id, expectedRevision},
-		`SELECT pf.revision FROM public.resource_type_presentation_fields pf
-		 JOIN public.resource_types t ON t.id=pf.type_id JOIN public.resource_families f ON f.id=t.family_id JOIN public.resource_classes cl ON cl.id=t.class_id
-		 JOIN public.attribute_definitions d ON d.id=pf.attribute_definition_id
-		 WHERE hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $1 FOR UPDATE`, id, expectedRevision)
+		`SELECT revision FROM public.resource_type_presentation_fields WHERE id=$1 FOR UPDATE`, id, expectedRevision)
 }
 
 func deletePresentationFieldV2(ctx context.Context, tx pgx.Tx, id int64, expectedRevision uint64) error {
 	return casDeleteRevision(ctx, tx,
-		`DELETE FROM public.resource_type_presentation_fields pf
-		 USING public.resource_types t, public.resource_families f, public.resource_classes cl, public.attribute_definitions d
-		 WHERE t.id = pf.type_id AND f.id = t.family_id AND cl.id = t.class_id AND d.id = pf.attribute_definition_id
-		   AND hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $1 AND pf.revision=$2`,
+		`DELETE FROM public.resource_type_presentation_fields WHERE id=$1 AND revision=$2`,
 		[]any{id, expectedRevision},
-		`SELECT pf.revision FROM public.resource_type_presentation_fields pf
-		 JOIN public.resource_types t ON t.id=pf.type_id JOIN public.resource_families f ON f.id=t.family_id JOIN public.resource_classes cl ON cl.id=t.class_id
-		 JOIN public.attribute_definitions d ON d.id=pf.attribute_definition_id
-		 WHERE hashtextextended(cl.code || '|' || f.code || '|' || t.code || '|' || d.code, 0) = $1 FOR UPDATE`, id, expectedRevision)
+		`SELECT revision FROM public.resource_type_presentation_fields WHERE id=$1 FOR UPDATE`, id, expectedRevision)
 }
 
 // --- stage-3G3 concrete domain.CatalogAdminRepositoryV2 adapter: dispatches

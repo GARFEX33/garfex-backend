@@ -174,7 +174,12 @@ func (a *Adapter) GetCatalog(ctx context.Context, key public.CatalogKey) (public
 
 // CreateCatalog creates one catalog record of the requested kind. Actor
 // travels only as request-scoped context metadata for diagnostic
-// attribution; it is never a business parameter and is never persisted.
+// attribution; it is never a business parameter and is never persisted. A
+// confirm-read follows the write (mirroring CreateResource/Deactivate/
+// ReactivateCatalog) because the write itself only ever echoes back the
+// caller-submitted Values — a reference field there carries no real ID
+// (the client only ever sends Code), so a fresh Get resolves the persisted
+// row's actual reference IDs instead of the client's implicit zero.
 func (a *Adapter) CreateCatalog(ctx context.Context, req public.CatalogWriteRequest) (public.CatalogRecord, error) {
 	kind := domain.CatalogKindCode(req.Kind)
 	rec := domain.CatalogRecord{
@@ -186,13 +191,19 @@ func (a *Adapter) CreateCatalog(ctx context.Context, req public.CatalogWriteRequ
 	if err != nil {
 		return public.CatalogRecord{}, mapError(err)
 	}
-	return a.mapCatalogRecord(kind, created), nil
+	confirmed, err := a.catalog.Get(ctx, kind, created.ID)
+	if err != nil {
+		return public.CatalogRecord{}, mapError(err)
+	}
+	return a.mapCatalogRecord(kind, confirmed), nil
 }
 
 // UpdateCatalog replaces one existing catalog record under optimistic
 // concurrency. Reuses the exact inverse value/rule mappers Create built; no
 // new mapping code. Actor travels only as request-scoped context metadata,
-// exactly as in CreateCatalog.
+// exactly as in CreateCatalog. A confirm-read follows the write for the
+// same reason as CreateCatalog's own (see its doc comment): the write
+// result otherwise echoes the client's zero-ID reference values.
 func (a *Adapter) UpdateCatalog(ctx context.Context, req public.CatalogUpdateRequest) (public.CatalogRecord, error) {
 	kind := domain.CatalogKindCode(req.Kind)
 	rec := domain.CatalogRecord{
@@ -201,11 +212,14 @@ func (a *Adapter) UpdateCatalog(ctx context.Context, req public.CatalogUpdateReq
 		Values: a.toDomainCatalogValues(kind, req.Values),
 		Rules:  toDomainCatalogRules(req.Rules),
 	}
-	updated, err := a.catalog.UpdateRevision(core.WithActor(ctx, req.Actor), kind, rec, req.ExpectedRevision)
+	if _, err := a.catalog.UpdateRevision(core.WithActor(ctx, req.Actor), kind, rec, req.ExpectedRevision); err != nil {
+		return public.CatalogRecord{}, mapError(err)
+	}
+	confirmed, err := a.catalog.Get(ctx, kind, req.ID)
 	if err != nil {
 		return public.CatalogRecord{}, mapError(err)
 	}
-	return a.mapCatalogRecord(kind, updated), nil
+	return a.mapCatalogRecord(kind, confirmed), nil
 }
 
 // UpdateResource replaces one existing resource under optimistic
@@ -625,7 +639,7 @@ func (a *Adapter) mapCatalogValue(kind domain.CatalogKindCode, name string, v do
 		if v.Ref.Code == "" && v.Ref.Kind == "" {
 			return public.Value{Kind: public.ValueReference}
 		}
-		return public.Value{Kind: public.ValueReference, Reference: &public.Reference{Kind: public.KindCode(v.Ref.Kind), ID: 0, Code: v.Ref.Code}}
+		return public.Value{Kind: public.ValueReference, Reference: &public.Reference{Kind: public.KindCode(v.Ref.Kind), ID: v.Ref.ID, Code: v.Ref.Code}}
 	case domain.FieldEnum:
 		return public.Value{Kind: public.ValueEnum, Text: v.Text}
 	}
