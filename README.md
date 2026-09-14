@@ -5,7 +5,67 @@ Core hexagonal (dominio + casos de uso + adaptador PostgreSQL) del Resource Mast
 ## Arquitectura
 
 - [Límite de capacidades MCP](docs/architecture/mcp-capability-boundary.md)
+- [Inicialización pública del Resource Master Core](docs/architecture/resource-master-core.md)
 - [Harness de runtime de agentes](docs/architecture/agent-runtime-harness.md)
+
+## Consumo como librería Core
+
+El punto de entrada público es el paquete raíz `garfex`. Abrí una instancia con
+un DSN explícito y cerrala cuando termine su uso:
+
+```go
+import (
+	"context"
+	"fmt"
+
+	garfex "github.com/GARFEX33/garfex-costos-unitarios"
+)
+
+func run(ctx context.Context, dsn string) error {
+	app, err := garfex.Open(ctx, garfex.Config{DSN: dsn})
+	if err != nil {
+		return fmt.Errorf("open GARFEX Core: %w", err)
+	}
+	defer app.Close()
+
+	return nil
+}
+```
+
+`Config.DSN` es obligatorio. Core no carga implícitamente variables `GARFEX_*`
+ni archivos `.env`; el host debe proporcionar un DSN completo. Al analizarlo,
+pgx puede aplicar sus valores predeterminados documentados `PG*` únicamente a
+los parámetros de conexión omitidos. Usá la identidad runtime `garfex_app`;
+las migraciones son una tarea externa de administración con `garfex_admin`.
+
+`Application` expone exactamente estos cuatro handles públicos:
+
+- `ResourceReader` (`*resourcecore.Reader`)
+- `ResourceWriter` (`*resourcecore.Writer`)
+- `SupplierReader` (`*suppliercore.Reader`)
+- `SupplierWriter` (`*suppliercore.Writer`)
+
+Para Resource Master, designá un único proceso writer autoritativo. Cada reader
+observa un snapshot coherente de su última lectura; otro proceso necesita una
+reconstrucción o reinicio explícito para observar escrituras externas. No hay
+recarga automática y `Resource ScopeAll` todavía no está soportado. Consultá el
+contrato y las restricciones completas en
+[Resource Master Core](docs/architecture/resource-master-core.md).
+
+## Preparación de versión
+
+No hay una versión semver seleccionada ni publicada. Para desarrollo local, un
+consumidor puede usar un `replace` local en `go.mod`:
+
+```go
+replace github.com/GARFEX33/garfex-costos-unitarios => ../garfex-costos-unitarios-workspace
+```
+
+Ese reemplazo es local y no portable como mecanismo de release. Los consumidores
+externos reproducibles deben fijar un commit publicado o una pseudo-versión, no
+una referencia móvil a `main`.
+
+TODO: seleccionar la primera versión semver; esto no bloquea el consumo local de la API separada.
 
 ## Repositorios y remotos Git
 
