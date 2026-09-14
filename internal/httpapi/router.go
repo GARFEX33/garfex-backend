@@ -87,6 +87,14 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveResourceUpdate(w, r, resourceWriter, id)
 			return
 		}
+		if typeCode, ok := typeAttributesEffectivePath(r.URL.Path); ok {
+			serveEffectiveAttributes(w, r, resourceReader, typeCode)
+			return
+		}
+		if typeCode, ok := typeAttributesEvaluatePath(r.URL.Path); ok {
+			serveEvaluateAttributes(w, r, resourceReader, typeCode)
+			return
+		}
 		writeText(w, http.StatusNotFound, "404 not found\n")
 	}
 }
@@ -224,6 +232,32 @@ func catalogDetailPath(path string) (kind, id string, ok bool) {
 	}
 	kind, id, ok = strings.Cut(remainder, "/")
 	return kind, id, ok && kind != "" && id != "" && !strings.Contains(id, "/")
+}
+
+// typeAttributesEffectivePath matches GET
+// /v1/types/{typeCode}/attributes/effective.
+func typeAttributesEffectivePath(path string) (typeCode string, ok bool) {
+	const prefix = "/v1/types/"
+	const suffix = "/attributes/effective"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
+	typeCode, ok = strings.CutSuffix(remainder, suffix)
+	return typeCode, ok && typeCode != "" && !strings.Contains(typeCode, "/")
+}
+
+// typeAttributesEvaluatePath matches POST
+// /v1/types/{typeCode}/attributes/evaluate.
+func typeAttributesEvaluatePath(path string) (typeCode string, ok bool) {
+	const prefix = "/v1/types/"
+	const suffix = "/attributes/evaluate"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
+	typeCode, ok = strings.CutSuffix(remainder, suffix)
+	return typeCode, ok && typeCode != "" && !strings.Contains(typeCode, "/")
 }
 
 func catalogListKind(path string) (string, bool) {

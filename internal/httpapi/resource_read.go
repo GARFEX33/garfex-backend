@@ -20,6 +20,8 @@ type ResourceReader interface {
 	GetResource(context.Context, resourcecore.ResourceKey) (resourcecore.Resource, error)
 	SearchResources(context.Context, resourcecore.ResourceQuery) (resourcecore.ResourcePage, error)
 	DescribeResource(context.Context, resourcecore.ResourceKey) (string, error)
+	EffectiveAttributesFor(context.Context, resourcecore.ResourceScope) ([]resourcecore.EffectiveAttribute, error)
+	EvaluateAttributes(context.Context, resourcecore.ResourceScope, []resourcecore.AttributeValue) ([]resourcecore.EffectiveAttribute, error)
 }
 
 type resourcePageResponse struct {

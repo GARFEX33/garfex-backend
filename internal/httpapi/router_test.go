@@ -137,6 +137,7 @@ func TestOpenAPIDescribesOnlyImplementedBusinessPath(t *testing.T) {
 		"  /v1/suppliers/{id}/contacts:\n", "  /v1/suppliers/{id}/contacts/{contactId}:\n",
 		"  /v1/resources:\n", "  /v1/resources/{classCode}/{identityV1}:\n", "  /v1/resources/{classCode}/{identityV1}/describe:\n",
 		"  /v1/resources/{id}:\n", "  /v1/resources/{id}/deactivate:\n", "  /v1/resources/{id}/reactivate:\n",
+		"  /v1/types/{typeCode}/attributes/effective:\n", "  /v1/types/{typeCode}/attributes/evaluate:\n",
 		"  /openapi.yaml:\n", "  /docs:\n",
 	} {
 		if !strings.Contains(body, path) {

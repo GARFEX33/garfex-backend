@@ -656,6 +656,64 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/types/{typeCode}/attributes/effective:
+    get:
+      summary: Resolve the static baseline attributes for a Tipo
+      description: Returns the attributes applicable to one ResourceType with inheritance (Familia/Tipo) and presentation order already resolved by Core, evaluated against NO known values (the static baseline) — a CONDITIONAL attribute with no matching rule defaults to REQUIRED here. To resolve mode/options against real, already-known values, use POST .../attributes/evaluate instead. Never re-derive inheritance or rule defaults client-side.
+      parameters:
+        - name: typeCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: classCode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Resolved attribute view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveAttributesResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/types/{typeCode}/attributes/evaluate:
+    post:
+      summary: Evaluate attributes for a Tipo against known values
+      description: Same resolution as the effective-attributes GET, but with the caller's already-known values folded into CONDITIONAL rule evaluation and relation-narrowed allowed options — reuses Core's exact ResourceAttribute Effective/ValidOptions resolution. Never re-derive this client-side.
+      parameters:
+        - name: typeCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: classCode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateAttributesRequest'
+      responses:
+        '200':
+          description: Resolved attribute view against the given values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveAttributesResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
   /openapi.yaml:
     get:
       summary: OpenAPI document
@@ -1027,3 +1085,49 @@ components:
       required: [description]
       properties:
         description: { type: string }
+    CharacteristicDescriptor:
+      type: object
+      required: [code, name, valueType]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        valueType: { type: string }
+        dimension: { type: string }
+    EffectiveAttributeSource:
+      type: object
+      required: [level, code]
+      properties:
+        level: { type: string, enum: [FAMILY, TYPE] }
+        code: { type: string }
+    EffectiveAttributeOption:
+      type: object
+      required: [code, label]
+      properties:
+        code: { type: string }
+        label: { type: string }
+    EffectiveAttribute:
+      type: object
+      required: [characteristic, effectiveMode, identityParticipates, notApplicable, position, hasPosition, source, rules, options]
+      properties:
+        characteristic: { $ref: '#/components/schemas/CharacteristicDescriptor' }
+        effectiveMode: { type: string }
+        identityParticipates: { type: boolean }
+        notApplicable: { type: boolean }
+        position: { type: integer }
+        hasPosition: { type: boolean, description: 'false means position is a placeholder zero — no PresentationField is configured for this attribute.' }
+        optionSetCode: { type: string }
+        source: { $ref: '#/components/schemas/EffectiveAttributeSource' }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
+        options: { type: array, items: { $ref: '#/components/schemas/EffectiveAttributeOption' }, description: 'Allowed values, narrowed by AttributeOptionRelation against whatever values were provided (unconstrained on the effective GET, since it provides none; narrowed on evaluate). Empty for non-option attributes.' }
+    EffectiveAttributesResponse:
+      type: object
+      required: [typeCode, attributes]
+      properties:
+        typeCode: { type: string }
+        attributes: { type: array, items: { $ref: '#/components/schemas/EffectiveAttribute' } }
+    EvaluateAttributesRequest:
+      type: object
+      additionalProperties: false
+      required: [values]
+      properties:
+        values: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }

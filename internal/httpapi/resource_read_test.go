@@ -12,9 +12,11 @@ import (
 )
 
 type resourceReaderFuncs struct {
-	get      func(context.Context, resourcecore.ResourceKey) (resourcecore.Resource, error)
-	search   func(context.Context, resourcecore.ResourceQuery) (resourcecore.ResourcePage, error)
-	describe func(context.Context, resourcecore.ResourceKey) (string, error)
+	get       func(context.Context, resourcecore.ResourceKey) (resourcecore.Resource, error)
+	search    func(context.Context, resourcecore.ResourceQuery) (resourcecore.ResourcePage, error)
+	describe  func(context.Context, resourcecore.ResourceKey) (string, error)
+	effective func(context.Context, resourcecore.ResourceScope) ([]resourcecore.EffectiveAttribute, error)
+	evaluate  func(context.Context, resourcecore.ResourceScope, []resourcecore.AttributeValue) ([]resourcecore.EffectiveAttribute, error)
 }
 
 func (f resourceReaderFuncs) GetResource(ctx context.Context, key resourcecore.ResourceKey) (resourcecore.Resource, error) {
@@ -27,6 +29,14 @@ func (f resourceReaderFuncs) SearchResources(ctx context.Context, q resourcecore
 
 func (f resourceReaderFuncs) DescribeResource(ctx context.Context, key resourcecore.ResourceKey) (string, error) {
 	return f.describe(ctx, key)
+}
+
+func (f resourceReaderFuncs) EffectiveAttributesFor(ctx context.Context, scope resourcecore.ResourceScope) ([]resourcecore.EffectiveAttribute, error) {
+	return f.effective(ctx, scope)
+}
+
+func (f resourceReaderFuncs) EvaluateAttributes(ctx context.Context, scope resourcecore.ResourceScope, values []resourcecore.AttributeValue) ([]resourcecore.EffectiveAttribute, error) {
+	return f.evaluate(ctx, scope, values)
 }
 
 func TestResourceSearchPassesQueryAndMapsPage(t *testing.T) {
