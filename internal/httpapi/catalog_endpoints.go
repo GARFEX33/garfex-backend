@@ -122,15 +122,16 @@ func catalogListQuery(r *http.Request, kind string) (resourcecore.CatalogQuery, 
 		return resourcecore.CatalogQuery{}, false
 	}
 	query := resourcecore.CatalogQuery{
-		Kind:          resourcecore.KindCode(kind),
-		Scope:         resourcecore.ScopeActive,
-		Text:          values.Get("text"),
-		ClassCode:     values.Get("classCode"),
-		FamilyCode:    values.Get("familyCode"),
-		TypeCode:      values.Get("typeCode"),
-		OptionSetCode: values.Get("optionSetCode"),
-		Limit:         defaultCatalogLimit,
-		Offset:        0,
+		Kind:               resourcecore.KindCode(kind),
+		Scope:              resourcecore.ScopeActive,
+		Text:               values.Get("text"),
+		ClassCode:          values.Get("classCode"),
+		FamilyCode:         values.Get("familyCode"),
+		TypeCode:           values.Get("typeCode"),
+		OptionSetCode:      values.Get("optionSetCode"),
+		CharacteristicCode: values.Get("characteristicCode"),
+		Limit:              defaultCatalogLimit,
+		Offset:             0,
 	}
 	if _, present := values["scope"]; present {
 		query.Scope = resourcecore.LifecycleScope(values.Get("scope"))

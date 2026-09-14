@@ -80,6 +80,10 @@ paths:
           in: query
           description: Scopes results to records whose parent CONJUNTO_OPCIONES has this code (e.g. listing OPCION under one option set). Silently ignored by a kind whose descriptor has no option-set parent field.
           schema: { type: string }
+        - name: characteristicCode
+          in: query
+          description: Scopes results to records whose parent CARACTERISTICA has this code (e.g. listing APLICABILIDAD or OPCION under one characteristic). Silently ignored by a kind whose descriptor has no characteristic parent field.
+          schema: { type: string }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 50, default: 50 }

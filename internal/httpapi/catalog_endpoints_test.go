@@ -56,6 +56,7 @@ func TestCatalogListPassesPublicQueryToCore(t *testing.T) {
 		{"/v1/catalog/UNIDAD?scope=ALL&limit=49&offset=1", resourcecore.CatalogQuery{Kind: "UNIDAD", Scope: resourcecore.ScopeAll, Limit: 49, Offset: 1}},
 		{"/v1/catalog/TIPO?classCode=MATERIAL&familyCode=CONDUCTORES", resourcecore.CatalogQuery{Kind: "TIPO", Scope: resourcecore.ScopeActive, ClassCode: "MATERIAL", FamilyCode: "CONDUCTORES", Limit: 50}},
 		{"/v1/catalog/APLICABILIDAD?typeCode=CABLE&optionSetCode=CALIBRES", resourcecore.CatalogQuery{Kind: "APLICABILIDAD", Scope: resourcecore.ScopeActive, TypeCode: "CABLE", OptionSetCode: "CALIBRES", Limit: 50}},
+		{"/v1/catalog/APLICABILIDAD?characteristicCode=COLOR", resourcecore.CatalogQuery{Kind: "APLICABILIDAD", Scope: resourcecore.ScopeActive, CharacteristicCode: "COLOR", Limit: 50}},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			reader.queries = nil
