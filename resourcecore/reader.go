@@ -28,6 +28,8 @@ type ReadCapabilities interface {
 	SearchResources(context.Context, ResourceQuery) (ResourcePage, error)
 	GetResource(context.Context, ResourceKey) (Resource, error)
 	DescribeResource(context.Context, ResourceKey) (string, error)
+	EffectiveAttributesFor(context.Context, ResourceScope) ([]EffectiveAttribute, error)
+	EvaluateAttributes(context.Context, ResourceScope, []AttributeValue) ([]EffectiveAttribute, error)
 }
 
 // Reader is the public read-only Resource Master contract. It validates
@@ -124,6 +126,36 @@ func (r *Reader) DescribeResource(ctx context.Context, key ResourceKey) (string,
 	return r.cap.DescribeResource(ctx, key)
 }
 
+// EffectiveAttributesFor returns the resolved attribute view for one
+// ResourceType: inheritance, presentation order, and rule evaluation already
+// applied (see domain.ResourceCatalog.EffectiveAttributesFor) — a caller
+// never has to re-implement herencia or Rules evaluation itself.
+func (r *Reader) EffectiveAttributesFor(ctx context.Context, scope ResourceScope) ([]EffectiveAttribute, error) {
+	if err := validateEffectiveAttributesScope(scope); err != nil {
+		return nil, err
+	}
+	attrs, err := r.cap.EffectiveAttributesFor(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	return cloneEffectiveAttributeSlice(attrs), nil
+}
+
+// EvaluateAttributes resolves scope's applicable attributes against values —
+// the same resolution as EffectiveAttributesFor, but with the caller's
+// already-known values folded into CONDITIONAL rule evaluation and relation-
+// narrowed Options (see domain.ResourceCatalog.EffectiveAttributesFor).
+func (r *Reader) EvaluateAttributes(ctx context.Context, scope ResourceScope, values []AttributeValue) ([]EffectiveAttribute, error) {
+	if err := validateEffectiveAttributesScope(scope); err != nil {
+		return nil, err
+	}
+	attrs, err := r.cap.EvaluateAttributes(ctx, scope, cloneAttributeValueSlice(values))
+	if err != nil {
+		return nil, err
+	}
+	return cloneEffectiveAttributeSlice(attrs), nil
+}
+
 func validateCatalogQuery(q CatalogQuery) error {
 	if !isKnownKind(q.Kind) {
 		return NewError(InvalidArgument, "invalid catalog kind")
@@ -161,6 +193,19 @@ func validateResourceKey(key ResourceKey) error {
 	return nil
 }
 
+func validateEffectiveAttributesScope(scope ResourceScope) error {
+	if strings.TrimSpace(scope.ClassCode) == "" {
+		return NewError(InvalidArgument, "class code is required")
+	}
+	if strings.TrimSpace(scope.FamilyCode) == "" {
+		return NewError(InvalidArgument, "family code is required")
+	}
+	if strings.TrimSpace(scope.TypeCode) == "" {
+		return NewError(InvalidArgument, "type code is required")
+	}
+	return nil
+}
+
 func isKnownKind(k KindCode) bool {
 	switch k {
 	case KindClass, KindFamily, KindType, KindAttributeDefinition, KindOptionSet,
@@ -178,6 +223,28 @@ func cloneCatalogRecordSlice(recs []CatalogRecord) []CatalogRecord {
 	out := make([]CatalogRecord, len(recs))
 	for i := range recs {
 		out[i] = CloneCatalogRecord(recs[i])
+	}
+	return out
+}
+
+func cloneAttributeValueSlice(values []AttributeValue) []AttributeValue {
+	if values == nil {
+		return nil
+	}
+	out := make([]AttributeValue, len(values))
+	for i, v := range values {
+		out[i] = AttributeValue{Code: v.Code, Value: CloneValue(v.Value), UnitCode: v.UnitCode}
+	}
+	return out
+}
+
+func cloneEffectiveAttributeSlice(attrs []EffectiveAttribute) []EffectiveAttribute {
+	if attrs == nil {
+		return nil
+	}
+	out := make([]EffectiveAttribute, len(attrs))
+	for i := range attrs {
+		out[i] = CloneEffectiveAttribute(attrs[i])
 	}
 	return out
 }

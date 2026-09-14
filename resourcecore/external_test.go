@@ -40,6 +40,14 @@ func (f *externalFakeCapabilities) DescribeResource(ctx context.Context, key res
 	return "described", nil
 }
 
+func (f *externalFakeCapabilities) EffectiveAttributesFor(ctx context.Context, scope resourcecore.ResourceScope) ([]resourcecore.EffectiveAttribute, error) {
+	return nil, nil
+}
+
+func (f *externalFakeCapabilities) EvaluateAttributes(ctx context.Context, scope resourcecore.ResourceScope, values []resourcecore.AttributeValue) ([]resourcecore.EffectiveAttribute, error) {
+	return nil, nil
+}
+
 func TestExternal_ConstructsReaderWithOnlyPublicTypes(t *testing.T) {
 	cap := &externalFakeCapabilities{
 		activeClasses: []resourcecore.CatalogRecord{{Kind: resourcecore.KindClass, ID: 1}},

@@ -420,3 +420,48 @@ func TestServiceDescribeUsesCurrentCommittedCatalog(t *testing.T) {
 		t.Fatalf("same-session presentation = %q, fresh presentation = %q, previous = %q", after, fresh, before)
 	}
 }
+
+func TestServiceEffectiveAttributesUsesCurrentCommittedCatalog(t *testing.T) {
+	catalog := domain.SeedResourceCatalog()
+	authority := domain.NewCatalogAuthority(catalog)
+	service := NewServiceWithCatalogAuthority(nil, authority)
+	scope := domain.ResourceScope{ClassCode: "MATERIAL", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"}
+
+	attributes, err := service.EffectiveAttributes(scope, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(attributes) == 0 {
+		t.Fatalf("EffectiveAttributes() returned no attributes for CABLE")
+	}
+	if code := attributes[0].Attribute.Definition.Code; code != "insulation" {
+		t.Fatalf("EffectiveAttributes()[0].Attribute.Definition.Code = %q, want %q", code, "insulation")
+	}
+
+	catalog.Attributes = append([]domain.ResourceAttribute(nil), catalog.Attributes...)
+	catalog.Attributes[0].Mode = domain.ModeOptional
+	authority.Publish(catalog)
+	after, err := service.EffectiveAttributes(scope, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	byCode := map[string]domain.EffectiveAttribute{}
+	for _, a := range after {
+		byCode[a.Attribute.Definition.Code] = a
+	}
+	if mode := byCode[catalog.Attributes[0].Definition.Code].EffectiveMode; mode != domain.ModeOptional {
+		t.Fatalf("EffectiveAttributes() after Publish did not reflect updated catalog: mode = %q, want %q", mode, domain.ModeOptional)
+	}
+}
+
+func TestServiceEffectiveAttributesPropagatesValueValidationError(t *testing.T) {
+	authority := domain.NewCatalogAuthority(domain.SeedResourceCatalog())
+	service := NewServiceWithCatalogAuthority(nil, authority)
+	scope := domain.ResourceScope{ClassCode: "MATERIAL", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"}
+
+	mismatched := domain.ResourceAttributeValue{AttributeCode: "insulation", Type: domain.ValueTypeControlledText, Text: "DESNUDO"}
+	_, err := service.EffectiveAttributes(scope, []domain.ResourceAttributeValue{mismatched})
+	if !errors.Is(err, domain.ErrResourceValidation) {
+		t.Fatalf("EffectiveAttributes(mismatched type) error = %v, want ErrResourceValidation", err)
+	}
+}

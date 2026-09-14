@@ -62,18 +62,20 @@ func (f *fakeCatalogReader) HardDeleteRevision(ctx context.Context, kind domain.
 }
 
 type fakeResourceReader struct {
-	get                func(ctx context.Context, classCode, identityKey string) (domain.Resource, error)
-	search             func(ctx context.Context, criteria domain.SearchCriteria) (domain.ResourcePage, error)
-	describe           func(resource domain.Resource) string
-	create             func(ctx context.Context, command domain.CreateCommand) (domain.Resource, error)
-	updateRevision     func(ctx context.Context, command domain.UpdateCommand, expectedRevision uint64) (domain.Resource, error)
-	deactivateRevision func(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
-	reactivateRevision func(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
-	lastDescribed      domain.Resource
-	getCalls           int
-	updateCalls        int
-	deactivateCalls    int
-	reactivateCalls    int
+	get                    func(ctx context.Context, classCode, identityKey string) (domain.Resource, error)
+	search                 func(ctx context.Context, criteria domain.SearchCriteria) (domain.ResourcePage, error)
+	describe               func(resource domain.Resource) string
+	create                 func(ctx context.Context, command domain.CreateCommand) (domain.Resource, error)
+	updateRevision         func(ctx context.Context, command domain.UpdateCommand, expectedRevision uint64) (domain.Resource, error)
+	deactivateRevision     func(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
+	reactivateRevision     func(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
+	effectiveAttributes    func(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error)
+	lastDescribed          domain.Resource
+	getCalls               int
+	updateCalls            int
+	deactivateCalls        int
+	reactivateCalls        int
+	effectiveAttributeArgs domain.ResourceScope
 }
 
 func (f *fakeResourceReader) Create(ctx context.Context, command domain.CreateCommand) (domain.Resource, error) {
@@ -105,6 +107,10 @@ func (f *fakeResourceReader) SearchPage(ctx context.Context, criteria domain.Sea
 func (f *fakeResourceReader) Describe(resource domain.Resource) string {
 	f.lastDescribed = resource
 	return f.describe(resource)
+}
+func (f *fakeResourceReader) EffectiveAttributes(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error) {
+	f.effectiveAttributeArgs = scope
+	return f.effectiveAttributes(scope, current)
 }
 
 func classKind() domain.CatalogKind {
@@ -349,6 +355,96 @@ func TestAdapter_DescribeResourceDelegates(t *testing.T) {
 	}
 	if resources.lastDescribed.IdentityKey != "v1|x" {
 		t.Fatalf("describe did not receive the fetched resource")
+	}
+}
+
+func TestAdapter_EffectiveAttributesForMapsDomainToPublic(t *testing.T) {
+	wantScope := domain.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"}
+	resources := &fakeResourceReader{
+		effectiveAttributes: func(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error) {
+			return []domain.EffectiveAttribute{{
+				Attribute: domain.ResourceAttribute{
+					TypeCode: "CABLE", OptionSet: "DEFAULT",
+					Definition: domain.AttributeDefinition{Code: "color", Name: "Color", ValueType: domain.ValueTypeControlledOption},
+				},
+				EffectiveMode:        domain.ModeRequired,
+				IdentityParticipates: true,
+				Position:             3,
+				HasPosition:          true,
+				SourceLevel:          domain.SourceLevelType,
+				SourceCode:           "CABLE",
+			}}, nil
+		},
+	}
+	adapter := newTestAdapter(nil, resources)
+	attrs, err := adapter.EffectiveAttributesFor(context.Background(), public.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resources.effectiveAttributeArgs != wantScope {
+		t.Fatalf("scope not forwarded: %+v, want %+v", resources.effectiveAttributeArgs, wantScope)
+	}
+	if len(attrs) != 1 {
+		t.Fatalf("expected 1 attribute, got %d", len(attrs))
+	}
+	got := attrs[0]
+	if got.Characteristic.Code != "color" || got.Characteristic.Name != "Color" || got.Characteristic.ValueType != "CONTROLLED_OPTION" {
+		t.Fatalf("unexpected Characteristic: %+v", got.Characteristic)
+	}
+	if got.EffectiveMode != "REQUIRED" || !got.IdentityParticipates {
+		t.Fatalf("unexpected mode/identity: %+v", got)
+	}
+	if got.Position != 3 || !got.HasPosition {
+		t.Fatalf("unexpected position/hasPosition: %+v", got)
+	}
+	if got.OptionSetCode != "DEFAULT" {
+		t.Fatalf("unexpected OptionSetCode: %q", got.OptionSetCode)
+	}
+	if got.Source.Level != "TYPE" || got.Source.Code != "CABLE" {
+		t.Fatalf("unexpected Source: %+v", got.Source)
+	}
+}
+
+func TestAdapter_EvaluateAttributesForwardsValuesAndMapsOptions(t *testing.T) {
+	wantScope := domain.ResourceScope{ClassCode: "MAT", FamilyCode: "CANALIZACIONES", TypeCode: "TUBERIA"}
+	var gotCurrent []domain.ResourceAttributeValue
+	resources := &fakeResourceReader{
+		effectiveAttributes: func(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error) {
+			gotCurrent = current
+			return []domain.EffectiveAttribute{{
+				Attribute: domain.ResourceAttribute{Definition: domain.AttributeDefinition{Code: "diameter_mm", ValueType: domain.ValueTypeControlledOption}},
+				Options:   []domain.AttributeOption{{Code: "13 mm", Label: "13 mm"}},
+			}}, nil
+		},
+	}
+	adapter := newTestAdapter(nil, resources)
+	attrs, err := adapter.EvaluateAttributes(context.Background(), public.ResourceScope{ClassCode: "MAT", FamilyCode: "CANALIZACIONES", TypeCode: "TUBERIA"},
+		[]public.AttributeValue{{Code: "diameter_inch", Value: public.Value{Kind: public.ValueControlledOption, Text: `1/2"`}}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resources.effectiveAttributeArgs != wantScope {
+		t.Fatalf("scope not forwarded: %+v, want %+v", resources.effectiveAttributeArgs, wantScope)
+	}
+	if len(gotCurrent) != 1 || gotCurrent[0].AttributeCode != "diameter_inch" || gotCurrent[0].OptionCode != `1/2"` {
+		t.Fatalf("values not forwarded to domain: %+v", gotCurrent)
+	}
+	if len(attrs) != 1 || len(attrs[0].Options) != 1 || attrs[0].Options[0].Code != "13 mm" {
+		t.Fatalf("unexpected mapped attributes: %+v", attrs)
+	}
+}
+
+func TestAdapter_EvaluateAttributesMapsValidationError(t *testing.T) {
+	resources := &fakeResourceReader{
+		effectiveAttributes: func(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error) {
+			return nil, fmt.Errorf("%w: attribute %q has type %q, want %q", domain.ErrResourceValidation, "insulation", "CONTROLLED_TEXT", "CONTROLLED_OPTION")
+		},
+	}
+	adapter := newTestAdapter(nil, resources)
+	_, err := adapter.EvaluateAttributes(context.Background(), public.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"},
+		[]public.AttributeValue{{Code: "insulation", Value: public.Value{Kind: public.ValueText, Text: "DESNUDO"}}})
+	if !public.IsCode(err, public.Validation) {
+		t.Fatalf("EvaluateAttributes() error = %v, want VALIDATION", err)
 	}
 }
 

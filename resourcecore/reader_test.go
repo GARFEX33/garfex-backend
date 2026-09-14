@@ -7,27 +7,33 @@ import (
 )
 
 type readerFakeCapabilities struct {
-	activeClasses      []CatalogRecord
-	descriptors        []CatalogDescriptor
-	listPage           CatalogPage
-	getRecord          CatalogRecord
-	searchPage         ResourcePage
-	getResource        Resource
-	describeText       string
-	activeClassesErr   error
-	descriptorsErr     error
-	listErr            error
-	getErr             error
-	searchErr          error
-	getResourceErr     error
-	describeErr        error
-	activeClassesCalls int
-	descriptorsCalls   int
-	listCalls          int
-	getCalls           int
-	searchCalls        int
-	getResourceCalls   int
-	describeCalls      int
+	activeClasses       []CatalogRecord
+	descriptors         []CatalogDescriptor
+	listPage            CatalogPage
+	getRecord           CatalogRecord
+	searchPage          ResourcePage
+	getResource         Resource
+	describeText        string
+	effectiveAttributes []EffectiveAttribute
+	activeClassesErr    error
+	descriptorsErr      error
+	listErr             error
+	getErr              error
+	searchErr           error
+	getResourceErr      error
+	describeErr         error
+	effectiveAttrsErr   error
+	evaluateAttrsErr    error
+	activeClassesCalls  int
+	descriptorsCalls    int
+	listCalls           int
+	getCalls            int
+	searchCalls         int
+	getResourceCalls    int
+	describeCalls       int
+	effectiveAttrsCalls int
+	evaluateAttrsCalls  int
+	evaluateAttrsValues []AttributeValue
 }
 
 func (f *readerFakeCapabilities) ActiveClasses(ctx context.Context) ([]CatalogRecord, error) {
@@ -63,6 +69,17 @@ func (f *readerFakeCapabilities) GetResource(ctx context.Context, key ResourceKe
 func (f *readerFakeCapabilities) DescribeResource(ctx context.Context, key ResourceKey) (string, error) {
 	f.describeCalls++
 	return f.describeText, f.describeErr
+}
+
+func (f *readerFakeCapabilities) EffectiveAttributesFor(ctx context.Context, scope ResourceScope) ([]EffectiveAttribute, error) {
+	f.effectiveAttrsCalls++
+	return f.effectiveAttributes, f.effectiveAttrsErr
+}
+
+func (f *readerFakeCapabilities) EvaluateAttributes(ctx context.Context, scope ResourceScope, values []AttributeValue) ([]EffectiveAttribute, error) {
+	f.evaluateAttrsCalls++
+	f.evaluateAttrsValues = values
+	return f.effectiveAttributes, f.evaluateAttrsErr
 }
 
 func TestNewReadOnly_NilCapabilitiesIsInvalidArgument(t *testing.T) {
@@ -239,6 +256,74 @@ func TestReader_DescribeResourcePassesThrough(t *testing.T) {
 	}
 	if got != "the canonical text" {
 		t.Fatalf("unexpected description: %q", got)
+	}
+}
+
+func TestReader_EffectiveAttributesForValidatesScope(t *testing.T) {
+	fake := &readerFakeCapabilities{}
+	r, _ := NewReadOnly(fake)
+	_, err := r.EffectiveAttributesFor(context.Background(), ResourceScope{ClassCode: "", FamilyCode: "F", TypeCode: "T"})
+	if !IsCode(err, InvalidArgument) {
+		t.Fatalf("expected INVALID_ARGUMENT for empty class, got %v", err)
+	}
+	_, err = r.EffectiveAttributesFor(context.Background(), ResourceScope{ClassCode: "C", FamilyCode: "", TypeCode: "T"})
+	if !IsCode(err, InvalidArgument) {
+		t.Fatalf("expected INVALID_ARGUMENT for empty family, got %v", err)
+	}
+	_, err = r.EffectiveAttributesFor(context.Background(), ResourceScope{ClassCode: "C", FamilyCode: "F", TypeCode: ""})
+	if !IsCode(err, InvalidArgument) {
+		t.Fatalf("expected INVALID_ARGUMENT for empty type, got %v", err)
+	}
+}
+
+func TestReader_EffectiveAttributesForCopiesResult(t *testing.T) {
+	shared := []EffectiveAttribute{{
+		Characteristic: CharacteristicDescriptor{Code: "color"},
+		Rules:          []ApplicabilityRule{{AttributeCode: "insulation", Equals: Value{Kind: ValueText, Text: "DESNUDO"}}},
+	}}
+	fake := &readerFakeCapabilities{effectiveAttributes: shared}
+	r, _ := NewReadOnly(fake)
+	got, err := r.EffectiveAttributesFor(context.Background(), ResourceScope{ClassCode: "C", FamilyCode: "F", TypeCode: "T"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got[0].Rules[0].Equals.Text = "Z"
+	if shared[0].Rules[0].Equals.Text != "DESNUDO" {
+		t.Fatalf("capability state leaked after caller mutation")
+	}
+}
+
+func TestReader_EvaluateAttributesValidatesScope(t *testing.T) {
+	fake := &readerFakeCapabilities{}
+	r, _ := NewReadOnly(fake)
+	_, err := r.EvaluateAttributes(context.Background(), ResourceScope{ClassCode: "", FamilyCode: "F", TypeCode: "T"}, nil)
+	if !IsCode(err, InvalidArgument) {
+		t.Fatalf("expected INVALID_ARGUMENT for empty class, got %v", err)
+	}
+}
+
+func TestReader_EvaluateAttributesClonesValuesAndResult(t *testing.T) {
+	sharedValues := []AttributeValue{{Code: "insulation", Value: Value{Kind: ValueControlledOption, Text: "DESNUDO"}}}
+	sharedResult := []EffectiveAttribute{{Characteristic: CharacteristicDescriptor{Code: "color"}}}
+	fake := &readerFakeCapabilities{effectiveAttributes: sharedResult}
+	r, _ := NewReadOnly(fake)
+
+	got, err := r.EvaluateAttributes(context.Background(), ResourceScope{ClassCode: "C", FamilyCode: "F", TypeCode: "T"}, sharedValues)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fake.evaluateAttrsValues) != 1 || fake.evaluateAttrsValues[0].Value.Text != "DESNUDO" {
+		t.Fatalf("capability did not receive forwarded values: %+v", fake.evaluateAttrsValues)
+	}
+
+	fake.evaluateAttrsValues[0].Value.Text = "MUTATED"
+	if sharedValues[0].Value.Text != "DESNUDO" {
+		t.Fatalf("caller's values slice leaked into capability's copy")
+	}
+
+	got[0].Characteristic.Code = "mutated"
+	if sharedResult[0].Characteristic.Code != "color" {
+		t.Fatalf("capability state leaked after caller mutation")
 	}
 }
 

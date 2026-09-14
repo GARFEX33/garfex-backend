@@ -83,6 +83,19 @@ func (s *Service) Describe(resource domain.Resource) string {
 	return catalog.Describe(resource)
 }
 
+// EffectiveAttributes resolves scope's applicable attributes against the
+// current committed catalog (domain.ResourceCatalog.EffectiveAttributesFor),
+// combining inheritance, presentation order, and rule evaluation into one
+// UI-ready view. current is the caller's already-known values (nil for a
+// static, pre-input baseline); passing values reuses the exact same
+// conditional-rule evaluation and value validation NewResource applies
+// internally, so a malformed value (wrong type, unknown or repeated
+// attribute) is rejected the same way here.
+func (s *Service) EffectiveAttributes(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error) {
+	catalog, _ := s.authority.Current()
+	return catalog.EffectiveAttributesFor(scope, current)
+}
+
 // Create constructs and validates a canonical resource before persistence.
 func (s *Service) Create(ctx context.Context, command domain.CreateCommand) (domain.Resource, error) {
 	catalog, _ := s.authority.Current()

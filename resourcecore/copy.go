@@ -33,6 +33,17 @@ func CloneCatalogRecord(rec CatalogRecord) CatalogRecord {
 	return out
 }
 
+func CloneEffectiveAttribute(a EffectiveAttribute) EffectiveAttribute {
+	out := a
+	out.Rules = make([]ApplicabilityRule, len(a.Rules))
+	for i := range a.Rules {
+		r := a.Rules[i]
+		out.Rules[i] = ApplicabilityRule{AttributeCode: r.AttributeCode, Equals: CloneValue(r.Equals), Mode: r.Mode, IdentityParticipates: r.IdentityParticipates, NotApplicable: r.NotApplicable, Active: r.Active}
+	}
+	out.Options = append([]EffectiveAttributeOption(nil), a.Options...)
+	return out
+}
+
 func CloneCatalogDescriptor(desc CatalogDescriptor) CatalogDescriptor {
 	out := desc
 	out.Fields = make([]FieldDescriptor, len(desc.Fields))

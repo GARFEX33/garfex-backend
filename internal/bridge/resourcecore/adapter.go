@@ -46,6 +46,7 @@ type resourceReader interface {
 	Get(ctx context.Context, classCode, identityKey string) (domain.Resource, error)
 	SearchPage(ctx context.Context, criteria domain.SearchCriteria) (domain.ResourcePage, error)
 	Describe(resource domain.Resource) string
+	EffectiveAttributes(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error)
 }
 
 // resourceWriter is the narrow resource write seam the bridge consumes.
@@ -367,6 +368,95 @@ func (a *Adapter) DescribeResource(ctx context.Context, key public.ResourceKey) 
 		return "", mapError(err)
 	}
 	return a.resources.Describe(res), nil
+}
+
+// EffectiveAttributesFor returns the resolved attribute view for one
+// ResourceType, delegating to the resource service's pure in-memory
+// resolution (inheritance, presentation order, and rule evaluation already
+// applied — see domain.ResourceCatalog.EffectiveAttributesFor). current is
+// always nil from this read path; a future contextual-evaluation capability
+// would pass real values through the same domain method.
+func (a *Adapter) EffectiveAttributesFor(ctx context.Context, scope public.ResourceScope) ([]public.EffectiveAttribute, error) {
+	_ = ctx
+	domainScope := domain.ResourceScope{ClassCode: scope.ClassCode, FamilyCode: scope.FamilyCode, TypeCode: scope.TypeCode}
+	attributes, err := a.resources.EffectiveAttributes(domainScope, nil)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	out := make([]public.EffectiveAttribute, len(attributes))
+	for i, attribute := range attributes {
+		out[i] = mapEffectiveAttribute(attribute)
+	}
+	return out, nil
+}
+
+// EvaluateAttributes resolves the same attribute view as
+// EffectiveAttributesFor, but with values folded into CONDITIONAL rule
+// evaluation and relation-narrowed Options — reusing the exact same
+// resource-service resolution, only with real values instead of nil.
+func (a *Adapter) EvaluateAttributes(ctx context.Context, scope public.ResourceScope, values []public.AttributeValue) ([]public.EffectiveAttribute, error) {
+	_ = ctx
+	domainValues, err := toDomainResourceAttributes(values)
+	if err != nil {
+		return nil, err
+	}
+	domainScope := domain.ResourceScope{ClassCode: scope.ClassCode, FamilyCode: scope.FamilyCode, TypeCode: scope.TypeCode}
+	attributes, err := a.resources.EffectiveAttributes(domainScope, domainValues)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	out := make([]public.EffectiveAttribute, len(attributes))
+	for i, attribute := range attributes {
+		out[i] = mapEffectiveAttribute(attribute)
+	}
+	return out, nil
+}
+
+func mapEffectiveAttribute(a domain.EffectiveAttribute) public.EffectiveAttribute {
+	return public.EffectiveAttribute{
+		Characteristic: public.CharacteristicDescriptor{
+			Code: a.Attribute.Definition.Code, Name: a.Attribute.Definition.Name,
+			ValueType: string(a.Attribute.Definition.ValueType), Dimension: a.Attribute.Definition.Dimension,
+		},
+		EffectiveMode:        string(a.EffectiveMode),
+		IdentityParticipates: a.IdentityParticipates,
+		NotApplicable:        a.NotApplicable,
+		Position:             a.Position,
+		HasPosition:          a.HasPosition,
+		OptionSetCode:        a.Attribute.OptionSet,
+		Source:               public.EffectiveAttributeSource{Level: a.SourceLevel, Code: a.SourceCode},
+		Rules:                mapAttributeRules(a.Attribute.Rules),
+		Options:              mapAttributeOptions(a.Options),
+	}
+}
+
+func mapAttributeOptions(options []domain.AttributeOption) []public.EffectiveAttributeOption {
+	if options == nil {
+		return nil
+	}
+	out := make([]public.EffectiveAttributeOption, len(options))
+	for i, o := range options {
+		out[i] = public.EffectiveAttributeOption{Code: o.Code, Label: o.Label}
+	}
+	return out
+}
+
+func mapAttributeRules(rules []domain.AttributeRule) []public.ApplicabilityRule {
+	if rules == nil {
+		return nil
+	}
+	out := make([]public.ApplicabilityRule, len(rules))
+	for i, r := range rules {
+		out[i] = public.ApplicabilityRule{
+			AttributeCode:        r.When.AttributeCode,
+			Equals:               public.Value{Kind: public.ValueText, Text: r.When.Equals},
+			Mode:                 string(r.Mode),
+			IdentityParticipates: r.IdentityParticipates,
+			NotApplicable:        r.NotApplicable,
+			Active:               r.Active,
+		}
+	}
+	return out
 }
 
 func mapError(err error) error {

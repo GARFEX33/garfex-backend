@@ -49,7 +49,26 @@ type (
 		Mode                                        string
 		IdentityParticipates, NotApplicable, Active bool
 	}
-	ResourceScope  struct{ ClassCode, FamilyCode, TypeCode string }
+	ResourceScope            struct{ ClassCode, FamilyCode, TypeCode string }
+	CharacteristicDescriptor struct {
+		Code, Name string
+		ValueType  string
+		Dimension  string
+	}
+	EffectiveAttributeSource struct{ Level, Code string }
+	EffectiveAttributeOption struct{ Code, Label string }
+	EffectiveAttribute       struct {
+		Characteristic       CharacteristicDescriptor
+		EffectiveMode        string
+		IdentityParticipates bool
+		NotApplicable        bool
+		Position             int
+		HasPosition          bool
+		OptionSetCode        string
+		Source               EffectiveAttributeSource
+		Rules                []ApplicabilityRule
+		Options              []EffectiveAttributeOption
+	}
 	AttributeValue struct {
 		Code     string
 		Value    Value
