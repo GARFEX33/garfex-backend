@@ -536,6 +536,7 @@ func mapCatalogDescriptor(kind domain.CatalogKind) public.CatalogDescriptor {
 			Required:    f.Required,
 			RefKind:     public.KindCode(f.RefKind),
 			RefScopedBy: append([]string(nil), f.RefScopedBy...),
+			AllowCreate: f.AllowCreate,
 			EnumValues:  mapEnumValues(f.EnumValues),
 		}
 	}
