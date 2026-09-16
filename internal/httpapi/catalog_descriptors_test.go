@@ -82,21 +82,23 @@ func TestCatalogDescriptorsNormalizesNilSlice(t *testing.T) {
 }
 
 func TestCatalogDescriptorsMapsAndSanitizesCoreErrors(t *testing.T) {
+	const coreMessage = "postgres://user:secret@host/db"
 	for _, tc := range []struct {
-		code    resourcecore.ErrorCode
-		status  int
-		message string
+		code       resourcecore.ErrorCode
+		status     int
+		message    string
+		wantDetail bool
 	}{
-		{resourcecore.InvalidArgument, 400, "invalid request"}, {resourcecore.NotFound, 404, "not found"},
-		{resourcecore.Duplicate, 409, "conflict"}, {resourcecore.Integrity, 409, "conflict"}, {resourcecore.IdentityConflict, 409, "conflict"},
-		{resourcecore.InvalidLifecycle, 409, "conflict"}, {resourcecore.ReactivationImpossible, 409, "conflict"}, {resourcecore.InUse, 409, "conflict"},
-		{resourcecore.ImmutableCode, 409, "conflict"}, {resourcecore.Conflict, 409, "conflict"}, {resourcecore.InvalidReference, 422, "validation failed"},
-		{resourcecore.Validation, 422, "validation failed"}, {resourcecore.InvalidCatalog, 422, "validation failed"}, {resourcecore.Unavailable, 503, "unavailable"},
-		{resourcecore.Internal, 500, "internal server error"},
+		{resourcecore.InvalidArgument, 400, "invalid request", true}, {resourcecore.NotFound, 404, "not found", false},
+		{resourcecore.Duplicate, 409, "conflict", false}, {resourcecore.Integrity, 409, "conflict", false}, {resourcecore.IdentityConflict, 409, "conflict", false},
+		{resourcecore.InvalidLifecycle, 409, "conflict", false}, {resourcecore.ReactivationImpossible, 409, "conflict", false}, {resourcecore.InUse, 409, "conflict", false},
+		{resourcecore.ImmutableCode, 409, "conflict", false}, {resourcecore.Conflict, 409, "conflict", false}, {resourcecore.InvalidReference, 422, "validation failed", true},
+		{resourcecore.Validation, 422, "validation failed", true}, {resourcecore.InvalidCatalog, 422, "validation failed", true}, {resourcecore.Unavailable, 503, "unavailable", false},
+		{resourcecore.Internal, 500, "internal server error", false},
 	} {
 		t.Run(string(tc.code), func(t *testing.T) {
 			h := NewRouter(catalogReaderFunc(func(context.Context) ([]resourcecore.CatalogDescriptor, error) {
-				return nil, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
+				return nil, resourcecore.NewError(tc.code, coreMessage)
 			}), nil, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/descriptors", nil))
@@ -106,6 +108,16 @@ func TestCatalogDescriptorsMapsAndSanitizesCoreErrors(t *testing.T) {
 			}
 			if r.Code != tc.status || got.Error != tc.message {
 				t.Fatalf("status/error = %d/%q, want %d/%q", r.Code, got.Error, tc.status, tc.message)
+			}
+			if got.Code != string(tc.code) {
+				t.Fatalf("code = %q, want %q", got.Code, tc.code)
+			}
+			wantDetail := ""
+			if tc.wantDetail {
+				wantDetail = coreMessage
+			}
+			if got.Detail != wantDetail {
+				t.Fatalf("detail = %q, want %q", got.Detail, wantDetail)
 			}
 		})
 	}

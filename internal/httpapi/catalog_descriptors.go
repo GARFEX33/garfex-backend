@@ -47,6 +47,11 @@ type fieldDescriptorResponse struct {
 	Required    bool                `json:"required"`
 	RefKind     string              `json:"refKind"`
 	RefScopedBy []string            `json:"refScopedBy"`
+	// AllowCreate marks a reference field as reuse-before-create: a client
+	// should search existing records of refKind first and offer creating a
+	// new one only when nothing matches, instead of defaulting straight to a
+	// create form. False (and meaningless) for non-reference fields.
+	AllowCreate bool                `json:"allowCreate"`
 	EnumValues  []enumValueResponse `json:"enumValues"`
 }
 
@@ -57,6 +62,21 @@ type enumValueResponse struct {
 
 type errorResponse struct {
 	Error string `json:"error"`
+	// Code is the stable, machine-readable resourcecore.ErrorCode backing
+	// Error (e.g. "IN_USE", "INVALID_LIFECYCLE", "CONFLICT", "NOT_FOUND").
+	// Always safe to expose and to switch on: it is one of a small fixed set
+	// of category names, never derived from request or infrastructure
+	// content — unlike Error/Detail, which are human-readable and may collapse
+	// several distinct Code values into the same text (e.g. every 409 reads
+	// "conflict" regardless of Code). Empty when the failure never reached
+	// Core (e.g. an HTTP method mismatch).
+	Code string `json:"code,omitempty"`
+	// Detail carries the Core's own validation message. It is populated only
+	// for the closed set of validation-class codes (see isValidationCode),
+	// whose messages are always developer-authored static strings that never
+	// embed request data or infrastructure details — every other code keeps
+	// returning a fully sanitized, generic message.
+	Detail string `json:"detail,omitempty"`
 }
 
 func serveCatalogDescriptors(w http.ResponseWriter, r *http.Request, reader CatalogDescriptorReader) {
@@ -122,7 +142,8 @@ func mapCatalogDescriptor(descriptor resourcecore.CatalogDescriptor) catalogDesc
 		response.Fields[i] = fieldDescriptorResponse{
 			Name: field.Name, Label: field.Label, Kind: string(field.Kind), Required: field.Required,
 			RefKind: string(field.RefKind), RefScopedBy: stringsOrEmpty(field.RefScopedBy),
-			EnumValues: enumValuesOrEmpty(field.EnumValues),
+			AllowCreate: field.AllowCreate,
+			EnumValues:  enumValuesOrEmpty(field.EnumValues),
 		}
 	}
 	return response
@@ -145,8 +166,25 @@ func enumValuesOrEmpty(values []resourcecore.EnumValue) []enumValueResponse {
 
 func writeCatalogError(w http.ResponseWriter, err error) {
 	status, message := catalogError(err)
-	log.Printf("catalog error: code=%s status=%d message=%q", resourcecore.Code(err), status, err.Error())
-	writeJSON(w, status, errorResponse{Error: message})
+	code := resourcecore.Code(err)
+	log.Printf("catalog error: code=%s status=%d message=%q", code, status, err.Error())
+	resp := errorResponse{Error: message, Code: string(code)}
+	if isValidationCode(code) {
+		resp.Detail = err.Error()
+	}
+	writeJSON(w, status, resp)
+}
+
+// isValidationCode reports whether code's message is always a static,
+// developer-authored string safe to return verbatim to the client — never a
+// wrapped infrastructure/repository error that could carry secrets or paths.
+func isValidationCode(code resourcecore.ErrorCode) bool {
+	switch code {
+	case resourcecore.InvalidArgument, resourcecore.Validation, resourcecore.InvalidReference, resourcecore.InvalidCatalog:
+		return true
+	default:
+		return false
+	}
 }
 
 func catalogError(err error) (int, string) {

@@ -837,7 +837,19 @@ components:
       type: object
       additionalProperties: false
       required: [kind, id, code]
-      properties: { kind: { type: string }, id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }, code: { type: string } }
+      properties:
+        kind: { type: string }
+        id:
+          type: string
+          pattern: '^(?:0|-?[1-9][0-9]*)$'
+          not: { pattern: '[\r\n]' }
+          description: >-
+            Decimal integer identifier. In a response this is the referenced
+            record's real id. In a create/update request body it MUST be "0":
+            the server resolves the reference by code, and a non-zero id is
+            rejected as invalid (references are addressed by natural code on
+            write, never by id).
+        code: { type: string }
     CatalogEnumValue:
       type: object
       additionalProperties: false
@@ -905,7 +917,7 @@ components:
         parentField: { type: string }
     FieldDescriptor:
       type: object
-      required: [name, label, kind, required, refKind, refScopedBy, enumValues]
+      required: [name, label, kind, required, refKind, refScopedBy, allowCreate, enumValues]
       properties:
         name: { type: string }
         label: { type: string }
@@ -913,6 +925,13 @@ components:
         required: { type: boolean }
         refKind: { type: string }
         refScopedBy: { type: array, items: { type: string } }
+        allowCreate:
+          type: boolean
+          description: >-
+            True on a reference field (refKind set) that should be presented
+            as search-existing-first, create-as-fallback — never a plain
+            "create new" form by default. Always false, and meaningless, on a
+            non-reference field.
         enumValues: { type: array, items: { $ref: '#/components/schemas/EnumValue' } }
     EnumValue:
       type: object
@@ -921,7 +940,41 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string } }
+      properties:
+        error:
+          type: string
+          description: 'Generic, sanitized classification of the failure (e.g. "invalid request", "validation failed").'
+        code:
+          type: string
+          description: >-
+            Stable, machine-readable reason code, safe to switch on: distinct
+            outcomes that read the same generic "conflict" error (e.g. an
+            expected-revision mismatch, a still-active record, or a record
+            still in use) are always distinguishable here even when error is
+            identical. Absent only when the failure never reached Core (e.g.
+            an HTTP method mismatch).
+          enum:
+            - INVALID_ARGUMENT
+            - NOT_FOUND
+            - DUPLICATE
+            - INVALID_REFERENCE
+            - VALIDATION
+            - INTEGRITY
+            - IDENTITY_CONFLICT
+            - INVALID_LIFECYCLE
+            - REACTIVATION_IMPOSSIBLE
+            - INVALID_CATALOG
+            - IN_USE
+            - IMMUTABLE_CODE
+            - CONFLICT
+            - UNAVAILABLE
+            - INTERNAL
+        detail:
+          type: string
+          description: >-
+            The specific reason, present only when error is "invalid request" or
+            "validation failed". Absent for every other error (not found, conflict,
+            unavailable, internal server error), which never expose internal detail.
     SupplierCreateRequest:
       type: object
       additionalProperties: false
