@@ -54,7 +54,7 @@ func TestCreateResourceMapsRequestAndResponse(t *testing.T) {
 			{"code": "peso", "value": {"kind": "QUANTITY", "value": "1.20", "unitCode": "KG"}},
 			{"code": "activo", "value": {"kind": "BOOLEAN", "value": true}},
 			{"code": "nombre", "value": {"kind": "TEXT", "value": "acero"}},
-			{"code": "material", "value": {"kind": "REFERENCE", "reference": {"kind": "MATERIAL", "code": "MAT-1"}}},
+			{"code": "material", "value": {"kind": "REFERENCE", "reference": {"kind": "MATERIAL", "id": "0", "code": "MAT-1"}}},
 			{"code": "tags", "value": {"kind": "STRING_LIST", "values": ["a", "b"]}},
 			{"code": "na", "value": {"kind": "NOT_APPLICABLE"}}
 		]
@@ -136,7 +136,8 @@ func TestCreateResourceRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 		{"unknown value kind", `{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG","attributes":[{"code":"x","value":{"kind":"FUTURE","value":"x"}}]}`},
 		{"extra field on TEXT value", `{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG","attributes":[{"code":"x","value":{"kind":"TEXT","value":"x","extra":true}}]}`},
 		{"missing quantity unit", `{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG","attributes":[{"code":"x","value":{"kind":"QUANTITY","value":"1"}}]}`},
-		{"reference with id", `{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG","attributes":[{"code":"x","value":{"kind":"REFERENCE","reference":{"kind":"MATERIAL","id":"1","code":"M"}}}]}`},
+		{"reference missing id", `{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG","attributes":[{"code":"x","value":{"kind":"REFERENCE","reference":{"kind":"MATERIAL","code":"M"}}}]}`},
+		{"reference non-numeric id", `{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG","attributes":[{"code":"x","value":{"kind":"REFERENCE","reference":{"kind":"MATERIAL","id":"abc","code":"M"}}}]}`},
 		{"boolean value is a string", `{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG","attributes":[{"code":"x","value":{"kind":"BOOLEAN","value":"true"}}]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

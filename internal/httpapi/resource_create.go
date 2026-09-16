@@ -225,6 +225,14 @@ func parseReference(raw json.RawMessage) (resourcecore.Reference, error) {
 	if err != nil {
 		return resourcecore.Reference{}, err
 	}
+	idText, err := popStringField(fields, "id")
+	if err != nil {
+		return resourcecore.Reference{}, err
+	}
+	id, err := strconv.ParseInt(idText, 10, 64)
+	if err != nil {
+		return resourcecore.Reference{}, resourcecore.NewError(resourcecore.InvalidArgument, "invalid id")
+	}
 	code, err := popStringField(fields, "code")
 	if err != nil {
 		return resourcecore.Reference{}, err
@@ -232,7 +240,7 @@ func parseReference(raw json.RawMessage) (resourcecore.Reference, error) {
 	if len(fields) != 0 {
 		return resourcecore.Reference{}, resourcecore.NewError(resourcecore.InvalidArgument, "unexpected reference fields")
 	}
-	return resourcecore.Reference{Kind: resourcecore.KindCode(kind), Code: code}, nil
+	return resourcecore.Reference{Kind: resourcecore.KindCode(kind), ID: id, Code: code}, nil
 }
 
 func popStringField(fields map[string]json.RawMessage, key string) (string, error) {
