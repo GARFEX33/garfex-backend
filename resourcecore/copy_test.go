@@ -28,12 +28,15 @@ func TestDefensiveCopy(t *testing.T) {
 	if rec.Values["code"].Text != "C" || rec.Rules[0].AttributeCode != "a" {
 		t.Fatalf("record clone leaked")
 	}
-	desc := CatalogDescriptor{Kind: KindClass, Fields: []FieldDescriptor{{Name: "code", EnumValues: []EnumValue{{Value: "A"}}}}, IdentityFields: []string{"code"}}
+	desc := CatalogDescriptor{Kind: KindClass, Fields: []FieldDescriptor{{Name: "code", AllowCreate: true, EnumValues: []EnumValue{{Value: "A"}}}}, IdentityFields: []string{"code"}}
 	descp := CloneCatalogDescriptor(desc)
 	descp.Fields[0].EnumValues[0].Value = "B"
 	descp.IdentityFields[0] = "x"
 	if desc.Fields[0].EnumValues[0].Value != "A" || desc.IdentityFields[0] != "code" {
 		t.Fatalf("descriptor clone leaked")
+	}
+	if !descp.Fields[0].AllowCreate {
+		t.Fatalf("descriptor clone dropped AllowCreate")
 	}
 	res := Resource{ID: 1, Attributes: []AttributeValue{{Code: "a", Value: Value{Kind: ValueInteger, Text: "1"}}}}
 	rescp := CloneResource(res)
