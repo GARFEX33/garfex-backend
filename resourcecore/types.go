@@ -10,6 +10,11 @@ type (
 		Required    bool
 		RefKind     KindCode
 		RefScopedBy []string
+		// AllowCreate marks a reference field as reuse-before-create: a
+		// client should search existing records of RefKind first and offer
+		// creating a new one only as a fallback, rather than defaulting
+		// straight to a create form.
+		AllowCreate bool
 		EnumValues  []EnumValue
 	}
 	CatalogDescriptor struct {
