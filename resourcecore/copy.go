@@ -49,7 +49,7 @@ func CloneCatalogDescriptor(desc CatalogDescriptor) CatalogDescriptor {
 	out.Fields = make([]FieldDescriptor, len(desc.Fields))
 	for i := range desc.Fields {
 		f := desc.Fields[i]
-		out.Fields[i] = FieldDescriptor{Name: f.Name, Label: f.Label, Kind: f.Kind, Required: f.Required, RefKind: f.RefKind, RefScopedBy: CloneStringSlice(f.RefScopedBy), EnumValues: append([]EnumValue(nil), f.EnumValues...)}
+		out.Fields[i] = FieldDescriptor{Name: f.Name, Label: f.Label, Kind: f.Kind, Required: f.Required, RefKind: f.RefKind, RefScopedBy: CloneStringSlice(f.RefScopedBy), AllowCreate: f.AllowCreate, EnumValues: append([]EnumValue(nil), f.EnumValues...)}
 	}
 	out.IdentityFields = CloneStringSlice(desc.IdentityFields)
 	return out
