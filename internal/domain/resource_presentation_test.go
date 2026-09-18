@@ -98,6 +98,30 @@ func TestDescribeSkipsFieldMarkedNotApplicable(t *testing.T) {
 	}
 }
 
+// TestDescribeSkipsInactivePresentationField covers the deactivate-a-
+// PRESENTACION contract: a PresentationField whose own Active flag is false
+// must stop composing the name, the same way every other catalog kind's
+// Active flag turns off runtime participation without a physical delete.
+func TestDescribeSkipsInactivePresentationField(t *testing.T) {
+	catalog := SeedResourceCatalog()
+	deactivateInsulationPresentationField(t, &catalog)
+
+	resource, err := NewResource(catalog, conductoresScope, "M", []ResourceAttributeValue{
+		OptionValue("conductor_material", "COBRE"),
+		OptionValue("gauge", "12 AWG"),
+		OptionValue("insulation", "THHN"),
+		OptionValue("color", "BLANCO"),
+		OptionValue("voltage", "600 V"),
+	})
+	if err != nil {
+		t.Fatalf("NewResource() error = %v", err)
+	}
+	want := "Cable 12 AWG BLANCO"
+	if got := catalog.Describe(resource); got != want {
+		t.Fatalf("Describe() = %q, want %q (insulation's PresentationField is inactive)", got, want)
+	}
+}
+
 // TestDescribeWithNoPresentationFieldsReturnsOnlyName covers D1's explicit
 // safe degradation: a ResourceType with zero matching PresentationFields
 // entries returns exactly its own Name, never a fallback to an improvised

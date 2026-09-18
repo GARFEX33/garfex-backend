@@ -49,7 +49,7 @@ func (c ResourceCatalog) resourceType(s ResourceScope) (ResourceType, bool) {
 func (c ResourceCatalog) presentationFields(s ResourceScope) []PresentationField {
 	var fields []PresentationField
 	for _, field := range c.PresentationFields {
-		if canonical(field.ClassCode) == s.ClassCode && canonical(field.FamilyCode) == s.FamilyCode && canonical(field.TypeCode) == s.TypeCode {
+		if field.Active && canonical(field.ClassCode) == s.ClassCode && canonical(field.FamilyCode) == s.FamilyCode && canonical(field.TypeCode) == s.TypeCode {
 			fields = append(fields, field)
 		}
 	}

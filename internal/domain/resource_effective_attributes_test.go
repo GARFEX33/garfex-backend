@@ -49,6 +49,37 @@ func TestEffectiveAttributesForResolvesPresentationPositionAndSource(t *testing.
 	}
 }
 
+// TestEffectiveAttributesForIgnoresInactivePresentationFieldPosition covers
+// the deactivate-a-PRESENTACION contract: once a PresentationField's own
+// Active flag is false, EffectiveAttributesFor must stop treating its
+// attribute as positioned (HasPosition/Position), the same way every other
+// catalog kind's Active flag turns off runtime participation without a
+// physical delete.
+func TestEffectiveAttributesForIgnoresInactivePresentationFieldPosition(t *testing.T) {
+	catalog := SeedResourceCatalog()
+	deactivateInsulationPresentationField(t, &catalog)
+
+	byCode := mustEffectiveByCode(t, catalog, conductoresScope, nil)
+	insulation := byCode["insulation"]
+	if insulation.HasPosition {
+		t.Fatalf("insulation HasPosition = true after deactivating its PresentationField, want false")
+	}
+}
+
+// deactivateInsulationPresentationField flips Active to false on CABLE's
+// configured "insulation" PresentationField (position 1 in SeedResourceCatalog),
+// failing the test if that fixture entry cannot be found.
+func deactivateInsulationPresentationField(t *testing.T, catalog *ResourceCatalog) {
+	t.Helper()
+	for i, field := range catalog.PresentationFields {
+		if field.TypeCode == "CABLE" && field.AttributeCode == "insulation" {
+			catalog.PresentationFields[i].Active = false
+			return
+		}
+	}
+	t.Fatalf("fixture PresentationField for CABLE/insulation not found")
+}
+
 // TestEffectiveAttributesForResolvesConditionalModeAgainstCurrentValues
 // covers CABLE's color: CONDITIONAL, defaulting to REQUIRED with no known
 // values (ResourceAttribute.Effective's own unmatched-CONDITIONAL default),
