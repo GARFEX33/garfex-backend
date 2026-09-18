@@ -52,6 +52,16 @@ recarga automática y `Resource ScopeAll` todavía no está soportado. Consultá
 contrato y las restricciones completas en
 [Resource Master Core](docs/architecture/resource-master-core.md).
 
+## Lectura de CFDI
+
+`cfdicore` es un paquete puro (sin base de datos, fuera de `Application`) que
+lee comprobantes CFDI 4.0 del SAT: `cfdicore.Parse(xmlBytes)` devuelve un
+`cfdicore.Invoice` con encabezado, emisor, receptor, conceptos con impuestos,
+impuestos globales y timbre fiscal. Solo parsea; no valida sellos ni persiste
+nada. Los errores son tipos estables (`INVALID_XML`, `NOT_CFDI`,
+`UNSUPPORTED_VERSION`, `INVALID_CFDI`). El contrato completo está en
+`cfdicore/doc.go`.
+
 ## Preparación de versión
 
 Primera versión publicada: `v0.1.0`. Un consumidor externo la referencia
