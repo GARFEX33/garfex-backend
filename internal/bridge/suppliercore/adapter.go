@@ -31,6 +31,7 @@ const defaultLimit = 100
 // services — already backs all three aggregates.
 type serviceReader interface {
 	GetSupplier(ctx context.Context, id int64) (domain.Supplier, error)
+	GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (domain.Supplier, error)
 	SearchSuppliers(ctx context.Context, criteria domain.SupplierSearch) ([]domain.Supplier, error)
 	GetBranch(ctx context.Context, supplierID, branchID int64) (domain.Branch, error)
 	ListBranches(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Branch, error)
@@ -110,6 +111,15 @@ func (a *Adapter) UpdateSupplier(ctx context.Context, req public.SupplierUpdateR
 // GetSupplier returns one supplier by id.
 func (a *Adapter) GetSupplier(ctx context.Context, id int64) (public.Supplier, error) {
 	s, err := a.service.GetSupplier(ctx, id)
+	if err != nil {
+		return public.Supplier{}, mapError(err)
+	}
+	return mapSupplier(s), nil
+}
+
+// GetSupplierByTaxIdentifier returns the one supplier owning taxID, active or not.
+func (a *Adapter) GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (public.Supplier, error) {
+	s, err := a.service.GetSupplierByTaxIdentifier(ctx, taxID)
 	if err != nil {
 		return public.Supplier{}, mapError(err)
 	}

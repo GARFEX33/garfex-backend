@@ -18,6 +18,12 @@ const createSupplierSQL = `
 
 const getSupplierSQL = `SELECT ` + supplierColumns + ` FROM public.suppliers WHERE id = $1`
 
+// getSupplierByTaxIdentifierSQL repeats the expression of the unique index
+// suppliers_tax_identifier_key so the lookup can use it. It deliberately does
+// not filter on active: an inactive supplier still owns its tax identifier.
+const getSupplierByTaxIdentifierSQL = `SELECT ` + supplierColumns + ` FROM public.suppliers
+	WHERE tax_identifier IS NOT NULL AND upper(btrim(tax_identifier)) = upper(btrim($1))`
+
 const searchSuppliersSQL = `
 	SELECT ` + supplierColumns + ` FROM public.suppliers
 	WHERE ($1 = '' OR trade_name ILIKE '%' || $1 || '%' OR legal_name ILIKE '%' || $1 || '%' OR tax_identifier ILIKE '%' || $1 || '%')
@@ -42,6 +48,17 @@ func (r *repository) GetSupplier(ctx context.Context, id int64) (domain.Supplier
 		return domain.Supplier{}, fmt.Errorf("%w: id %d", domain.ErrSupplierNotFound, id)
 	}
 	return value, wrapRead("get supplier", err)
+}
+
+func (r *repository) GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (domain.Supplier, error) {
+	if err := r.ready(); err != nil {
+		return domain.Supplier{}, err
+	}
+	value, err := scanSupplier(r.pool.QueryRow(ctx, getSupplierByTaxIdentifierSQL, taxID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Supplier{}, domain.ErrSupplierNotFound
+	}
+	return value, wrapRead("get supplier by tax identifier", err)
 }
 
 func (r *repository) SearchSuppliers(ctx context.Context, criteria domain.SupplierSearch) ([]domain.Supplier, error) {

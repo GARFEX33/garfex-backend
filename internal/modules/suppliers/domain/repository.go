@@ -31,6 +31,10 @@ type ContactListCriteria struct {
 type Repository interface {
 	CreateSupplier(context.Context, Supplier) (Supplier, error)
 	GetSupplier(context.Context, int64) (Supplier, error)
+	// GetSupplierByTaxIdentifier finds one supplier by its tax identifier,
+	// compared exactly and case/space-insensitively like the unique index,
+	// regardless of active state. taxID arrives already normalized.
+	GetSupplierByTaxIdentifier(context.Context, string) (Supplier, error)
 	SearchSuppliers(context.Context, SupplierSearch) ([]Supplier, error)
 	UpdateSupplier(context.Context, Supplier) (Supplier, error)
 	SetSupplierActive(context.Context, int64, bool) (Supplier, error)
