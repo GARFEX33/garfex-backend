@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Serie="AB" Folio="1234" Fecha="2026-03-05T09:30:15" Sello="SELLO-CFD" FormaPago="03" NoCertificado="00001000000700000001" Certificado="CERT-BASE64" CondicionesDePago="Contado" SubTotal="1200.50" Descuento="200.50" Moneda="MXN" TipoCambio="1" Total="1160.00" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" LugarExpedicion="64000">
+  <cfdi:CfdiRelacionados TipoRelacion="04">
+    <cfdi:CfdiRelacionado UUID="11111111-2222-3333-4444-555555555555"/>
+    <cfdi:CfdiRelacionado UUID="66666666-7777-8888-9999-000000000000"/>
+  </cfdi:CfdiRelacionados>
+  <cfdi:Emisor Nombre="  PROVEEDOR DE PRUEBA SA DE CV " RegimenFiscal="601" Rfc=" abc010101aa1 "/>
+  <cfdi:Receptor Rfc="XAXX010101000" Nombre="CLIENTE DE PRUEBA" DomicilioFiscalReceptor="64010" RegimenFiscalReceptor="612" UsoCFDI="G03"/>
+  <cfdi:Conceptos>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CAB-001" Cantidad="100.00" ClaveUnidad="MTR" Unidad="mts" Descripcion="CABLE THW CAL. 12 NEGRO" ValorUnitario="10.00" Importe="1000.00" Descuento="100.00" ObjetoImp="02">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="900.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="144.00"/>
+        </cfdi:Traslados>
+        <cfdi:Retenciones>
+          <cfdi:Retencion Base="900.00" Impuesto="001" TipoFactor="Tasa" TasaOCuota="0.100000" Importe="90.00"/>
+        </cfdi:Retenciones>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="39121700" Cantidad="2" ClaveUnidad="H87" Descripcion="CONECTOR" ValorUnitario="100.25" Importe="200.50" ObjetoImp="01"/>
+  </cfdi:Conceptos>
+  <cfdi:Impuestos TotalImpuestosRetenidos="90.00" TotalImpuestosTrasladados="144.00">
+    <cfdi:Retenciones>
+      <cfdi:Retencion Impuesto="001" Importe="90.00"/>
+    </cfdi:Retenciones>
+    <cfdi:Traslados>
+      <cfdi:Traslado Base="900.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="144.00"/>
+    </cfdi:Traslados>
+  </cfdi:Impuestos>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Version="1.1" UUID="abcdef12-3456-7890-abcd-ef1234567890" FechaTimbrado="2026-03-05T09:30:20" RfcProvCertif="SPR190613I52" SelloCFD="SELLO-CFD" NoCertificadoSAT="00001000000700000002" SelloSAT="SELLO-SAT"/>
+  </cfdi:Complemento>
+</cfdi:Comprobante>
