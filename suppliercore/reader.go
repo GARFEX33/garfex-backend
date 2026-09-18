@@ -1,12 +1,16 @@
 package suppliercore
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // ReadCapabilities is the service-shaped seam a Reader delegates to.
 // Implementations are expected to be authoritative for the results they
 // return and to translate their own internal errors to public Error values.
 type ReadCapabilities interface {
 	GetSupplier(context.Context, int64) (Supplier, error)
+	GetSupplierByTaxIdentifier(context.Context, string) (Supplier, error)
 	SearchSuppliers(context.Context, SupplierQuery) (SupplierPage, error)
 	ListBranches(context.Context, BranchQuery) (BranchPage, error)
 	GetBranch(context.Context, BranchKey) (Branch, error)
@@ -36,6 +40,21 @@ func (r *Reader) GetSupplier(ctx context.Context, id int64) (Supplier, error) {
 		return Supplier{}, NewError(InvalidArgument, "supplier id must be positive")
 	}
 	s, err := r.cap.GetSupplier(ctx, id)
+	if err != nil {
+		return Supplier{}, err
+	}
+	return CloneSupplier(s), nil
+}
+
+// GetSupplierByTaxIdentifier returns the supplier owning taxID, whether it is
+// active or inactive, or a NOT_FOUND error when none does. The match is exact
+// and ignores case and surrounding whitespace, mirroring the uniqueness rule
+// that makes a second supplier with the same tax identifier a conflict.
+func (r *Reader) GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (Supplier, error) {
+	if strings.TrimSpace(taxID) == "" {
+		return Supplier{}, NewError(InvalidArgument, "tax identifier must not be blank")
+	}
+	s, err := r.cap.GetSupplierByTaxIdentifier(ctx, taxID)
 	if err != nil {
 		return Supplier{}, err
 	}

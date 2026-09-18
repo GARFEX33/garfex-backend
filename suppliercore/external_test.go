@@ -15,6 +15,9 @@ type fakeCapabilities struct{}
 func (fakeCapabilities) GetSupplier(ctx context.Context, id int64) (suppliercore.Supplier, error) {
 	return suppliercore.Supplier{ID: id, TradeName: "External Supplier"}, nil
 }
+func (fakeCapabilities) GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (suppliercore.Supplier, error) {
+	return suppliercore.Supplier{ID: 5, TaxIdentifier: taxID}, nil
+}
 func (fakeCapabilities) SearchSuppliers(ctx context.Context, q suppliercore.SupplierQuery) (suppliercore.SupplierPage, error) {
 	return suppliercore.SupplierPage{Suppliers: []suppliercore.Supplier{{ID: 1}}}, nil
 }
@@ -41,6 +44,9 @@ func TestExternalConsumer_ReadsAllThreeEntities(t *testing.T) {
 
 	if _, err := reader.GetSupplier(ctx, 1); err != nil {
 		t.Fatalf("GetSupplier error = %v", err)
+	}
+	if got, err := reader.GetSupplierByTaxIdentifier(ctx, "ABC010101AA1"); err != nil || got.ID != 5 {
+		t.Fatalf("GetSupplierByTaxIdentifier = %#v, %v", got, err)
 	}
 	if _, err := reader.ListBranches(ctx, suppliercore.BranchQuery{SupplierID: 1}); err != nil {
 		t.Fatalf("ListBranches error = %v", err)

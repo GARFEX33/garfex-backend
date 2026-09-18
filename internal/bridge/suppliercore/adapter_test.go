@@ -14,6 +14,7 @@ import (
 
 type stubService struct {
 	getSupplier     func(ctx context.Context, id int64) (domain.Supplier, error)
+	getByTaxID      func(ctx context.Context, taxID string) (domain.Supplier, error)
 	searchSuppliers func(ctx context.Context, criteria domain.SupplierSearch) ([]domain.Supplier, error)
 	getBranch       func(ctx context.Context, supplierID, branchID int64) (domain.Branch, error)
 	listBranches    func(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Branch, error)
@@ -25,6 +26,9 @@ type stubService struct {
 
 func (s *stubService) GetSupplier(ctx context.Context, id int64) (domain.Supplier, error) {
 	return s.getSupplier(ctx, id)
+}
+func (s *stubService) GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (domain.Supplier, error) {
+	return s.getByTaxID(ctx, taxID)
 }
 func (s *stubService) SearchSuppliers(ctx context.Context, criteria domain.SupplierSearch) ([]domain.Supplier, error) {
 	return s.searchSuppliers(ctx, criteria)
@@ -584,5 +588,48 @@ func TestAdapter_UpdateSupplier_MutatingRequestAfterCall_NoLeak(t *testing.T) {
 
 	if captured.TradeName != "ACME" {
 		t.Fatalf("caller mutation after call leaked into the internal call: %+v", captured)
+	}
+}
+
+func TestAdapter_GetSupplierByTaxIdentifier_MapsSupplier(t *testing.T) {
+	var gotTaxID string
+	adapter := NewAdapter(&stubService{getByTaxID: func(_ context.Context, taxID string) (domain.Supplier, error) {
+		gotTaxID = taxID
+		return domain.Supplier{ID: 9, LegalName: "ACME SA", TaxIdentifier: "ACM010101AA1", Active: false}, nil
+	}})
+
+	got, err := adapter.GetSupplierByTaxIdentifier(context.Background(), "acm010101aa1")
+	if err != nil {
+		t.Fatalf("GetSupplierByTaxIdentifier error = %v", err)
+	}
+	if gotTaxID != "acm010101aa1" {
+		t.Errorf("service received %q, want the value untouched", gotTaxID)
+	}
+	if got.ID != 9 || got.LegalName != "ACME SA" || got.TaxIdentifier != "ACM010101AA1" || got.Active {
+		t.Errorf("mapped supplier = %#v", got)
+	}
+}
+
+func TestAdapter_GetSupplierByTaxIdentifier_ClassifiesErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want public.ErrorCode
+	}{
+		{"not found", domain.ErrSupplierNotFound, public.NotFound},
+		{"validation", domain.NewValidationError("tax_identifier", "must not be blank"), public.Validation},
+		{"raw error never leaks", errors.New("pq: connection refused"), public.Internal},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := NewAdapter(&stubService{getByTaxID: func(context.Context, string) (domain.Supplier, error) { return domain.Supplier{}, tt.err }})
+			_, err := adapter.GetSupplierByTaxIdentifier(context.Background(), "ABC010101AA1")
+			if public.Code(err) != tt.want {
+				t.Fatalf("code = %v, want %v", public.Code(err), tt.want)
+			}
+			if strings.Contains(err.Error(), "connection refused") {
+				t.Fatalf("raw infrastructure error leaked: %v", err)
+			}
+		})
 	}
 }

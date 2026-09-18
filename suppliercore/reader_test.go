@@ -11,6 +11,7 @@ type stubCapabilities struct {
 	called bool
 
 	getSupplier     func(ctx context.Context, id int64) (Supplier, error)
+	getByTaxID      func(ctx context.Context, taxID string) (Supplier, error)
 	searchSuppliers func(ctx context.Context, q SupplierQuery) (SupplierPage, error)
 	listBranches    func(ctx context.Context, q BranchQuery) (BranchPage, error)
 	getBranch       func(ctx context.Context, key BranchKey) (Branch, error)
@@ -21,6 +22,10 @@ type stubCapabilities struct {
 func (s *stubCapabilities) GetSupplier(ctx context.Context, id int64) (Supplier, error) {
 	s.called = true
 	return s.getSupplier(ctx, id)
+}
+func (s *stubCapabilities) GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (Supplier, error) {
+	s.called = true
+	return s.getByTaxID(ctx, taxID)
 }
 func (s *stubCapabilities) SearchSuppliers(ctx context.Context, q SupplierQuery) (SupplierPage, error) {
 	s.called = true
@@ -191,7 +196,7 @@ func TestReader_PropagatesCapabilityError(t *testing.T) {
 
 func TestReader_NoUngraduatedMethodExported(t *testing.T) {
 	allowed := map[string]bool{
-		"GetSupplier": true, "SearchSuppliers": true,
+		"GetSupplier": true, "GetSupplierByTaxIdentifier": true, "SearchSuppliers": true,
 		"ListBranches": true, "GetBranch": true,
 		"ListContacts": true, "GetContact": true,
 	}
@@ -213,5 +218,50 @@ func TestReader_NoUngraduatedMethodExported(t *testing.T) {
 		if !allowed[name] {
 			t.Errorf("Reader exports ungraduated method %s", name)
 		}
+	}
+}
+
+func TestReader_GetSupplierByTaxIdentifier_RejectsBlank(t *testing.T) {
+	for _, taxID := range []string{"", "   ", "\t\n"} {
+		stub := &stubCapabilities{}
+		reader, _ := NewReadOnly(stub)
+		_, err := reader.GetSupplierByTaxIdentifier(context.Background(), taxID)
+		if !IsCode(err, InvalidArgument) {
+			t.Errorf("GetSupplierByTaxIdentifier(%q) code = %v, want %v", taxID, Code(err), InvalidArgument)
+		}
+		if stub.called {
+			t.Errorf("GetSupplierByTaxIdentifier(%q) reached the capability, should have been rejected at the boundary", taxID)
+		}
+	}
+}
+
+func TestReader_GetSupplierByTaxIdentifier_DelegatesAndClones(t *testing.T) {
+	var gotTaxID string
+	stub := &stubCapabilities{getByTaxID: func(_ context.Context, taxID string) (Supplier, error) {
+		gotTaxID = taxID
+		return Supplier{ID: 7, TaxIdentifier: "ABC010101AA1", Active: false}, nil
+	}}
+	reader, _ := NewReadOnly(stub)
+
+	got, err := reader.GetSupplierByTaxIdentifier(context.Background(), "abc010101aa1")
+	if err != nil {
+		t.Fatalf("GetSupplierByTaxIdentifier error = %v", err)
+	}
+	if gotTaxID != "abc010101aa1" {
+		t.Errorf("capability received %q, want the caller value untouched", gotTaxID)
+	}
+	if got.ID != 7 || got.Active {
+		t.Errorf("got %#v, want the inactive supplier 7 returned as is", got)
+	}
+}
+
+func TestReader_GetSupplierByTaxIdentifier_PropagatesCapabilityError(t *testing.T) {
+	want := NewError(NotFound, "supplier not found")
+	stub := &stubCapabilities{getByTaxID: func(context.Context, string) (Supplier, error) { return Supplier{}, want }}
+	reader, _ := NewReadOnly(stub)
+
+	_, err := reader.GetSupplierByTaxIdentifier(context.Background(), "ABC010101AA1")
+	if !errors.Is(err, want) && !IsCode(err, NotFound) {
+		t.Fatalf("error = %v, want NotFound", err)
 	}
 }

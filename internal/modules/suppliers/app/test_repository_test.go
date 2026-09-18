@@ -15,6 +15,7 @@ type memoryRepository struct {
 	contacts               map[int64]domain.Contact
 	createContactCalls     int
 	setSupplierActiveCalls int
+	getByTaxIDCalls        []string
 }
 
 func newMemoryRepository() *memoryRepository {
@@ -33,6 +34,15 @@ func (r *memoryRepository) GetSupplier(_ context.Context, id int64) (domain.Supp
 		return domain.Supplier{}, domain.ErrSupplierNotFound
 	}
 	return value, nil
+}
+func (r *memoryRepository) GetSupplierByTaxIdentifier(_ context.Context, taxID string) (domain.Supplier, error) {
+	r.getByTaxIDCalls = append(r.getByTaxIDCalls, taxID)
+	for _, value := range r.suppliers {
+		if strings.EqualFold(strings.TrimSpace(value.TaxIdentifier), strings.TrimSpace(taxID)) && value.TaxIdentifier != "" {
+			return value, nil
+		}
+	}
+	return domain.Supplier{}, domain.ErrSupplierNotFound
 }
 func (r *memoryRepository) SearchSuppliers(_ context.Context, criteria domain.SupplierSearch) ([]domain.Supplier, error) {
 	values := make([]domain.Supplier, 0)

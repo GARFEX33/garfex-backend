@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
 )
@@ -21,6 +22,18 @@ func (s *Service) GetSupplier(ctx context.Context, id int64) (domain.Supplier, e
 	}
 	supplier, err := s.repo.GetSupplier(ctx, id)
 	return supplier, wrap("get supplier", err)
+}
+
+// GetSupplierByTaxIdentifier finds a supplier, active or not, by its tax
+// identifier. The value is trimmed and upper-cased here so callers cannot
+// bypass the normalization the unique index relies on.
+func (s *Service) GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (domain.Supplier, error) {
+	taxID = strings.ToUpper(strings.TrimSpace(taxID))
+	if taxID == "" {
+		return domain.Supplier{}, domain.NewValidationError("tax_identifier", "must not be blank")
+	}
+	supplier, err := s.repo.GetSupplierByTaxIdentifier(ctx, taxID)
+	return supplier, wrap("get supplier by tax identifier", err)
 }
 
 func (s *Service) SearchSuppliers(ctx context.Context, criteria domain.SupplierSearch) ([]domain.Supplier, error) {
