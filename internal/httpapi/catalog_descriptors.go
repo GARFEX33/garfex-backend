@@ -41,12 +41,12 @@ type catalogDescriptorResponse struct {
 }
 
 type fieldDescriptorResponse struct {
-	Name        string              `json:"name"`
-	Label       string              `json:"label"`
-	Kind        string              `json:"kind"`
-	Required    bool                `json:"required"`
-	RefKind     string              `json:"refKind"`
-	RefScopedBy []string            `json:"refScopedBy"`
+	Name        string   `json:"name"`
+	Label       string   `json:"label"`
+	Kind        string   `json:"kind"`
+	Required    bool     `json:"required"`
+	RefKind     string   `json:"refKind"`
+	RefScopedBy []string `json:"refScopedBy"`
 	// AllowCreate marks a reference field as reuse-before-create: a client
 	// should search existing records of refKind first and offer creating a
 	// new one only when nothing matches, instead of defaulting straight to a
