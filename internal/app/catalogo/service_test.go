@@ -452,6 +452,44 @@ func TestServiceCreateCommitsSnapshotOnlyAfterPersist(t *testing.T) {
 	}
 }
 
+// TestServiceCreateCanonicalizesCodeBeforePersisting proves the write path
+// never lets a non-canonical "código" value reach the repository: Validate()
+// already canonicalizes for comparison (resource_catalog_validate.go), but
+// without this wiring the repository would still receive and persist the
+// caller's raw, lowercase text.
+func TestServiceCreateCanonicalizesCodeBeforePersisting(t *testing.T) {
+	var persisted domain.CatalogRecord
+	repo := &fakeCatalogAdminRepository{
+		insertFn: func(ctx context.Context, rec domain.CatalogRecord) (int64, error) {
+			persisted = rec
+			return 42, nil
+		},
+	}
+	svc := newTestService(repo)
+
+	lowercase := domain.CatalogRecord{
+		Active: true,
+		Values: map[string]domain.CatalogValue{
+			"class": {Ref: domain.CatalogRef{Kind: domain.KindClass, Code: "MATERIAL"}},
+			"code":  {Text: "  canalizaciones  "},
+			"name":  {Text: "Canalizaciones"},
+		},
+	}
+	got, err := svc.Create(context.Background(), domain.KindFamily, lowercase)
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if persisted.Values["code"].Text != "CANALIZACIONES" {
+		t.Fatalf("repository received code %q, want canonical CANALIZACIONES", persisted.Values["code"].Text)
+	}
+	if got.Values["code"].Text != "CANALIZACIONES" {
+		t.Fatalf("Create returned code %q, want canonical CANALIZACIONES", got.Values["code"].Text)
+	}
+	if got.Values["name"].Text != "Canalizaciones" {
+		t.Fatalf("non-código field must not be canonicalized: got %q", got.Values["name"].Text)
+	}
+}
+
 // TestServiceCreatePropagatesDuplicateFromRepository confirms PR4's
 // domain.ErrCatalogDuplicate (pgx 23505) mapping surfaces through the
 // service unchanged (errors.Is), rather than being re-implemented or lost.
@@ -519,6 +557,51 @@ func TestServiceUpdateCommitsSnapshotOnPersist(t *testing.T) {
 	}
 	if svc.snapshot.Classes[0].Name != "Material (renombrado)" {
 		t.Fatalf("service snapshot Classes[0].Name = %q, want committed rename", svc.snapshot.Classes[0].Name)
+	}
+}
+
+// TestServiceUpdateCanonicalizesCodeBeforePersisting mirrors
+// TestServiceCreateCanonicalizesCodeBeforePersisting for the Update path,
+// and additionally proves a mere case variant of the current code ("material"
+// vs persisted "MATERIAL") is never treated as a código change: the
+// immutability guard must never fire, and repo.ReferencedByResources must
+// never even be consulted.
+func TestServiceUpdateCanonicalizesCodeBeforePersisting(t *testing.T) {
+	current := domain.CatalogRecord{
+		Kind: domain.KindClass, ID: 1, Active: true,
+		Values: map[string]domain.CatalogValue{
+			"code": {Text: "MATERIAL"}, "name": {Text: "Material"}, "plural": {Text: "Materiales"}, "slug": {Text: "materiales"},
+		},
+	}
+	var persisted domain.CatalogRecord
+	repo := &fakeCatalogAdminRepository{
+		getFn: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (domain.CatalogRecord, error) {
+			return current, nil
+		},
+		updateFn: func(ctx context.Context, rec domain.CatalogRecord) error {
+			persisted = rec
+			return nil
+		},
+		referencedByResourcesFn: func(ctx context.Context, kind domain.CatalogKindCode, id int64) (bool, error) {
+			t.Fatal("ReferencedByResources must not be consulted for a mere case variant of the same code")
+			return false, nil
+		},
+	}
+	svc := newTestService(repo)
+
+	lowercase := current
+	lowercase.Values = map[string]domain.CatalogValue{
+		"code": {Text: "material"}, "name": {Text: "Material (renombrado)"}, "plural": {Text: "Materiales"}, "slug": {Text: "materiales"},
+	}
+	got, err := svc.Update(context.Background(), domain.KindClass, lowercase)
+	if err != nil {
+		t.Fatalf("Update returned error: %v", err)
+	}
+	if persisted.Values["code"].Text != "MATERIAL" {
+		t.Fatalf("repository received code %q, want canonical MATERIAL", persisted.Values["code"].Text)
+	}
+	if got.Values["code"].Text != "MATERIAL" {
+		t.Fatalf("Update returned code %q, want canonical MATERIAL", got.Values["code"].Text)
 	}
 }
 

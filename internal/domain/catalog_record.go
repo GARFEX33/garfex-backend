@@ -111,6 +111,29 @@ func cloneCatalogRecord(record CatalogRecord) CatalogRecord {
 	return copyOfRecord
 }
 
+// CanonicalizeCatalogRecordCodes returns a copy of rec with every FieldCode
+// value canonicalized (trimmed, single-spaced, uppercase) per kind.Fields —
+// the single point every catalog write path (Create/CreateV2/Update/
+// UpdateRevision) goes through before validation and persistence, so a
+// "código" field can never reach the repository in a non-canonical form.
+// Fields not present in rec.Values are left untouched; rec itself is never
+// mutated.
+func CanonicalizeCatalogRecordCodes(kind CatalogKind, rec CatalogRecord) CatalogRecord {
+	rec = cloneCatalogRecord(rec)
+	for _, field := range kind.Fields {
+		if field.Kind != FieldCode {
+			continue
+		}
+		value, ok := rec.Values[field.Name]
+		if !ok {
+			continue
+		}
+		value.Text = canonical(value.Text)
+		rec.Values[field.Name] = value
+	}
+	return rec
+}
+
 type CatalogStatus uint8
 
 const (

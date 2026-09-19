@@ -138,6 +138,7 @@ func (s *Service) Create(ctx context.Context, kind domain.CatalogKindCode, rec d
 		return s.insertLocked(ctx, rec)
 	}
 
+	rec = s.canonicalizeCodes(rec)
 	next, err := domain.ApplyCatalogMutation(s.snapshot, s.registry, domain.CatalogMutation{Op: domain.OpInsert, Record: rec})
 	if err != nil {
 		return domain.CatalogRecord{}, err
@@ -174,6 +175,8 @@ func (s *Service) Update(ctx context.Context, kind domain.CatalogKindCode, rec d
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	rec = s.canonicalizeCodes(rec)
 
 	current, err := s.repo.Get(ctx, kind, rec.ID)
 	if err != nil {
@@ -501,6 +504,7 @@ func (s *Service) CreateV2(ctx context.Context, kind domain.CatalogKindCode, rec
 // through repoV2, and publish only its committed coherent result. Callers
 // must already hold s.mu and have already called prepareV2Write.
 func (s *Service) insertLocked(ctx context.Context, rec domain.CatalogRecord) (domain.CatalogRecord, error) {
+	rec = s.canonicalizeCodes(rec)
 	next, err := domain.ApplyCatalogMutation(s.snapshot, s.registry, domain.CatalogMutation{Op: domain.OpInsert, Record: rec})
 	if err != nil {
 		return domain.CatalogRecord{}, err
@@ -530,6 +534,8 @@ func (s *Service) UpdateRevision(ctx context.Context, kind domain.CatalogKindCod
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	rec = s.canonicalizeCodes(rec)
 
 	if err := s.prepareV2Write(ctx); err != nil {
 		return domain.CatalogRecord{}, err
@@ -627,6 +633,17 @@ func (s *Service) HardDeleteRevision(ctx context.Context, kind domain.CatalogKin
 
 	s.publishCoherent(result.Catalog)
 	return nil
+}
+
+// canonicalizeCodes canonicalizes rec's FieldCode values per its registered
+// kind, so every write path persists the same canonical form it validates.
+// An unknown kind is left untouched: the downstream mutation/validation call
+// reports domain.ErrCatalogKindUnknown as before.
+func (s *Service) canonicalizeCodes(rec domain.CatalogRecord) domain.CatalogRecord {
+	if def, ok := s.registry.Kind(rec.Kind); ok {
+		rec = domain.CanonicalizeCatalogRecordCodes(def, rec)
+	}
+	return rec
 }
 
 // cloneCatalogValues returns a shallow copy of values — Update must never
