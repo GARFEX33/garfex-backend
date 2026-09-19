@@ -29,7 +29,7 @@ func TestServeEffectiveAttributesPassesScopeAndMapsResponse(t *testing.T) {
 			}},
 		}}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, reader, nil)
+	h := NewRouter(nil, nil, nil, nil, reader, nil, nil, nil)
 
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/types/CABLE/attributes/effective?classCode=MATERIAL&familyCode=CONDUCTORES", nil))
@@ -80,7 +80,7 @@ func TestServeEffectiveAttributesPassesScopeAndMapsResponse(t *testing.T) {
 
 func TestServeEffectiveAttributesMethodNotAllowed(t *testing.T) {
 	reader := resourceReaderFuncs{}
-	h := NewRouter(nil, nil, nil, nil, reader, nil)
+	h := NewRouter(nil, nil, nil, nil, reader, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/types/CABLE/attributes/effective", nil))
 	if r.Code != http.StatusMethodNotAllowed {
@@ -92,7 +92,7 @@ func TestServeEffectiveAttributesPropagatesReaderError(t *testing.T) {
 	reader := resourceReaderFuncs{effective: func(context.Context, resourcecore.ResourceScope) ([]resourcecore.EffectiveAttribute, error) {
 		return nil, resourcecore.NewError(resourcecore.InvalidArgument, "family code is required")
 	}}
-	h := NewRouter(nil, nil, nil, nil, reader, nil)
+	h := NewRouter(nil, nil, nil, nil, reader, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/types/CABLE/attributes/effective?classCode=MATERIAL", nil))
 	if r.Code != http.StatusBadRequest {
@@ -111,7 +111,7 @@ func TestServeEvaluateAttributesParsesBodyForwardsValuesAndMapsOptions(t *testin
 			Options:        []resourcecore.EffectiveAttributeOption{{Code: "13 mm", Label: "13 mm"}},
 		}}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, reader, nil)
+	h := NewRouter(nil, nil, nil, nil, reader, nil, nil, nil)
 
 	body := strings.NewReader(`{"values":[{"code":"diameter_inch","value":{"kind":"CONTROLLED_OPTION","value":"1/2\""}}]}`)
 	r := httptest.NewRecorder()
@@ -143,7 +143,7 @@ func TestServeEvaluateAttributesParsesBodyForwardsValuesAndMapsOptions(t *testin
 
 func TestServeEvaluateAttributesMethodNotAllowed(t *testing.T) {
 	reader := resourceReaderFuncs{}
-	h := NewRouter(nil, nil, nil, nil, reader, nil)
+	h := NewRouter(nil, nil, nil, nil, reader, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/types/CABLE/attributes/evaluate", nil))
 	if r.Code != http.StatusMethodNotAllowed {
@@ -153,7 +153,7 @@ func TestServeEvaluateAttributesMethodNotAllowed(t *testing.T) {
 
 func TestServeEvaluateAttributesInvalidBody(t *testing.T) {
 	reader := resourceReaderFuncs{}
-	h := NewRouter(nil, nil, nil, nil, reader, nil)
+	h := NewRouter(nil, nil, nil, nil, reader, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/types/CABLE/attributes/evaluate", strings.NewReader("not json")))
 	if r.Code != http.StatusBadRequest {
@@ -165,7 +165,7 @@ func TestServeEvaluateAttributesPropagatesReaderError(t *testing.T) {
 	reader := resourceReaderFuncs{evaluate: func(context.Context, resourcecore.ResourceScope, []resourcecore.AttributeValue) ([]resourcecore.EffectiveAttribute, error) {
 		return nil, resourcecore.NewError(resourcecore.InvalidArgument, "family code is required")
 	}}
-	h := NewRouter(nil, nil, nil, nil, reader, nil)
+	h := NewRouter(nil, nil, nil, nil, reader, nil, nil, nil)
 	r := httptest.NewRecorder()
 	body := strings.NewReader(`{"values":[]}`)
 	r2 := httptest.NewRequest(http.MethodPost, "/v1/types/CABLE/attributes/evaluate?classCode=MATERIAL", body)

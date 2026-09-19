@@ -30,7 +30,7 @@ func TestCatalogLifecycleMapsRequestAndResponse(t *testing.T) {
 				captured = req
 				return resourcecore.CatalogRecord{Kind: req.Kind, ID: req.ID, Revision: req.ExpectedRevision + 1}, nil
 			})
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD/42/"+tc.action, strings.NewReader(`{"actor":"tester","expectedRevision":"3"}`)))
 
@@ -61,7 +61,7 @@ func TestCatalogLifecycleRejectsInvalidIDWithoutCallingCore(t *testing.T) {
 		called = true
 		return resourcecore.CatalogRecord{}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, nil, writer)
+	h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD/0/deactivate", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 	var got errorResponse
@@ -88,7 +88,7 @@ func TestCatalogLifecycleRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 				called = true
 				return resourcecore.CatalogRecord{}, nil
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD/1/deactivate", strings.NewReader(tc.body)))
 			var got errorResponse
@@ -103,7 +103,7 @@ func TestCatalogLifecycleRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestCatalogLifecycleSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD/1/deactivate", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 	var got errorResponse
@@ -129,7 +129,7 @@ func TestCatalogLifecycleMapsAndSanitizesCoreErrors(t *testing.T) {
 			writer := catalogWriterFuncs{deactivate: func(context.Context, resourcecore.CatalogLifecycleRequest) (resourcecore.CatalogRecord, error) {
 				return resourcecore.CatalogRecord{}, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD/1/deactivate", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 			var got errorResponse
@@ -144,7 +144,7 @@ func TestCatalogLifecycleMapsAndSanitizesCoreErrors(t *testing.T) {
 }
 
 func TestCatalogLifecycleRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, catalogWriterFuncs{})
+	h := NewRouter(nil, nil, nil, nil, nil, catalogWriterFuncs{}, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD/1/deactivate", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodPost {
@@ -155,7 +155,7 @@ func TestCatalogLifecycleRejectsWrongMethod(t *testing.T) {
 func TestCatalogLifecyclePathRejectsUnknownAction(t *testing.T) {
 	// An unreserved third segment falls through to 404: catalogDetailPath's
 	// two-segment Cut rejects it (its id part would contain a "/").
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD/1/archive", nil))
 	if r.Code != http.StatusNotFound {

@@ -60,7 +60,7 @@ func TestSupplierSearchPassesQueryAndMapsPage(t *testing.T) {
 			HasPrevious: true, HasNext: true,
 		}, nil
 	}}
-	h := NewRouter(nil, nil, nil, reader, nil, nil)
+	h := NewRouter(nil, nil, nil, reader, nil, nil, nil, nil)
 
 	for _, tc := range []struct {
 		path string
@@ -94,7 +94,7 @@ func TestSupplierSearchRejectsInvalidParametersWithoutCallingCore(t *testing.T) 
 		called = true
 		return suppliercore.SupplierPage{}, nil
 	}}
-	h := NewRouter(nil, nil, nil, reader, nil, nil)
+	h := NewRouter(nil, nil, nil, reader, nil, nil, nil, nil)
 	for _, query := range []string{"limit=0", "limit=51", "limit=bad", "offset=-1", "offset=bad", "scope=RETIRED"} {
 		t.Run(query, func(t *testing.T) {
 			called = false
@@ -112,7 +112,7 @@ func TestSupplierSearchRejectsInvalidParametersWithoutCallingCore(t *testing.T) 
 }
 
 func TestSupplierSearchSanitizesNilReader(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers", nil))
 	var got errorResponse
@@ -147,7 +147,7 @@ func TestSupplierDetailMapsRecordAndSanitizesFailures(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewRouter(nil, nil, nil, tc.reader, nil, nil)
+			h := NewRouter(nil, nil, nil, tc.reader, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers/"+tc.id, nil))
 			if r.Code != tc.status {
@@ -164,7 +164,7 @@ func TestSupplierDetailMapsRecordAndSanitizesFailures(t *testing.T) {
 }
 
 func TestSupplierDetailRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil)
+	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers/1", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != "GET, PUT" {

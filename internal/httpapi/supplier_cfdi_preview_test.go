@@ -17,7 +17,7 @@ const supplierPreviewPath = "/v1/suppliers/from-cfdi/preview"
 func servePreview(t *testing.T, reader SupplierReader, req *http.Request) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	NewRouter(nil, nil, nil, reader, nil, nil).ServeHTTP(rec, req)
+	NewRouter(nil, nil, nil, reader, nil, nil, nil, nil).ServeHTTP(rec, req)
 	return rec
 }
 

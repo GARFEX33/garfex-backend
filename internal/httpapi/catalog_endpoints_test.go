@@ -44,7 +44,7 @@ func TestCatalogListPassesPublicQueryToCore(t *testing.T) {
 	reader := &listCatalogReader{list: func(context.Context, resourcecore.CatalogQuery) (resourcecore.CatalogPage, error) {
 		return resourcecore.CatalogPage{}, nil
 	}}
-	h := NewRouter(reader, nil, nil, nil, nil, nil)
+	h := NewRouter(reader, nil, nil, nil, nil, nil, nil, nil)
 
 	for _, tc := range []struct {
 		path string
@@ -90,7 +90,7 @@ func TestCatalogListMapsNonemptyPageThroughHTTP(t *testing.T) {
 		}, nil
 	}}
 	r := httptest.NewRecorder()
-	NewRouter(reader, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD", nil))
+	NewRouter(reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD", nil))
 	body := r.Body.Bytes()
 	var page struct {
 		Records []struct {
@@ -131,7 +131,7 @@ func TestCatalogListRejectsInvalidParametersWithoutCallingCore(t *testing.T) {
 	reader := &listCatalogReader{list: func(context.Context, resourcecore.CatalogQuery) (resourcecore.CatalogPage, error) {
 		return resourcecore.CatalogPage{}, nil
 	}}
-	h := NewRouter(reader, nil, nil, nil, nil, nil)
+	h := NewRouter(reader, nil, nil, nil, nil, nil, nil, nil)
 	for _, query := range []string{
 		"limit=", "limit=0", "limit=-1", "limit=51", "limit=bad", "limit=999999999999999999999999999999",
 		"limit=%ZZ", "limit=1;bad", "offset=", "offset=-1", "offset=bad", "offset=999999999999999999999999999999", "offset=%ZZ", "scope=", "scope=RETIRED",
@@ -156,7 +156,7 @@ func TestCatalogListDefersUnknownKindToCore(t *testing.T) {
 		return resourcecore.CatalogPage{}, resourcecore.NewError(resourcecore.InvalidArgument, "unsupported catalog kind")
 	}}
 	r := httptest.NewRecorder()
-	NewRouter(reader, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/FUTURE", nil))
+	NewRouter(reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/FUTURE", nil))
 	var response errorResponse
 	if err := json.NewDecoder(r.Body).Decode(&response); err != nil || r.Code != http.StatusBadRequest || response.Error != "invalid request" {
 		t.Fatalf("status/error = %d/%q, decode error = %v", r.Code, response.Error, err)
@@ -181,7 +181,7 @@ func TestCatalogListSanitizesUnavailableReaderAndMappingErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRecorder()
-			NewRouter(tc.reader, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD", nil))
+			NewRouter(tc.reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD", nil))
 			var response errorResponse
 			if err := json.NewDecoder(r.Body).Decode(&response); err != nil || r.Code != tc.status || response.Error != tc.message {
 				t.Fatalf("status/error = %d/%q, decode error = %v", r.Code, response.Error, err)
@@ -205,7 +205,7 @@ func TestCatalogListRejectsUnsupportedMethodAndExtraSegment(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			r := httptest.NewRecorder()
-			NewRouter(reader, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(tc.method, tc.path, nil))
+			NewRouter(reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(tc.method, tc.path, nil))
 			if r.Code != tc.status || r.Body.String() != tc.body {
 				t.Fatalf("status/body = %d/%q", r.Code, r.Body.String())
 			}
@@ -229,7 +229,7 @@ func TestCatalogDetailPassesExactPositiveKeysToCore(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			reader.keys = nil
 			r := httptest.NewRecorder()
-			NewRouter(reader, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD/"+tc.id, nil))
+			NewRouter(reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD/"+tc.id, nil))
 			want := resourcecore.CatalogKey{Kind: resourcecore.KindUnit, ID: tc.want}
 			if r.Code != http.StatusOK || !reflect.DeepEqual(reader.keys, []resourcecore.CatalogKey{want}) {
 				t.Fatalf("status/keys = %d/%#v, want 200/%#v", r.Code, reader.keys, want)
@@ -249,7 +249,7 @@ func TestCatalogDetailRejectsMalformedIDWithoutCallingCore(t *testing.T) {
 			r := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD/1", nil)
 			req.URL.Path = "/v1/catalog/UNIDAD/" + id
-			NewRouter(reader, nil, nil, nil, nil, nil).ServeHTTP(r, req)
+			NewRouter(reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, req)
 			var response errorResponse
 			if err := json.NewDecoder(r.Body).Decode(&response); err != nil || r.Code != http.StatusBadRequest || response.Error != "invalid request" || len(reader.keys) != 0 {
 				t.Fatalf("status/error/calls = %d/%q/%d, decode error = %v", r.Code, response.Error, len(reader.keys), err)
@@ -266,7 +266,7 @@ func TestCatalogDetailDefersUnknownKindToCore(t *testing.T) {
 		return resourcecore.CatalogRecord{}, resourcecore.NewError(resourcecore.InvalidArgument, "unsupported catalog kind")
 	}}
 	r := httptest.NewRecorder()
-	NewRouter(reader, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/FUTURE/1", nil))
+	NewRouter(reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/FUTURE/1", nil))
 	var response errorResponse
 	if err := json.NewDecoder(r.Body).Decode(&response); err != nil || r.Code != http.StatusBadRequest || response.Error != "invalid request" {
 		t.Fatalf("status/error = %d/%q, decode error = %v", r.Code, response.Error, err)
@@ -317,7 +317,7 @@ func TestCatalogDetailMapsRecordAndSanitizesFailures(t *testing.T) {
 		Kind: "UNIDAD", ID: 9007199254740993, Revision: math.MaxUint64, Active: false,
 		Values: map[string]resourcecore.Value{"boolean": {Kind: resourcecore.ValueBool}, "empty": {Kind: resourcecore.ValueStringList}},
 	}
-	h := NewRouter(&listCatalogReader{get: func(context.Context, resourcecore.CatalogKey) (resourcecore.CatalogRecord, error) { return record, nil }}, nil, nil, nil, nil, nil)
+	h := NewRouter(&listCatalogReader{get: func(context.Context, resourcecore.CatalogKey) (resourcecore.CatalogRecord, error) { return record, nil }}, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD/9007199254740993", nil))
 	var got struct {
@@ -352,7 +352,7 @@ func TestCatalogDetailMapsRecordAndSanitizesFailures(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRecorder()
-			NewRouter(tc.reader, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD/1", nil))
+			NewRouter(tc.reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/UNIDAD/1", nil))
 			var response errorResponse
 			if err := json.NewDecoder(r.Body).Decode(&response); err != nil || r.Code != tc.status || response.Error != tc.message {
 				t.Fatalf("status/error = %d/%q, decode error = %v", r.Code, response.Error, err)
@@ -376,7 +376,7 @@ func TestCatalogDetailRequiresGETAndRejectsEmptyOrExtraSegments(t *testing.T) {
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			r := httptest.NewRecorder()
-			NewRouter(reader, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(tc.method, tc.path, nil))
+			NewRouter(reader, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(r, httptest.NewRequest(tc.method, tc.path, nil))
 			if r.Code != tc.status || r.Body.String() != tc.body {
 				t.Fatalf("status/body = %d/%q", r.Code, r.Body.String())
 			}

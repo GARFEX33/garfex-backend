@@ -17,6 +17,7 @@ type ResourceWriter interface {
 	UpdateResource(context.Context, resourcecore.ResourceUpdateRequest) (resourcecore.Resource, error)
 	DeactivateResource(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error)
 	ReactivateResource(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error)
+	UpdateAttributeOrder(context.Context, resourcecore.AttributeOrderWriteRequest) (resourcecore.ResourceAttributeOrder, error)
 }
 
 type resourceCreateRequest struct {

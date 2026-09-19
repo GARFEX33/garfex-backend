@@ -7,9 +7,9 @@ import (
 )
 
 // NewRouter returns the complete public HTTP surface for this unit.
-func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader, catalogWriter CatalogWriter) http.Handler {
+func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader, catalogWriter CatalogWriter, purchaseReader PurchaseReader, purchaseWriter PurchaseWriter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		route(w, r, reader, supplierWriter, resourceWriter, supplierReader, resourceReader, catalogWriter)
+		route(w, r, reader, supplierWriter, resourceWriter, supplierReader, resourceReader, catalogWriter, purchaseReader, purchaseWriter)
 	})
 }
 
@@ -19,7 +19,7 @@ func NewRouter(reader CatalogReader, supplierWriter SupplierWriter, resourceWrit
 // inputs before they reach a decoder.
 const maxRequestBodyBytes = 1 << 20
 
-func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader, catalogWriter CatalogWriter) {
+func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplierWriter SupplierWriter, resourceWriter ResourceWriter, supplierReader SupplierReader, resourceReader ResourceReader, catalogWriter CatalogWriter, purchaseReader PurchaseReader, purchaseWriter PurchaseWriter) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 
@@ -38,6 +38,8 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 		serveCFDIParse(w, r)
 	case "/v1/suppliers/from-cfdi/preview":
 		serveSupplierCFDIPreview(w, r, supplierReader)
+	case "/v1/purchases":
+		servePurchaseImport(w, r, purchaseWriter)
 	case "/openapi.yaml":
 		serveGet(w, r, serveOpenAPI)
 	case "/docs":
@@ -63,6 +65,18 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveBranchList(w, r, supplierReader, supplierID)
 			return
 		}
+		if supplierID, ok := supplierNestedListPath(r.URL.Path, "/products/find"); ok {
+			serveSupplierProductFind(w, r, purchaseReader, supplierID)
+			return
+		}
+		if supplierID, ok := supplierNestedListPath(r.URL.Path, "/products"); ok {
+			serveSupplierProductList(w, r, purchaseReader, supplierID)
+			return
+		}
+		if supplierID, ok := supplierNestedListPath(r.URL.Path, "/purchases"); ok {
+			serveSupplierPurchases(w, r, purchaseReader, supplierID)
+			return
+		}
 		if supplierID, contactID, ok := supplierContactDetailPath(r.URL.Path); ok {
 			serveContactDetail(w, r, supplierReader, supplierID, contactID)
 			return
@@ -75,8 +89,40 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			serveSupplierDetail(w, r, supplierReader, supplierWriter, id)
 			return
 		}
+		if uuid, ok := strings.CutPrefix(r.URL.Path, "/v1/purchases/by-uuid/"); ok && uuid != "" && !strings.Contains(uuid, "/") {
+			servePurchaseByUUID(w, r, purchaseReader, uuid)
+			return
+		}
+		if id, ok := purchaseLinesPath(r.URL.Path); ok {
+			servePurchaseLines(w, r, purchaseReader, id)
+			return
+		}
+		if id, ok := purchaseDetailPath(r.URL.Path); ok {
+			servePurchaseDetail(w, r, purchaseReader, id)
+			return
+		}
+		if id, ok := supplierProductLinkPath(r.URL.Path); ok {
+			serveSupplierProductLink(w, r, purchaseWriter, id)
+			return
+		}
+		if id, ok := supplierProductUnlinkPath(r.URL.Path); ok {
+			serveSupplierProductUnlink(w, r, purchaseWriter, id)
+			return
+		}
+		if id, ok := purchaseLineLinkStatusPath(r.URL.Path); ok {
+			servePurchaseLineLinkStatus(w, r, purchaseWriter, id)
+			return
+		}
+		if id, ok := supplierProductDetailPath(r.URL.Path); ok {
+			serveSupplierProductDetail(w, r, purchaseReader, id)
+			return
+		}
 		if id, action, ok := resourceLifecyclePath(r.URL.Path); ok {
 			serveResourceLifecycle(w, r, resourceWriter, id, action)
+			return
+		}
+		if id, ok := resourcePurchaseHistoryPath(r.URL.Path); ok {
+			serveResourcePurchaseHistory(w, r, purchaseReader, id)
 			return
 		}
 		if classCode, identityV1, ok := resourceDescribePath(r.URL.Path); ok {
@@ -89,6 +135,10 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 		}
 		if id, ok := resourceIDPath(r.URL.Path); ok {
 			serveResourceUpdate(w, r, resourceWriter, id)
+			return
+		}
+		if typeCode, ok := typeAttributesOrderPath(r.URL.Path); ok {
+			serveTypeAttributeOrder(w, r, resourceReader, resourceWriter, typeCode)
 			return
 		}
 		if typeCode, ok := typeAttributesEffectivePath(r.URL.Path); ok {
@@ -262,6 +312,89 @@ func typeAttributesEvaluatePath(path string) (typeCode string, ok bool) {
 	}
 	typeCode, ok = strings.CutSuffix(remainder, suffix)
 	return typeCode, ok && typeCode != "" && !strings.Contains(typeCode, "/")
+}
+
+// typeAttributesOrderPath matches GET and PUT
+// /v1/types/{typeCode}/attributes/order, both dispatched to the same
+// handler, unlike the single-verb effective/evaluate routes above.
+func typeAttributesOrderPath(path string) (typeCode string, ok bool) {
+	const prefix = "/v1/types/"
+	const suffix = "/attributes/order"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
+	typeCode, ok = strings.CutSuffix(remainder, suffix)
+	return typeCode, ok && typeCode != "" && !strings.Contains(typeCode, "/")
+}
+
+// purchaseDetailPath matches GET /v1/purchases/{id}, the numeric-id read
+// path. by-uuid and the /lines suffix are ruled out because their
+// remainder always contains a slash.
+func purchaseDetailPath(path string) (id string, ok bool) {
+	const prefix = "/v1/purchases/"
+	id, ok = strings.CutPrefix(path, prefix)
+	return id, ok && id != "" && !strings.Contains(id, "/")
+}
+
+func purchaseLinesPath(path string) (id string, ok bool) {
+	const prefix = "/v1/purchases/"
+	const suffix = "/lines"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
+	id, ok = strings.CutSuffix(remainder, suffix)
+	return id, ok && id != "" && !strings.Contains(id, "/")
+}
+
+func supplierProductDetailPath(path string) (id string, ok bool) {
+	const prefix = "/v1/supplier-products/"
+	id, ok = strings.CutPrefix(path, prefix)
+	return id, ok && id != "" && !strings.Contains(id, "/")
+}
+
+func supplierProductLinkPath(path string) (id string, ok bool) {
+	return supplierProductActionPath(path, "/link")
+}
+
+func supplierProductUnlinkPath(path string) (id string, ok bool) {
+	return supplierProductActionPath(path, "/unlink")
+}
+
+func supplierProductActionPath(path, suffix string) (id string, ok bool) {
+	const prefix = "/v1/supplier-products/"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
+	id, ok = strings.CutSuffix(remainder, suffix)
+	return id, ok && id != "" && !strings.Contains(id, "/")
+}
+
+func purchaseLineLinkStatusPath(path string) (id string, ok bool) {
+	const prefix = "/v1/purchase-lines/"
+	const suffix = "/link-status"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
+	id, ok = strings.CutSuffix(remainder, suffix)
+	return id, ok && id != "" && !strings.Contains(id, "/")
+}
+
+// resourcePurchaseHistoryPath matches GET /v1/resources/{id}/purchase-history,
+// a numeric-id nested path distinct from resourceDetailPath's
+// classCode/identityV1 natural-key shape.
+func resourcePurchaseHistoryPath(path string) (id string, ok bool) {
+	const prefix = "/v1/resources/"
+	const suffix = "/purchase-history"
+	remainder, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
+	id, ok = strings.CutSuffix(remainder, suffix)
+	return id, ok && id != "" && !strings.Contains(id, "/")
 }
 
 func catalogListKind(path string) (string, bool) {

@@ -50,7 +50,7 @@ func TestCreateCatalogMapsRequestAndResponse(t *testing.T) {
 			Values: req.Values, Rules: req.Rules,
 		}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, nil, writer)
+	h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 	body := `{
 		"actor": "tester",
 		"active": true,
@@ -98,7 +98,7 @@ func TestCreateCatalogPreservesNilVersusEmptyRules(t *testing.T) {
 				captured = req
 				return resourcecore.CatalogRecord{Kind: req.Kind, ID: 1, Revision: 1, Values: req.Values, Rules: req.Rules}, nil
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(tc.body)))
 			if r.Code != http.StatusCreated {
@@ -126,7 +126,7 @@ func TestCreateCatalogRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 				called = true
 				return resourcecore.CatalogRecord{}, nil
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(tc.body)))
 			var got errorResponse
@@ -141,7 +141,7 @@ func TestCreateCatalogRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestCreateCatalogSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(`{"actor":"a","values":{"x":{"kind":"TEXT","value":"y"}}}`)))
 	var got errorResponse
@@ -167,7 +167,7 @@ func TestCreateCatalogMapsAndSanitizesCoreErrors(t *testing.T) {
 			writer := catalogWriterFuncs{create: func(context.Context, resourcecore.CatalogWriteRequest) (resourcecore.CatalogRecord, error) {
 				return resourcecore.CatalogRecord{}, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(`{"actor":"a","values":{"x":{"kind":"TEXT","value":"y"}}}`)))
 			var got errorResponse
@@ -185,7 +185,7 @@ func TestCreateCatalogMapsAndSanitizesCoreErrors(t *testing.T) {
 }
 
 func TestCatalogByKindRejectsUnsupportedMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPatch, "/v1/catalog/UNIDAD", nil))
 	var got errorResponse

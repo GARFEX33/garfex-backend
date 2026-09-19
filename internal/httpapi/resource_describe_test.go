@@ -17,7 +17,7 @@ func TestResourceDescribeMapsResponse(t *testing.T) {
 		}
 		return "Acero 1/2\" x 6m", nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, reader, nil)
+	h := NewRouter(nil, nil, nil, nil, reader, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/resources/MATERIAL/abc/describe", nil))
 	if r.Code != http.StatusOK {
@@ -46,7 +46,7 @@ func TestResourceDescribeSanitizesFailures(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewRouter(nil, nil, nil, nil, tc.reader, nil)
+			h := NewRouter(nil, nil, nil, nil, tc.reader, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/resources/MATERIAL/abc/describe", nil))
 			if r.Code != tc.status {
@@ -61,7 +61,7 @@ func TestResourceDescribeSanitizesFailures(t *testing.T) {
 }
 
 func TestResourceDescribeRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, resourceReaderFuncs{}, nil)
+	h := NewRouter(nil, nil, nil, nil, resourceReaderFuncs{}, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources/MATERIAL/abc/describe", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {

@@ -16,7 +16,7 @@ func TestRouterRejectsOversizedRequestBody(t *testing.T) {
 		called = true
 		return resourcecore.CatalogRecord{}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, nil, writer)
+	h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 	oversized := strings.Repeat("a", maxRequestBodyBytes+1)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/UNIDAD", strings.NewReader(oversized)))
@@ -26,7 +26,7 @@ func TestRouterRejectsOversizedRequestBody(t *testing.T) {
 }
 
 func TestPublicEndpoints(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 
 	tests := []struct {
 		name        string
@@ -88,7 +88,7 @@ func TestPublicEndpoints(t *testing.T) {
 }
 
 func TestRouterRejectsUnexpectedRequestsWithoutReflection(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 
 	tests := []struct {
 		name   string
@@ -125,7 +125,7 @@ func TestRouterRejectsUnexpectedRequestsWithoutReflection(t *testing.T) {
 }
 
 func TestOpenAPIDescribesOnlyImplementedBusinessPath(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
 
@@ -152,7 +152,7 @@ func TestOpenAPIDescribesOnlyImplementedBusinessPath(t *testing.T) {
 }
 
 func TestDocsUsesScalarDeclarativeCDNInitialization(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/docs", nil))
 

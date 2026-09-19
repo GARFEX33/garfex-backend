@@ -21,7 +21,7 @@ func TestUpdateResourceMapsRequestAndResponse(t *testing.T) {
 			Attributes: req.Attributes,
 		}, nil
 	}}
-	h := NewRouter(nil, nil, writer, nil, nil, nil)
+	h := NewRouter(nil, nil, writer, nil, nil, nil, nil, nil)
 	body := `{
 		"actor": "tester",
 		"expectedRevision": "3",
@@ -67,7 +67,7 @@ func TestUpdateResourceRejectsInvalidIDWithoutCallingCore(t *testing.T) {
 		called = true
 		return resourcecore.Resource{}, nil
 	}}
-	h := NewRouter(nil, nil, writer, nil, nil, nil)
+	h := NewRouter(nil, nil, writer, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/resources/0", strings.NewReader(`{"actor":"a","expectedRevision":"1","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG"}`)))
 	var got errorResponse
@@ -95,7 +95,7 @@ func TestUpdateResourceRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 				called = true
 				return resourcecore.Resource{}, nil
 			}}
-			h := NewRouter(nil, nil, writer, nil, nil, nil)
+			h := NewRouter(nil, nil, writer, nil, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/resources/1", strings.NewReader(tc.body)))
 			var got errorResponse
@@ -110,7 +110,7 @@ func TestUpdateResourceRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestUpdateResourceSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/resources/1", strings.NewReader(`{"actor":"a","expectedRevision":"1","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG"}`)))
 	var got errorResponse
@@ -136,7 +136,7 @@ func TestUpdateResourceMapsAndSanitizesCoreErrors(t *testing.T) {
 			writer := resourceWriterFuncs{update: func(context.Context, resourcecore.ResourceUpdateRequest) (resourcecore.Resource, error) {
 				return resourcecore.Resource{}, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
 			}}
-			h := NewRouter(nil, nil, writer, nil, nil, nil)
+			h := NewRouter(nil, nil, writer, nil, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/resources/1", strings.NewReader(`{"actor":"a","expectedRevision":"1","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG"}`)))
 			var got errorResponse
@@ -182,7 +182,7 @@ func TestResourceUpdateRequestOpenAPIShape(t *testing.T) {
 }
 
 func TestResourceIDRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, resourceWriterFuncs{}, nil, nil, nil)
+	h := NewRouter(nil, nil, resourceWriterFuncs{}, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/resources/1", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodPut {

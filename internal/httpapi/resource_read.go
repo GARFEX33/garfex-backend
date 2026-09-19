@@ -22,6 +22,7 @@ type ResourceReader interface {
 	DescribeResource(context.Context, resourcecore.ResourceKey) (string, error)
 	EffectiveAttributesFor(context.Context, resourcecore.ResourceScope) ([]resourcecore.EffectiveAttribute, error)
 	EvaluateAttributes(context.Context, resourcecore.ResourceScope, []resourcecore.AttributeValue) ([]resourcecore.EffectiveAttribute, error)
+	AttributeOrderFor(context.Context, resourcecore.ResourceScope) (resourcecore.ResourceAttributeOrder, error)
 }
 
 type resourcePageResponse struct {

@@ -17,7 +17,7 @@ func TestHardDeleteCatalogMapsRequest(t *testing.T) {
 		captured = req
 		return nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, nil, writer)
+	h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodDelete, "/v1/catalog/UNIDAD/42", strings.NewReader(`{"actor":"tester","expectedRevision":"3"}`)))
 
@@ -39,7 +39,7 @@ func TestHardDeleteCatalogRejectsInvalidIDWithoutCallingCore(t *testing.T) {
 		called = true
 		return nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, nil, writer)
+	h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodDelete, "/v1/catalog/UNIDAD/0", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 	var got errorResponse
@@ -66,7 +66,7 @@ func TestHardDeleteCatalogRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 				called = true
 				return nil
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodDelete, "/v1/catalog/UNIDAD/1", strings.NewReader(tc.body)))
 			var got errorResponse
@@ -81,7 +81,7 @@ func TestHardDeleteCatalogRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestHardDeleteCatalogSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodDelete, "/v1/catalog/UNIDAD/1", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 	var got errorResponse
@@ -107,7 +107,7 @@ func TestHardDeleteCatalogMapsAndSanitizesCoreErrors(t *testing.T) {
 			writer := catalogWriterFuncs{hardDelete: func(context.Context, resourcecore.CatalogLifecycleRequest) error {
 				return resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodDelete, "/v1/catalog/UNIDAD/1", strings.NewReader(`{"actor":"a","expectedRevision":"1"}`)))
 			var got errorResponse

@@ -722,6 +722,68 @@ paths:
                 $ref: '#/components/schemas/EffectiveAttributesResponse'
         '400': { $ref: '#/components/responses/InvalidArgument' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/types/{typeCode}/attributes/order:
+    get:
+      summary: Get the effective attribute order for a Tipo
+      description: Returns the authoritative committed per-Tipo visual order snapshot — the exact scope, the full ordered permutation, and an opaque OrderRevision. OrderRevision is never parsed or synthesized client-side; pass it back verbatim as expectedOrderRevision on the next write.
+      parameters:
+        - name: typeCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: classCode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Attribute order snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeOrderResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+    put:
+      summary: Replace the effective attribute order for a Tipo
+      description: Replaces one existing Tipo's effective attribute presentation order under optimistic concurrency. expectedOrderRevision must equal the OrderRevision most recently observed from GET (or a prior PUT result) for the exact same scope; orderedAttributes must be an exact permutation of that same snapshot's orderedAttributes. Actor is audit metadata, not authentication. The frontend never automatically retries a conflict.
+      parameters:
+        - name: typeCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: classCode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeOrderWriteRequest'
+      responses:
+        '200':
+          description: Updated attribute order snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeOrderResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/types/{typeCode}/attributes/evaluate:
     post:
       summary: Evaluate attributes for a Tipo against known values
@@ -797,6 +859,290 @@ paths:
             The file is not a usable CFDI 4.0. `code` is one of INVALID_XML,
             NOT_CFDI, UNSUPPORTED_VERSION, INVALID_CFDI.
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchases:
+    post:
+      summary: Import a CFDI purchase document
+      description: >-
+        Imports one CFDI 4.0 purchase document from its raw XML, sent as
+        multipart/form-data. Idempotent on the document's fiscal UUID:
+        re-importing the same document returns 200 with alreadyExisted true
+        and creates nothing; importing the same UUID with different content
+        returns 409. If the Emisor RFC matches no existing supplier, a
+        minimal supplier is auto-registered.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, actor]
+              properties:
+                file: { type: string, format: binary, description: The CFDI XML file. }
+                actor: { type: string }
+                branchId: { type: string, description: 'Optional strict positive decimal branch identifier.' }
+      responses:
+        '201':
+          description: Purchase imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseImportResponse'
+        '200':
+          description: Purchase already existed with matching content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseImportResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchases/{id}:
+    get:
+      summary: Get a purchase
+      description: Returns one purchase by strict positive decimal identifier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Purchase
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchases/by-uuid/{uuid}:
+    get:
+      summary: Get a purchase by its CFDI fiscal UUID
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Purchase
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchases/{id}/lines:
+    get:
+      summary: List a purchase's lines
+      description: Returns every line of one purchase, in original order.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Purchase lines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PurchaseLine' }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/purchases:
+    get:
+      summary: List a supplier's purchases
+      description: Returns a page of purchases from one supplier, most recent first.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Purchase page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasePage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/products:
+    get:
+      summary: List a supplier's products
+      description: Returns a page of one supplier's registered products.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Supplier product page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierProductPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/products/find:
+    get:
+      summary: Find a supplier product by SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: sku
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Supplier product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierProduct'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}:
+    get:
+      summary: Get a supplier product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Supplier product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierProduct'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/link:
+    post:
+      summary: Link a supplier product to a Resource Master entry
+      description: Every PENDIENTE purchase line already referencing this supplier product becomes VINCULADO; future purchase lines resolving to it reuse the relation automatically.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkSupplierProductRequest'
+      responses:
+        '200':
+          description: Updated supplier product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierProduct'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/unlink:
+    post:
+      summary: Remove a supplier product's Resource Master relation
+      description: Every VINCULADO purchase line referencing this supplier product reverts to PENDIENTE.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlinkSupplierProductRequest'
+      responses:
+        '200':
+          description: Updated supplier product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierProduct'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchase-lines/{id}/link-status:
+    post:
+      summary: Manually override a purchase line's link status
+      description: For cases automatic resolution must not decide on its own -- marking a line NO_APLICA, or resolving a CONFLICTO a human has reviewed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetLinkStatusRequest'
+      responses:
+        '200':
+          description: Updated purchase line
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseLine'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{id}/purchase-history:
+    get:
+      summary: List a Resource Master entry's purchase history
+      description: Which suppliers and supplier products have sold this resource, when, at what price and quantity, in what currency, and from which branch and source document. Most recent purchase first.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Purchase line history page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseLineHistoryPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
         '500': { $ref: '#/components/responses/Internal' }
   /openapi.yaml:
     get:
@@ -1454,3 +1800,159 @@ components:
       required: [values]
       properties:
         values: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    AttributeOrderKey:
+      type: object
+      additionalProperties: false
+      required: [sourceLevel, sourceCode, characteristicCode]
+      properties:
+        sourceLevel: { type: string }
+        sourceCode: { type: string }
+        characteristicCode: { type: string }
+    AttributeOrderResponse:
+      type: object
+      additionalProperties: false
+      required: [scope, orderedAttributes, orderRevision]
+      properties:
+        scope: { $ref: '#/components/schemas/ResourceScope' }
+        orderedAttributes: { type: array, items: { $ref: '#/components/schemas/AttributeOrderKey' } }
+        orderRevision: { type: string, description: 'Opaque concurrency token; never parsed or synthesized client-side.' }
+    AttributeOrderWriteRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedOrderRevision, orderedAttributes]
+      properties:
+        actor: { type: string }
+        expectedOrderRevision: { type: string, description: 'Opaque concurrency token, passed through verbatim from a prior GET or PUT response.' }
+        orderedAttributes: { type: array, items: { $ref: '#/components/schemas/AttributeOrderKey' } }
+    XMLDocument:
+      type: object
+      additionalProperties: false
+      required: [hash, filename]
+      properties:
+        hash: { type: string, description: Lower-case hex SHA-256 of the original XML content. }
+        filename: { type: string, description: Informational traceability only; never part of any document's identity. }
+    Purchase:
+      type: object
+      additionalProperties: false
+      required: [id, supplierId, branchId, cfdiUuid, series, folio, issuedAt, currency, exchangeRate, subtotal, discount, taxTransferred, taxWithheld, total, issuerTaxId, issuerName, xml, importedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        branchId: { type: string, nullable: true, description: Decimal integer identifier; null when the document carries no applicable branch. }
+        cfdiUuid: { type: string }
+        series: { type: string }
+        folio: { type: string }
+        issuedAt: { type: string, description: "The CFDI's own issuance date, with no zone." }
+        currency: { type: string }
+        exchangeRate: { type: string, nullable: true }
+        subtotal: { type: string }
+        discount: { type: string }
+        taxTransferred: { type: string }
+        taxWithheld: { type: string }
+        total: { type: string }
+        issuerTaxId: { type: string }
+        issuerName: { type: string }
+        xml: { $ref: '#/components/schemas/XMLDocument' }
+        importedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PurchaseLine:
+      type: object
+      additionalProperties: false
+      required: [id, purchaseId, lineNumber, description, supplierSku, satProductCode, quantity, unitCode, unit, unitPrice, amount, discount, taxTransferred, taxWithheld, taxObject, supplierProductId, linkStatus]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        purchaseId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        lineNumber: { type: integer }
+        description: { type: string }
+        supplierSku: { type: string }
+        satProductCode: { type: string }
+        quantity: { type: string }
+        unitCode: { type: string }
+        unit: { type: string }
+        unitPrice: { type: string }
+        amount: { type: string }
+        discount: { type: string }
+        taxTransferred: { type: string }
+        taxWithheld: { type: string }
+        taxObject: { type: string }
+        supplierProductId: { type: string, nullable: true, description: Decimal integer identifier; null until this line is linked. }
+        linkStatus: { type: string, enum: [PENDIENTE, VINCULADO, NO_APLICA, CONFLICTO] }
+    SupplierProduct:
+      type: object
+      additionalProperties: false
+      required: [id, supplierId, supplierSku, description, resourceId, notes, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        supplierSku: { type: string }
+        description: { type: string, description: Last-seen description for this SKU; informational only. }
+        resourceId: { type: string, nullable: true, description: Decimal integer identifier of the linked Resource Master entry; null when unlinked. }
+        notes: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PurchaseLineHistory:
+      type: object
+      additionalProperties: false
+      required: [line, supplierProduct, purchaseId, purchaseUuid, supplierId, branchId, issuedAt, currency]
+      properties:
+        line: { $ref: '#/components/schemas/PurchaseLine' }
+        supplierProduct: { $ref: '#/components/schemas/SupplierProduct' }
+        purchaseId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        purchaseUuid: { type: string }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        branchId: { type: string, nullable: true }
+        issuedAt: { type: string }
+        currency: { type: string }
+    PurchasePage:
+      type: object
+      additionalProperties: false
+      required: [purchases, hasPrevious, hasNext]
+      properties:
+        purchases: { type: array, items: { $ref: '#/components/schemas/Purchase' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    SupplierProductPage:
+      type: object
+      additionalProperties: false
+      required: [products, hasPrevious, hasNext]
+      properties:
+        products: { type: array, items: { $ref: '#/components/schemas/SupplierProduct' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    PurchaseLineHistoryPage:
+      type: object
+      additionalProperties: false
+      required: [history, hasPrevious, hasNext]
+      properties:
+        history: { type: array, items: { $ref: '#/components/schemas/PurchaseLineHistory' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    PurchaseImportResponse:
+      type: object
+      additionalProperties: false
+      required: [purchase, lines, alreadyExisted]
+      properties:
+        purchase: { $ref: '#/components/schemas/Purchase' }
+        lines: { type: array, items: { $ref: '#/components/schemas/PurchaseLine' } }
+        alreadyExisted: { type: boolean, description: True when the document's fiscal UUID was already registered with matching content; no additional write happened. }
+    LinkSupplierProductRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, resourceId]
+      properties:
+        actor: { type: string }
+        resourceId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+    UnlinkSupplierProductRequest:
+      type: object
+      additionalProperties: false
+      required: [actor]
+      properties:
+        actor: { type: string }
+    SetLinkStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, status]
+      properties:
+        actor: { type: string }
+        status: { type: string, enum: [PENDIENTE, VINCULADO, NO_APLICA, CONFLICTO] }

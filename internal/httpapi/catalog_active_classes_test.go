@@ -34,7 +34,7 @@ func TestActiveClassesMapsRecords(t *testing.T) {
 			{Kind: resourcecore.KindClass, ID: 1, Revision: 1, Active: true, Values: map[string]resourcecore.Value{"nombre": {Kind: resourcecore.ValueText, Text: "Acero"}}},
 		}, nil
 	})
-	h := NewRouter(reader, nil, nil, nil, nil, nil)
+	h := NewRouter(reader, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/classes", nil))
 	if r.Code != http.StatusOK {
@@ -55,7 +55,7 @@ func TestActiveClassesMapsRecords(t *testing.T) {
 
 func TestActiveClassesNormalizesNilSlice(t *testing.T) {
 	reader := activeClassesReaderFunc(func(context.Context) ([]resourcecore.CatalogRecord, error) { return nil, nil })
-	h := NewRouter(reader, nil, nil, nil, nil, nil)
+	h := NewRouter(reader, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/classes", nil))
 	var response activeClassesResponse
@@ -68,7 +68,7 @@ func TestActiveClassesNormalizesNilSlice(t *testing.T) {
 }
 
 func TestActiveClassesSanitizesNilReaderAndCoreErrors(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/classes", nil))
 	var got errorResponse
@@ -82,7 +82,7 @@ func TestActiveClassesSanitizesNilReaderAndCoreErrors(t *testing.T) {
 	reader := activeClassesReaderFunc(func(context.Context) ([]resourcecore.CatalogRecord, error) {
 		return nil, resourcecore.NewError(resourcecore.Unavailable, "postgres://user:secret@host/db")
 	})
-	h = NewRouter(reader, nil, nil, nil, nil, nil)
+	h = NewRouter(reader, nil, nil, nil, nil, nil, nil, nil)
 	r = httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/catalog/classes", nil))
 	if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
@@ -94,7 +94,7 @@ func TestActiveClassesSanitizesNilReaderAndCoreErrors(t *testing.T) {
 }
 
 func TestActiveClassesRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(activeClassesReaderFunc(nil), nil, nil, nil, nil, nil)
+	h := NewRouter(activeClassesReaderFunc(nil), nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/catalog/classes", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {

@@ -35,6 +35,8 @@ type application interface {
 	SupplierReader() httpapi.SupplierReader
 	Resources() httpapi.ResourceReader
 	Catalogs() httpapi.CatalogWriter
+	Purchases() httpapi.PurchaseReader
+	PurchaseWrites() httpapi.PurchaseWriter
 }
 
 type coreApplication struct{ *garfex.Application }
@@ -61,6 +63,14 @@ func (a coreApplication) Resources() httpapi.ResourceReader {
 
 func (a coreApplication) Catalogs() httpapi.CatalogWriter {
 	return a.Application.ResourceWriter
+}
+
+func (a coreApplication) Purchases() httpapi.PurchaseReader {
+	return a.PurchaseReader
+}
+
+func (a coreApplication) PurchaseWrites() httpapi.PurchaseWriter {
+	return a.PurchaseWriter
 }
 
 type server interface {
@@ -135,7 +145,7 @@ func run(parent context.Context, config config, deps dependencies) error {
 	if err != nil {
 		return errors.New("API startup failed")
 	}
-	server := deps.newServer(config.listenAddr, httpapiRouter(app.ResourceReader(), app.SupplierWriter(), app.ResourceWriter(), app.SupplierReader(), app.Resources(), app.Catalogs()))
+	server := deps.newServer(config.listenAddr, httpapiRouter(app.ResourceReader(), app.SupplierWriter(), app.ResourceWriter(), app.SupplierReader(), app.Resources(), app.Catalogs(), app.Purchases(), app.PurchaseWrites()))
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(listener) }()
 
@@ -183,8 +193,8 @@ func productionDependencies() dependencies {
 	}
 }
 
-func httpapiRouter(reader httpapi.CatalogReader, supplierWriter httpapi.SupplierWriter, resourceWriter httpapi.ResourceWriter, supplierReader httpapi.SupplierReader, resourceReader httpapi.ResourceReader, catalogWriter httpapi.CatalogWriter) http.Handler {
-	return httpapi.NewRouter(reader, supplierWriter, resourceWriter, supplierReader, resourceReader, catalogWriter)
+func httpapiRouter(reader httpapi.CatalogReader, supplierWriter httpapi.SupplierWriter, resourceWriter httpapi.ResourceWriter, supplierReader httpapi.SupplierReader, resourceReader httpapi.ResourceReader, catalogWriter httpapi.CatalogWriter, purchaseReader httpapi.PurchaseReader, purchaseWriter httpapi.PurchaseWriter) http.Handler {
+	return httpapi.NewRouter(reader, supplierWriter, resourceWriter, supplierReader, resourceReader, catalogWriter, purchaseReader, purchaseWriter)
 }
 
 func newHTTPServer(addr string, handler http.Handler) *http.Server {

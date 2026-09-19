@@ -18,7 +18,7 @@ func TestUpdateCatalogMapsRequestAndResponse(t *testing.T) {
 		captured = req
 		return resourcecore.CatalogRecord{Kind: req.Kind, ID: req.ID, Revision: req.ExpectedRevision + 1, Active: req.Active, Values: req.Values, Rules: req.Rules}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, nil, writer)
+	h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 	body := `{
 		"actor": "tester",
 		"expectedRevision": "3",
@@ -58,7 +58,7 @@ func TestUpdateCatalogRejectsInvalidIDWithoutCallingCore(t *testing.T) {
 		called = true
 		return resourcecore.CatalogRecord{}, nil
 	}}
-	h := NewRouter(nil, nil, nil, nil, nil, writer)
+	h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/catalog/UNIDAD/0", strings.NewReader(`{"actor":"a","expectedRevision":"1","values":{"x":{"kind":"TEXT","value":"y"}}}`)))
 	var got errorResponse
@@ -86,7 +86,7 @@ func TestUpdateCatalogRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 				called = true
 				return resourcecore.CatalogRecord{}, nil
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/catalog/UNIDAD/1", strings.NewReader(tc.body)))
 			var got errorResponse
@@ -101,7 +101,7 @@ func TestUpdateCatalogRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestUpdateCatalogSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/catalog/UNIDAD/1", strings.NewReader(`{"actor":"a","expectedRevision":"1","values":{"x":{"kind":"TEXT","value":"y"}}}`)))
 	var got errorResponse
@@ -127,7 +127,7 @@ func TestUpdateCatalogMapsAndSanitizesCoreErrors(t *testing.T) {
 			writer := catalogWriterFuncs{update: func(context.Context, resourcecore.CatalogUpdateRequest) (resourcecore.CatalogRecord, error) {
 				return resourcecore.CatalogRecord{}, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
 			}}
-			h := NewRouter(nil, nil, nil, nil, nil, writer)
+			h := NewRouter(nil, nil, nil, nil, nil, writer, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPut, "/v1/catalog/UNIDAD/1", strings.NewReader(`{"actor":"a","expectedRevision":"1","values":{"x":{"kind":"TEXT","value":"y"}}}`)))
 			var got errorResponse

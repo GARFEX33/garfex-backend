@@ -18,6 +18,7 @@ type resourceWriterFuncs struct {
 	update     func(context.Context, resourcecore.ResourceUpdateRequest) (resourcecore.Resource, error)
 	deactivate func(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error)
 	reactivate func(context.Context, resourcecore.ResourceLifecycleRequest) (resourcecore.Resource, error)
+	order      func(context.Context, resourcecore.AttributeOrderWriteRequest) (resourcecore.ResourceAttributeOrder, error)
 }
 
 func (f resourceWriterFuncs) CreateResource(ctx context.Context, req resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
@@ -36,6 +37,10 @@ func (f resourceWriterFuncs) ReactivateResource(ctx context.Context, req resourc
 	return f.reactivate(ctx, req)
 }
 
+func (f resourceWriterFuncs) UpdateAttributeOrder(ctx context.Context, req resourcecore.AttributeOrderWriteRequest) (resourcecore.ResourceAttributeOrder, error) {
+	return f.order(ctx, req)
+}
+
 func TestCreateResourceMapsRequestAndResponse(t *testing.T) {
 	var captured resourcecore.ResourceWriteRequest
 	h := NewRouter(nil, nil, resourceWriterFuncs{create: func(_ context.Context, req resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
@@ -45,7 +50,7 @@ func TestCreateResourceMapsRequestAndResponse(t *testing.T) {
 			Scope: req.Scope, NaturalUnit: req.NaturalUnit, Active: true, Revision: 3,
 			Attributes: req.Attributes,
 		}, nil
-	}}, nil, nil, nil)
+	}}, nil, nil, nil, nil, nil)
 	body := `{
 		"actor": "tester",
 		"scope": {"classCode": "C1", "familyCode": "F1", "typeCode": "T1"},
@@ -115,7 +120,7 @@ func TestResourcesRejectsUnsupportedMethod(t *testing.T) {
 	h := NewRouter(nil, nil, resourceWriterFuncs{create: func(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
 		called = true
 		return resourcecore.Resource{}, nil
-	}}, nil, nil, nil)
+	}}, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPatch, "/v1/resources", nil))
 	var got errorResponse
@@ -145,7 +150,7 @@ func TestCreateResourceRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 			h := NewRouter(nil, nil, resourceWriterFuncs{create: func(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
 				called = true
 				return resourcecore.Resource{}, nil
-			}}, nil, nil, nil)
+			}}, nil, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources", strings.NewReader(tc.body)))
 			var got errorResponse
@@ -160,7 +165,7 @@ func TestCreateResourceRejectsInvalidBodyWithoutCallingCore(t *testing.T) {
 }
 
 func TestCreateResourceSanitizesNilWriter(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources", strings.NewReader(`{"actor":"tester","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG"}`)))
 	var got errorResponse
@@ -186,7 +191,7 @@ func TestCreateResourceMapsAndSanitizesCoreErrors(t *testing.T) {
 		t.Run(string(tc.code), func(t *testing.T) {
 			h := NewRouter(nil, nil, resourceWriterFuncs{create: func(context.Context, resourcecore.ResourceWriteRequest) (resourcecore.Resource, error) {
 				return resourcecore.Resource{}, resourcecore.NewError(tc.code, "postgres://user:secret@host/db")
-			}}, nil, nil, nil)
+			}}, nil, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/resources", strings.NewReader(`{"actor":"a","scope":{"classCode":"C","familyCode":"F","typeCode":"T"},"naturalUnit":"KG"}`)))
 			var got errorResponse

@@ -23,7 +23,7 @@ func TestContactListPassesQueryAndMapsPage(t *testing.T) {
 			HasPrevious: true, HasNext: true,
 		}, nil
 	}}
-	h := NewRouter(nil, nil, nil, reader, nil, nil)
+	h := NewRouter(nil, nil, nil, reader, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers/42/contacts?text=ana&branchId=7&limit=5&offset=1", nil))
 
@@ -52,7 +52,7 @@ func TestContactListRejectsInvalidParametersWithoutCallingCore(t *testing.T) {
 		called = true
 		return suppliercore.ContactPage{}, nil
 	}}
-	h := NewRouter(nil, nil, nil, reader, nil, nil)
+	h := NewRouter(nil, nil, nil, reader, nil, nil, nil, nil)
 	for _, tc := range []struct{ path string }{
 		{"/v1/suppliers/0/contacts"},
 		{"/v1/suppliers/1/contacts?branchId=0"},
@@ -74,7 +74,7 @@ func TestContactListRejectsInvalidParametersWithoutCallingCore(t *testing.T) {
 }
 
 func TestContactListSanitizesNilReader(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers/1/contacts", nil))
 	var got errorResponse
@@ -94,7 +94,7 @@ func TestContactDetailMapsRecordAndOmitsEmptyBranch(t *testing.T) {
 		}
 		return suppliercore.Contact{ID: 9, SupplierID: 42, Name: "Ana", Active: true, CreatedAt: created, UpdatedAt: created}, nil
 	}}
-	h := NewRouter(nil, nil, nil, reader, nil, nil)
+	h := NewRouter(nil, nil, nil, reader, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers/42/contacts/9", nil))
 	if r.Code != http.StatusOK {
@@ -121,7 +121,7 @@ func TestContactDetailSanitizesFailures(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewRouter(nil, nil, nil, tc.reader, nil, nil)
+			h := NewRouter(nil, nil, nil, tc.reader, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, tc.path, nil))
 			if r.Code != tc.status {
@@ -136,7 +136,7 @@ func TestContactDetailSanitizesFailures(t *testing.T) {
 }
 
 func TestContactListRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil)
+	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers/1/contacts", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {
@@ -145,7 +145,7 @@ func TestContactListRejectsWrongMethod(t *testing.T) {
 }
 
 func TestContactDetailRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil)
+	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers/1/contacts/1", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {

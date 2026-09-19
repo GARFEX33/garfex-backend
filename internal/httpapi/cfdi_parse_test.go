@@ -47,7 +47,7 @@ func cfdiMultipartRequest(t *testing.T, field, filename, content string) *http.R
 func serveCFDI(t *testing.T, req *http.Request) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	NewRouter(nil, nil, nil, nil, nil, nil).ServeHTTP(rec, req)
+	NewRouter(nil, nil, nil, nil, nil, nil, nil, nil).ServeHTTP(rec, req)
 	return rec
 }
 

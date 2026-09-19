@@ -22,7 +22,7 @@ func TestBranchListPassesQueryAndMapsPage(t *testing.T) {
 			HasPrevious: true, HasNext: true,
 		}, nil
 	}}
-	h := NewRouter(nil, nil, nil, reader, nil, nil)
+	h := NewRouter(nil, nil, nil, reader, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers/42/branches?text=main&limit=5&offset=1", nil))
 
@@ -45,7 +45,7 @@ func TestBranchListRejectsInvalidSupplierIDWithoutCallingCore(t *testing.T) {
 		called = true
 		return suppliercore.BranchPage{}, nil
 	}}
-	h := NewRouter(nil, nil, nil, reader, nil, nil)
+	h := NewRouter(nil, nil, nil, reader, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers/0/branches", nil))
 	var got errorResponse
@@ -58,7 +58,7 @@ func TestBranchListRejectsInvalidSupplierIDWithoutCallingCore(t *testing.T) {
 }
 
 func TestBranchListSanitizesNilReader(t *testing.T) {
-	h := NewRouter(nil, nil, nil, nil, nil, nil)
+	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/v1/suppliers/1/branches", nil))
 	var got errorResponse
@@ -71,7 +71,7 @@ func TestBranchListSanitizesNilReader(t *testing.T) {
 }
 
 func TestBranchListRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil)
+	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers/1/branches", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {
@@ -102,7 +102,7 @@ func TestBranchDetailMapsRecordAndSanitizesFailures(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewRouter(nil, nil, nil, tc.reader, nil, nil)
+			h := NewRouter(nil, nil, nil, tc.reader, nil, nil, nil, nil)
 			r := httptest.NewRecorder()
 			h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, tc.path, nil))
 			if r.Code != tc.status {
@@ -119,7 +119,7 @@ func TestBranchDetailMapsRecordAndSanitizesFailures(t *testing.T) {
 }
 
 func TestBranchDetailRejectsWrongMethod(t *testing.T) {
-	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil)
+	h := NewRouter(nil, nil, nil, supplierReaderFuncs{}, nil, nil, nil, nil)
 	r := httptest.NewRecorder()
 	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/v1/suppliers/1/branches/1", nil))
 	if r.Code != http.StatusMethodNotAllowed || r.Header().Get("Allow") != http.MethodGet {
