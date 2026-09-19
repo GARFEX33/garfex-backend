@@ -272,12 +272,16 @@ func mapCFDIParse(inv cfdicore.Invoice) cfdiParseResponse {
 		}
 	}
 	return cfdiParseResponse{
-		Invoice: out,
-		SupplierDraft: cfdiSupplierDraftResponse{
-			TaxIdentifier: inv.Issuer.TaxID,
-			LegalName:     inv.Issuer.Name,
-			TaxRegime:     inv.Issuer.TaxRegime,
-		},
+		Invoice:       out,
+		SupplierDraft: cfdiSupplierDraft(inv),
+	}
+}
+
+func cfdiSupplierDraft(inv cfdicore.Invoice) cfdiSupplierDraftResponse {
+	return cfdiSupplierDraftResponse{
+		TaxIdentifier: inv.Issuer.TaxID,
+		LegalName:     inv.Issuer.Name,
+		TaxRegime:     inv.Issuer.TaxRegime,
 	}
 }
 

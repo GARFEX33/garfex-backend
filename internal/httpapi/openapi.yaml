@@ -320,6 +320,46 @@ paths:
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/Unavailable' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/from-cfdi/preview:
+    post:
+      summary: Preview creating a supplier from a CFDI XML
+      description: >-
+        Reads a CFDI 4.0 voucher (multipart `file` field or raw XML body) and
+        returns the supplier draft built from its Emisor plus the supplier that
+        already owns that RFC, active or inactive, or null when the RFC is new.
+        Read-only: nothing is created. To create, call `POST /v1/suppliers`
+        with the draft; the unique RFC constraint stays authoritative if
+        another request creates the supplier in between.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The CFDI XML file.
+          application/xml:
+            schema:
+              type: string
+              description: The raw CFDI XML document.
+      responses:
+        '200':
+          description: Draft and existing supplier, if any
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierCFDIPreview'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '422':
+          description: >-
+            The file is not a usable CFDI 4.0. `code` is one of INVALID_XML,
+            NOT_CFDI, UNSUPPORTED_VERSION, INVALID_CFDI.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/suppliers/{id}:
     get:
       summary: Get a supplier
@@ -981,6 +1021,17 @@ components:
       type: object
       required: [value, label]
       properties: { value: { type: string }, label: { type: string } }
+    SupplierCFDIPreview:
+      type: object
+      additionalProperties: false
+      required: [draft, existing]
+      properties:
+        draft: { $ref: '#/components/schemas/CFDISupplierDraft' }
+        existing:
+          nullable: true
+          description: The supplier already owning the RFC (active or inactive); null when the RFC is new.
+          allOf:
+            - $ref: '#/components/schemas/Supplier'
     CFDIParseResponse:
       type: object
       additionalProperties: false

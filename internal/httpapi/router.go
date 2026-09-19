@@ -36,6 +36,8 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 		serveResources(w, r, resourceWriter, resourceReader)
 	case "/v1/cfdi/parse":
 		serveCFDIParse(w, r)
+	case "/v1/suppliers/from-cfdi/preview":
+		serveSupplierCFDIPreview(w, r, supplierReader)
 	case "/openapi.yaml":
 		serveGet(w, r, serveOpenAPI)
 	case "/docs":

@@ -14,6 +14,7 @@ import (
 
 type supplierReaderFuncs struct {
 	get          func(context.Context, int64) (suppliercore.Supplier, error)
+	getByTaxID   func(context.Context, string) (suppliercore.Supplier, error)
 	search       func(context.Context, suppliercore.SupplierQuery) (suppliercore.SupplierPage, error)
 	listBranches func(context.Context, suppliercore.BranchQuery) (suppliercore.BranchPage, error)
 	getBranch    func(context.Context, suppliercore.BranchKey) (suppliercore.Branch, error)
@@ -23,6 +24,10 @@ type supplierReaderFuncs struct {
 
 func (f supplierReaderFuncs) GetSupplier(ctx context.Context, id int64) (suppliercore.Supplier, error) {
 	return f.get(ctx, id)
+}
+
+func (f supplierReaderFuncs) GetSupplierByTaxIdentifier(ctx context.Context, taxID string) (suppliercore.Supplier, error) {
+	return f.getByTaxID(ctx, taxID)
 }
 
 func (f supplierReaderFuncs) SearchSuppliers(ctx context.Context, q suppliercore.SupplierQuery) (suppliercore.SupplierPage, error) {

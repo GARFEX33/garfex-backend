@@ -19,6 +19,7 @@ const (
 // search and detail routes, including the nested branch and contact routes.
 type SupplierReader interface {
 	GetSupplier(context.Context, int64) (suppliercore.Supplier, error)
+	GetSupplierByTaxIdentifier(context.Context, string) (suppliercore.Supplier, error)
 	SearchSuppliers(context.Context, suppliercore.SupplierQuery) (suppliercore.SupplierPage, error)
 	ListBranches(context.Context, suppliercore.BranchQuery) (suppliercore.BranchPage, error)
 	GetBranch(context.Context, suppliercore.BranchKey) (suppliercore.Branch, error)
