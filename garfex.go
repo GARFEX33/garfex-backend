@@ -10,11 +10,14 @@ import (
 
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/app/catalogo"
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/app/recursos"
+	purchasebridge "github.com/GARFEX33/garfex-costos-unitarios/internal/bridge/purchasecore"
 	resourcebridge "github.com/GARFEX33/garfex-costos-unitarios/internal/bridge/resourcecore"
 	supplierbridge "github.com/GARFEX33/garfex-costos-unitarios/internal/bridge/suppliercore"
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases"
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers"
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/postgres"
+	"github.com/GARFEX33/garfex-costos-unitarios/purchasecore"
 	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
 	"github.com/GARFEX33/garfex-costos-unitarios/suppliercore"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,6 +39,8 @@ type Application struct {
 	ResourceWriter *resourcecore.Writer
 	SupplierReader *suppliercore.Reader
 	SupplierWriter *suppliercore.Writer
+	PurchaseReader *purchasecore.Reader
+	PurchaseWriter *purchasecore.Writer
 
 	pool      *pgxpool.Pool
 	closeOnce sync.Once
@@ -76,7 +81,7 @@ func Open(ctx context.Context, config Config) (*Application, error) {
 	resourceService := recursos.NewServiceWithCatalogAuthority(
 		postgres.NewResourceRepository(pool),
 		authority,
-	)
+	).WithAttributeOrderStore(postgres.NewAttributeOrderRepositoryFull(pool))
 	resourceAdapter := resourcebridge.NewAdapter(catalogService, resourceService)
 	resourceReader, err := resourcecore.NewReadOnly(resourceAdapter)
 	if err != nil {
@@ -89,7 +94,8 @@ func Open(ctx context.Context, config Config) (*Application, error) {
 		return nil, safeOpenError(err)
 	}
 
-	supplierAdapter := supplierbridge.NewAdapter(suppliers.New(pool).Service)
+	suppliersModule := suppliers.New(pool)
+	supplierAdapter := supplierbridge.NewAdapter(suppliersModule.Service)
 	supplierReader, err := suppliercore.NewReadOnly(supplierAdapter)
 	if err != nil {
 		pool.Close()
@@ -101,11 +107,25 @@ func Open(ctx context.Context, config Config) (*Application, error) {
 		return nil, safeOpenError(err)
 	}
 
+	purchaseAdapter := purchasebridge.NewAdapter(purchases.New(pool, suppliersModule.Service).Service)
+	purchaseReader, err := purchasecore.NewReadOnly(purchaseAdapter)
+	if err != nil {
+		pool.Close()
+		return nil, safeOpenError(err)
+	}
+	purchaseWriter, err := purchasecore.NewWriter(purchaseAdapter)
+	if err != nil {
+		pool.Close()
+		return nil, safeOpenError(err)
+	}
+
 	return &Application{
 		ResourceReader: resourceReader,
 		ResourceWriter: resourceWriter,
 		SupplierReader: supplierReader,
 		SupplierWriter: supplierWriter,
+		PurchaseReader: purchaseReader,
+		PurchaseWriter: purchaseWriter,
 		pool:           pool,
 	}, nil
 }
