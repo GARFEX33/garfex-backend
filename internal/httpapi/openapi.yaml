@@ -714,6 +714,50 @@ paths:
                 $ref: '#/components/schemas/EffectiveAttributesResponse'
         '400': { $ref: '#/components/responses/InvalidArgument' }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/cfdi/parse:
+    post:
+      summary: Parse a CFDI 4.0 XML
+      description: >-
+        Reads one CFDI 4.0 voucher (Mexican electronic invoice) and returns all
+        of its data. Nothing is stored. The XML may be uploaded as a multipart
+        `file` field or sent as the raw request body. `supplierDraft` holds
+        the Emisor shaped like a supplier create request, so a client can
+        prefill a supplier form; `taxRegime` has no supplier field and is
+        informational.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The CFDI XML file.
+          application/xml:
+            schema:
+              type: string
+              description: The raw CFDI XML document.
+          text/xml:
+            schema:
+              type: string
+              description: The raw CFDI XML document.
+      responses:
+        '200':
+          description: Parsed voucher
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CFDIParseResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '422':
+          description: >-
+            The file is not a usable CFDI 4.0. `code` is one of INVALID_XML,
+            NOT_CFDI, UNSUPPORTED_VERSION, INVALID_CFDI.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
   /openapi.yaml:
     get:
       summary: OpenAPI document
@@ -937,6 +981,181 @@ components:
       type: object
       required: [value, label]
       properties: { value: { type: string }, label: { type: string } }
+    CFDIParseResponse:
+      type: object
+      additionalProperties: false
+      required: [invoice, supplierDraft]
+      properties:
+        invoice: { $ref: '#/components/schemas/CFDIInvoice' }
+        supplierDraft: { $ref: '#/components/schemas/CFDISupplierDraft' }
+    CFDISupplierDraft:
+      type: object
+      additionalProperties: false
+      required: [taxIdentifier, legalName, taxRegime]
+      description: Emisor data shaped like a supplier create request. RFC is trimmed and upper-cased.
+      properties:
+        taxIdentifier: { type: string }
+        legalName: { type: string }
+        taxRegime: { type: string, description: "SAT regimen fiscal code, such as 601. Informational only; suppliers have no such field." }
+    CFDIInvoice:
+      type: object
+      additionalProperties: false
+      description: >-
+        Amounts, quantities and rates are exact decimal strings as written in
+        the XML. Absent values are empty strings. Dates have no zone
+        (`YYYY-MM-DDThh:mm:ss`).
+      required:
+        - version
+        - series
+        - folio
+        - issuedAt
+        - seal
+        - paymentForm
+        - certificateNumber
+        - certificate
+        - paymentConditions
+        - subtotal
+        - discount
+        - currency
+        - exchangeRate
+        - total
+        - voucherType
+        - export
+        - paymentMethod
+        - issuePlace
+        - confirmation
+        - related
+        - issuer
+        - receiver
+        - concepts
+        - taxes
+        - stamp
+      properties:
+        version: { type: string }
+        series: { type: string }
+        folio: { type: string }
+        issuedAt: { type: string }
+        seal: { type: string }
+        paymentForm: { type: string }
+        certificateNumber: { type: string }
+        certificate: { type: string }
+        paymentConditions: { type: string }
+        subtotal: { type: string }
+        discount: { type: string }
+        currency: { type: string }
+        exchangeRate: { type: string }
+        total: { type: string }
+        voucherType: { type: string }
+        export: { type: string }
+        paymentMethod: { type: string }
+        issuePlace: { type: string }
+        confirmation: { type: string }
+        related:
+          type: array
+          items: { $ref: '#/components/schemas/CFDIRelated' }
+        issuer: { $ref: '#/components/schemas/CFDIIssuer' }
+        receiver: { $ref: '#/components/schemas/CFDIReceiver' }
+        concepts:
+          type: array
+          items: { $ref: '#/components/schemas/CFDIConcept' }
+        taxes: { $ref: '#/components/schemas/CFDITaxes' }
+        stamp:
+          nullable: true
+          description: The SAT TimbreFiscalDigital complement; null when the voucher has none.
+          allOf:
+            - $ref: '#/components/schemas/CFDIStamp'
+    CFDIRelated:
+      type: object
+      additionalProperties: false
+      required: [relationType, uuids]
+      properties:
+        relationType: { type: string }
+        uuids:
+          type: array
+          items: { type: string }
+    CFDIIssuer:
+      type: object
+      additionalProperties: false
+      required: [taxIdentifier, name, taxRegime]
+      properties:
+        taxIdentifier: { type: string }
+        name: { type: string }
+        taxRegime: { type: string }
+    CFDIReceiver:
+      type: object
+      additionalProperties: false
+      required: [taxIdentifier, name, postalCode, taxRegime, cfdiUse, foreignResidence, foreignTaxIdentifier]
+      properties:
+        taxIdentifier: { type: string }
+        name: { type: string }
+        postalCode: { type: string }
+        taxRegime: { type: string }
+        cfdiUse: { type: string }
+        foreignResidence: { type: string }
+        foreignTaxIdentifier: { type: string }
+    CFDIConcept:
+      type: object
+      additionalProperties: false
+      required: [productServiceCode, itemNumber, quantity, unitCode, unit, description, unitPrice, amount, discount, taxObject, taxes]
+      properties:
+        productServiceCode: { type: string }
+        itemNumber: { type: string, description: "The issuer product code (NoIdentificacion)." }
+        quantity: { type: string }
+        unitCode: { type: string }
+        unit: { type: string }
+        description: { type: string }
+        unitPrice: { type: string }
+        amount: { type: string }
+        discount: { type: string }
+        taxObject: { type: string }
+        taxes:
+          type: object
+          additionalProperties: false
+          required: [transferred, withheld]
+          properties:
+            transferred:
+              type: array
+              items: { $ref: '#/components/schemas/CFDITax' }
+            withheld:
+              type: array
+              items: { $ref: '#/components/schemas/CFDITax' }
+    CFDITaxes:
+      type: object
+      additionalProperties: false
+      required: [totalTransferred, totalWithheld, transferred, withheld]
+      properties:
+        totalTransferred: { type: string }
+        totalWithheld: { type: string }
+        transferred:
+          type: array
+          items: { $ref: '#/components/schemas/CFDITax' }
+        withheld:
+          type: array
+          items: { $ref: '#/components/schemas/CFDITax' }
+    CFDITax:
+      type: object
+      additionalProperties: false
+      required: [base, tax, factorType, rate, amount]
+      description: Voucher-level withholdings only carry `tax` and `amount`.
+      properties:
+        base: { type: string }
+        tax: { type: string, description: "SAT tax code: 001 ISR, 002 IVA, 003 IEPS." }
+        factorType: { type: string }
+        rate: { type: string }
+        amount: { type: string }
+    CFDIStamp:
+      type: object
+      additionalProperties: false
+      required: [version, uuid, stampedAt, providerTaxIdentifier, legend, cfdSeal, satCertificateNumber, satSeal]
+      properties:
+        version: { type: string }
+        uuid: { type: string, description: Upper-cased. }
+        stampedAt: { type: string }
+        providerTaxIdentifier: { type: string }
+        legend: { type: string }
+        cfdSeal: { type: string }
+        satCertificateNumber: { type: string }
+        satSeal: { type: string }
     Error:
       type: object
       required: [error]

@@ -42,6 +42,9 @@ OpenAPI document (`GET /openapi.yaml`), browsable interactively at `GET /docs`
   create, update, and deactivate/reactivate by internal numeric id.
 - **Supplier** — search/get/update by id, create, and its nested branches and
   contacts (read-only).
+- **CFDI** — `POST /v1/cfdi/parse` reads a CFDI 4.0 XML (multipart `file` field
+  or raw body) and returns all its data plus a `supplierDraft` built from the
+  Emisor, to prefill a supplier form. Stateless: nothing is stored.
 
 The Scalar page loads a pinned external browser dependency from jsDelivr
 (`@scalar/api-reference@1.25.0`); interactive docs require browser network access.
