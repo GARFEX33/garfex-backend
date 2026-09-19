@@ -19,6 +19,12 @@ var ErrInvalidArgument = errors.New("resource lookup argument is required")
 type Service struct {
 	repo      domain.ResourceRepository
 	authority *domain.CatalogAuthority
+
+	// orderStore is the optional per-Tipo visual-order capability, wired
+	// additively via WithAttributeOrderStore. It is never consulted by
+	// Describe/EffectiveAttributes/Create/etc. above, and ReadAttributeOrder/
+	// WriteAttributeOrder never touch authority — see attribute_order.go.
+	orderStore domain.AttributeOrderStore
 }
 
 // NewService returns a Service whose catalog authority constructs and validates

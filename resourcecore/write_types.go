@@ -59,3 +59,17 @@ type ResourceLifecycleRequest struct {
 	ID               int64
 	ExpectedRevision uint64
 }
+
+// AttributeOrderWriteRequest replaces one existing resource type's effective
+// attribute presentation order under optimistic concurrency.
+// ExpectedOrderRevision must equal the OrderRevision most recently observed
+// from Reader.AttributeOrderFor (or a prior UpdateAttributeOrder result) for
+// the exact same scope; OrderedAttributes must be an exact permutation of
+// that same snapshot's OrderedAttributes. Actor is audit metadata, not
+// authentication.
+type AttributeOrderWriteRequest struct {
+	Actor                 string
+	Scope                 ResourceScope
+	ExpectedOrderRevision string
+	OrderedAttributes     []AttributeOrderKey
+}

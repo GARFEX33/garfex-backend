@@ -71,6 +71,8 @@ func Map(err error) Error {
 	switch {
 	case errors.Is(err, domain.ErrRevisionConflict):
 		return New(Conflict, messages[Conflict])
+	case errors.Is(err, domain.ErrAttributeOrderRevisionConflict):
+		return New(Conflict, messages[Conflict])
 	case errors.Is(err, domain.ErrIdentityConflict):
 		return New(IdentityConflict, messages[IdentityConflict])
 	case errors.Is(err, domain.ErrReactivationImpossible):
@@ -95,6 +97,8 @@ func Map(err error) Error {
 		return New(NotFound, messages[NotFound])
 	case errors.Is(err, ErrInvalidArgument):
 		return New(InvalidArgument, messages[InvalidArgument])
+	case errors.Is(err, domain.ErrAttributeOrderUnavailable):
+		return New(Unavailable, messages[Unavailable])
 	case errors.Is(err, ErrUnavailable), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return New(Unavailable, messages[Unavailable])
 	default:

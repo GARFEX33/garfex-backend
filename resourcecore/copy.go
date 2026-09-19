@@ -135,3 +135,31 @@ func CloneResourceUpdateRequest(req ResourceUpdateRequest) ResourceUpdateRequest
 	}
 	return out
 }
+
+// CloneAttributeOrderKeySlice defensively copies an AttributeOrderKey slice.
+// Each key is a plain, pointer-free struct, so a shallow element copy is a
+// full deep copy; nil is preserved as nil.
+func CloneAttributeOrderKeySlice(keys []AttributeOrderKey) []AttributeOrderKey {
+	if keys == nil {
+		return nil
+	}
+	out := make([]AttributeOrderKey, len(keys))
+	copy(out, keys)
+	return out
+}
+
+// CloneResourceAttributeOrder defensively copies a snapshot so the caller
+// cannot mutate the returned OrderedAttributes slice.
+func CloneResourceAttributeOrder(o ResourceAttributeOrder) ResourceAttributeOrder {
+	out := o
+	out.OrderedAttributes = CloneAttributeOrderKeySlice(o.OrderedAttributes)
+	return out
+}
+
+// CloneAttributeOrderWriteRequest defensively copies a write request so the
+// caller cannot mutate an in-flight or already-submitted request.
+func CloneAttributeOrderWriteRequest(req AttributeOrderWriteRequest) AttributeOrderWriteRequest {
+	out := req
+	out.OrderedAttributes = CloneAttributeOrderKeySlice(req.OrderedAttributes)
+	return out
+}

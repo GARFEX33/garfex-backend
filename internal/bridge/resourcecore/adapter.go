@@ -47,6 +47,7 @@ type resourceReader interface {
 	SearchPage(ctx context.Context, criteria domain.SearchCriteria) (domain.ResourcePage, error)
 	Describe(resource domain.Resource) string
 	EffectiveAttributes(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error)
+	ReadAttributeOrder(ctx context.Context, scope domain.ResourceScope) (domain.AttributeOrderReadResult, error)
 }
 
 // resourceWriter is the narrow resource write seam the bridge consumes.
@@ -55,6 +56,7 @@ type resourceWriter interface {
 	UpdateRevision(ctx context.Context, command domain.UpdateCommand, expectedRevision uint64) (domain.Resource, error)
 	DeactivateRevision(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
 	ReactivateRevision(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
+	WriteAttributeOrder(ctx context.Context, req domain.AttributeOrderWriteRequest) (domain.AttributeOrderReadResult, error)
 }
 
 // resourcePort is the complete resource seam: reads plus the one graduated
@@ -424,6 +426,65 @@ func (a *Adapter) EvaluateAttributes(ctx context.Context, scope public.ResourceS
 		out[i] = mapEffectiveAttribute(attribute)
 	}
 	return out, nil
+}
+
+// AttributeOrderFor returns the per-Tipo visual order snapshot for one
+// exact {classCode,familyCode,typeCode} scope. It maps only
+// domain.AttributeOrderReadResult.Order into the public DTO; .Catalog is an
+// internal structural-catalog snapshot used only to resolve the baseline
+// inside the domain/postgres layers and is never exposed here (no database
+// IDs, and no field of public.ResourceAttributeOrder could carry it).
+func (a *Adapter) AttributeOrderFor(ctx context.Context, scope public.ResourceScope) (public.ResourceAttributeOrder, error) {
+	domainScope := domain.ResourceScope{ClassCode: scope.ClassCode, FamilyCode: scope.FamilyCode, TypeCode: scope.TypeCode}
+	result, err := a.resources.ReadAttributeOrder(ctx, domainScope)
+	if err != nil {
+		return public.ResourceAttributeOrder{}, mapError(err)
+	}
+	return mapAttributeOrderSnapshot(result.Order), nil
+}
+
+// UpdateAttributeOrder replaces one existing resource type's effective
+// attribute presentation order under optimistic concurrency. req.Actor is
+// audit metadata, not authentication, carried via core.WithActor exactly as
+// UpdateResource already does. Like AttributeOrderFor, only
+// domain.AttributeOrderReadResult.Order is mapped into the public DTO;
+// .Catalog is never exposed.
+func (a *Adapter) UpdateAttributeOrder(ctx context.Context, req public.AttributeOrderWriteRequest) (public.ResourceAttributeOrder, error) {
+	domainScope := domain.ResourceScope{ClassCode: req.Scope.ClassCode, FamilyCode: req.Scope.FamilyCode, TypeCode: req.Scope.TypeCode}
+	domainReq := domain.AttributeOrderWriteRequest{
+		Scope:                 domainScope,
+		ExpectedOrderRevision: req.ExpectedOrderRevision,
+		OrderedAttributes:     toDomainAttributeOrderKeys(req.OrderedAttributes),
+	}
+	result, err := a.resources.WriteAttributeOrder(core.WithActor(ctx, req.Actor), domainReq)
+	if err != nil {
+		return public.ResourceAttributeOrder{}, mapError(err)
+	}
+	return mapAttributeOrderSnapshot(result.Order), nil
+}
+
+func mapAttributeOrderSnapshot(order domain.AttributeOrderSnapshot) public.ResourceAttributeOrder {
+	return public.ResourceAttributeOrder{
+		Scope:             public.ResourceScope{ClassCode: order.Scope.ClassCode, FamilyCode: order.Scope.FamilyCode, TypeCode: order.Scope.TypeCode},
+		OrderedAttributes: mapAttributeOrderKeys(order.OrderedAttributes),
+		OrderRevision:     order.OrderRevision,
+	}
+}
+
+func mapAttributeOrderKeys(keys []domain.AttributeOrderKey) []public.AttributeOrderKey {
+	out := make([]public.AttributeOrderKey, len(keys))
+	for i, k := range keys {
+		out[i] = public.AttributeOrderKey{SourceLevel: k.SourceLevel, SourceCode: k.SourceCode, CharacteristicCode: k.CharacteristicCode}
+	}
+	return out
+}
+
+func toDomainAttributeOrderKeys(keys []public.AttributeOrderKey) []domain.AttributeOrderKey {
+	out := make([]domain.AttributeOrderKey, len(keys))
+	for i, k := range keys {
+		out[i] = domain.AttributeOrderKey{SourceLevel: k.SourceLevel, SourceCode: k.SourceCode, CharacteristicCode: k.CharacteristicCode}
+	}
+	return out
 }
 
 func mapEffectiveAttribute(a domain.EffectiveAttribute) public.EffectiveAttribute {

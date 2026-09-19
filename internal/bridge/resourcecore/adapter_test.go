@@ -62,20 +62,24 @@ func (f *fakeCatalogReader) HardDeleteRevision(ctx context.Context, kind domain.
 }
 
 type fakeResourceReader struct {
-	get                    func(ctx context.Context, classCode, identityKey string) (domain.Resource, error)
-	search                 func(ctx context.Context, criteria domain.SearchCriteria) (domain.ResourcePage, error)
-	describe               func(resource domain.Resource) string
-	create                 func(ctx context.Context, command domain.CreateCommand) (domain.Resource, error)
-	updateRevision         func(ctx context.Context, command domain.UpdateCommand, expectedRevision uint64) (domain.Resource, error)
-	deactivateRevision     func(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
-	reactivateRevision     func(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
-	effectiveAttributes    func(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error)
-	lastDescribed          domain.Resource
-	getCalls               int
-	updateCalls            int
-	deactivateCalls        int
-	reactivateCalls        int
-	effectiveAttributeArgs domain.ResourceScope
+	get                      func(ctx context.Context, classCode, identityKey string) (domain.Resource, error)
+	search                   func(ctx context.Context, criteria domain.SearchCriteria) (domain.ResourcePage, error)
+	describe                 func(resource domain.Resource) string
+	create                   func(ctx context.Context, command domain.CreateCommand) (domain.Resource, error)
+	updateRevision           func(ctx context.Context, command domain.UpdateCommand, expectedRevision uint64) (domain.Resource, error)
+	deactivateRevision       func(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
+	reactivateRevision       func(ctx context.Context, id int64, expectedRevision uint64) (domain.LifecycleResult, error)
+	effectiveAttributes      func(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error)
+	readAttributeOrder       func(ctx context.Context, scope domain.ResourceScope) (domain.AttributeOrderReadResult, error)
+	writeAttributeOrder      func(ctx context.Context, req domain.AttributeOrderWriteRequest) (domain.AttributeOrderReadResult, error)
+	lastDescribed            domain.Resource
+	getCalls                 int
+	updateCalls              int
+	deactivateCalls          int
+	reactivateCalls          int
+	effectiveAttributeArgs   domain.ResourceScope
+	readAttributeOrderCalls  int
+	writeAttributeOrderCalls int
 }
 
 func (f *fakeResourceReader) Create(ctx context.Context, command domain.CreateCommand) (domain.Resource, error) {
@@ -111,6 +115,14 @@ func (f *fakeResourceReader) Describe(resource domain.Resource) string {
 func (f *fakeResourceReader) EffectiveAttributes(scope domain.ResourceScope, current []domain.ResourceAttributeValue) ([]domain.EffectiveAttribute, error) {
 	f.effectiveAttributeArgs = scope
 	return f.effectiveAttributes(scope, current)
+}
+func (f *fakeResourceReader) ReadAttributeOrder(ctx context.Context, scope domain.ResourceScope) (domain.AttributeOrderReadResult, error) {
+	f.readAttributeOrderCalls++
+	return f.readAttributeOrder(ctx, scope)
+}
+func (f *fakeResourceReader) WriteAttributeOrder(ctx context.Context, req domain.AttributeOrderWriteRequest) (domain.AttributeOrderReadResult, error) {
+	f.writeAttributeOrderCalls++
+	return f.writeAttributeOrder(ctx, req)
 }
 
 func classKind() domain.CatalogKind {
@@ -470,6 +482,142 @@ func TestAdapter_EvaluateAttributesMapsValidationError(t *testing.T) {
 		[]public.AttributeValue{{Code: "insulation", Value: public.Value{Kind: public.ValueText, Text: "DESNUDO"}}})
 	if !public.IsCode(err, public.Validation) {
 		t.Fatalf("EvaluateAttributes() error = %v, want VALIDATION", err)
+	}
+}
+
+func TestAdapter_AttributeOrderForMapsOrderOnlyNeverLeaksCatalog(t *testing.T) {
+	wantScope := domain.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"}
+	order := domain.AttributeOrderSnapshot{
+		Scope: wantScope,
+		OrderedAttributes: []domain.AttributeOrderKey{
+			{SourceLevel: domain.SourceLevelType, SourceCode: "CABLE", CharacteristicCode: "color"},
+			{SourceLevel: domain.SourceLevelFamily, SourceCode: "CONDUCTORES", CharacteristicCode: "material"},
+		},
+		OrderRevision: "v1:abc",
+	}
+	var gotScope domain.ResourceScope
+	resources := &fakeResourceReader{
+		readAttributeOrder: func(ctx context.Context, scope domain.ResourceScope) (domain.AttributeOrderReadResult, error) {
+			gotScope = scope
+			return domain.AttributeOrderReadResult{
+				Catalog: domain.ResourceCatalog{Classes: []domain.ResourceClass{{Code: "LEAK"}}},
+				Order:   order,
+			}, nil
+		},
+	}
+	adapter := newTestAdapter(nil, resources)
+	got, err := adapter.AttributeOrderFor(context.Background(), public.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotScope != wantScope {
+		t.Fatalf("scope not forwarded: %+v, want %+v", gotScope, wantScope)
+	}
+	if got.Scope != (public.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"}) {
+		t.Fatalf("unexpected scope: %+v", got.Scope)
+	}
+	if got.OrderRevision != "v1:abc" {
+		t.Fatalf("unexpected order revision: %q", got.OrderRevision)
+	}
+	want := []public.AttributeOrderKey{
+		{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"},
+		{SourceLevel: "FAMILY", SourceCode: "CONDUCTORES", CharacteristicCode: "material"},
+	}
+	if len(got.OrderedAttributes) != 2 || got.OrderedAttributes[0] != want[0] || got.OrderedAttributes[1] != want[1] {
+		t.Fatalf("unexpected ordered attributes: %+v, want %+v", got.OrderedAttributes, want)
+	}
+	// public.ResourceAttributeOrder has no Catalog-derived field at all (see
+	// resourcecore/types.go): Scope/OrderedAttributes/OrderRevision above are
+	// its complete field set, so this asserts the mapping never reaches into
+	// result.Catalog, which here deliberately carries a recognizable "LEAK"
+	// value that must never surface.
+}
+
+func TestAdapter_UpdateAttributeOrderMapsResultAndThreadsActor(t *testing.T) {
+	wantScope := domain.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"}
+	var gotCtx context.Context
+	var gotReq domain.AttributeOrderWriteRequest
+	resources := &fakeResourceReader{
+		writeAttributeOrder: func(ctx context.Context, req domain.AttributeOrderWriteRequest) (domain.AttributeOrderReadResult, error) {
+			gotCtx = ctx
+			gotReq = req
+			return domain.AttributeOrderReadResult{
+				Catalog: domain.ResourceCatalog{Classes: []domain.ResourceClass{{Code: "LEAK"}}},
+				Order: domain.AttributeOrderSnapshot{
+					Scope:             req.Scope,
+					OrderedAttributes: req.OrderedAttributes,
+					OrderRevision:     "v2:def",
+				},
+			}, nil
+		},
+	}
+	adapter := newTestAdapter(nil, resources)
+	got, err := adapter.UpdateAttributeOrder(context.Background(), public.AttributeOrderWriteRequest{
+		Actor:                 "PI",
+		Scope:                 public.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"},
+		ExpectedOrderRevision: "v1:abc",
+		OrderedAttributes: []public.AttributeOrderKey{
+			{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotReq.Scope != wantScope || gotReq.ExpectedOrderRevision != "v1:abc" {
+		t.Fatalf("unexpected mapped request: %+v", gotReq)
+	}
+	if len(gotReq.OrderedAttributes) != 1 || gotReq.OrderedAttributes[0] != (domain.AttributeOrderKey{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"}) {
+		t.Fatalf("unexpected mapped ordered attributes: %+v", gotReq.OrderedAttributes)
+	}
+	if core.ActorFrom(gotCtx) != "PI" {
+		t.Fatalf("expected Actor to reach the diagnostic seam via ctx, got %q", core.ActorFrom(gotCtx))
+	}
+	if got.OrderRevision != "v2:def" || got.Scope.ClassCode != "MAT" {
+		t.Fatalf("unexpected mapped result: %+v", got)
+	}
+}
+
+func TestAdapter_AttributeOrderErrorMapping(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantCode public.ErrorCode
+	}{
+		{"revision conflict", domain.ErrAttributeOrderRevisionConflict, public.Conflict},
+		{"not found", domain.ErrCatalogRecordNotFound, public.NotFound},
+		{"validation", domain.ErrResourceValidation, public.Validation},
+		{"unavailable", domain.ErrAttributeOrderUnavailable, public.Unavailable},
+	}
+	for _, tt := range tests {
+		t.Run("read/"+tt.name, func(t *testing.T) {
+			resources := &fakeResourceReader{
+				readAttributeOrder: func(ctx context.Context, scope domain.ResourceScope) (domain.AttributeOrderReadResult, error) {
+					return domain.AttributeOrderReadResult{}, tt.err
+				},
+			}
+			adapter := newTestAdapter(nil, resources)
+			_, err := adapter.AttributeOrderFor(context.Background(), public.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"})
+			if !public.IsCode(err, tt.wantCode) {
+				t.Fatalf("expected %v, got %v", tt.wantCode, err)
+			}
+		})
+		t.Run("write/"+tt.name, func(t *testing.T) {
+			resources := &fakeResourceReader{
+				writeAttributeOrder: func(ctx context.Context, req domain.AttributeOrderWriteRequest) (domain.AttributeOrderReadResult, error) {
+					return domain.AttributeOrderReadResult{}, tt.err
+				},
+			}
+			adapter := newTestAdapter(nil, resources)
+			_, err := adapter.UpdateAttributeOrder(context.Background(), public.AttributeOrderWriteRequest{
+				Actor:                 "PI",
+				Scope:                 public.ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"},
+				ExpectedOrderRevision: "v1:abc",
+				OrderedAttributes:     []public.AttributeOrderKey{{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"}},
+			})
+			if !public.IsCode(err, tt.wantCode) {
+				t.Fatalf("expected %v, got %v", tt.wantCode, err)
+			}
+		})
 	}
 }
 

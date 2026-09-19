@@ -30,6 +30,7 @@ type ReadCapabilities interface {
 	DescribeResource(context.Context, ResourceKey) (string, error)
 	EffectiveAttributesFor(context.Context, ResourceScope) ([]EffectiveAttribute, error)
 	EvaluateAttributes(context.Context, ResourceScope, []AttributeValue) ([]EffectiveAttribute, error)
+	AttributeOrderFor(context.Context, ResourceScope) (ResourceAttributeOrder, error)
 }
 
 // Reader is the public read-only Resource Master contract. It validates
@@ -154,6 +155,20 @@ func (r *Reader) EvaluateAttributes(ctx context.Context, scope ResourceScope, va
 		return nil, err
 	}
 	return cloneEffectiveAttributeSlice(attrs), nil
+}
+
+// AttributeOrderFor returns the per-Tipo visual order snapshot for one
+// exact {classCode,familyCode,typeCode} scope: the same shape validation as
+// EffectiveAttributesFor, since the contract is the same exact scope.
+func (r *Reader) AttributeOrderFor(ctx context.Context, scope ResourceScope) (ResourceAttributeOrder, error) {
+	if err := validateEffectiveAttributesScope(scope); err != nil {
+		return ResourceAttributeOrder{}, err
+	}
+	order, err := r.cap.AttributeOrderFor(ctx, scope)
+	if err != nil {
+		return ResourceAttributeOrder{}, err
+	}
+	return CloneResourceAttributeOrder(order), nil
 }
 
 func validateCatalogQuery(q CatalogQuery) error {

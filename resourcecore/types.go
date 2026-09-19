@@ -88,6 +88,23 @@ type (
 		Revision    uint64
 		Attributes  []AttributeValue
 	}
+	// AttributeOrderKey identifies one ordered occurrence within an exact
+	// {classCode,familyCode,typeCode} scope: the same characteristic may
+	// occur at both FAMILY and TYPE source levels. No database IDs are
+	// exposed here.
+	AttributeOrderKey struct {
+		SourceLevel        string
+		SourceCode         string
+		CharacteristicCode string
+	}
+	// ResourceAttributeOrder is the public per-Tipo visual order snapshot:
+	// the exact scope, the full ordered permutation, and an opaque
+	// OrderRevision used as the write's concurrency precondition.
+	ResourceAttributeOrder struct {
+		Scope             ResourceScope
+		OrderedAttributes []AttributeOrderKey
+		OrderRevision     string
+	}
 )
 
 const (

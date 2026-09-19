@@ -19,6 +19,7 @@ type WriteCapabilities interface {
 	DeactivateResource(context.Context, ResourceLifecycleRequest) (Resource, error)
 	ReactivateResource(context.Context, ResourceLifecycleRequest) (Resource, error)
 	HardDeleteCatalog(context.Context, CatalogLifecycleRequest) error
+	UpdateAttributeOrder(context.Context, AttributeOrderWriteRequest) (ResourceAttributeOrder, error)
 }
 
 // Writer is the public write-only Resource Master contract. It validates
@@ -149,6 +150,19 @@ func (w *Writer) HardDeleteCatalog(ctx context.Context, req CatalogLifecycleRequ
 		return err
 	}
 	return w.cap.HardDeleteCatalog(ctx, req)
+}
+
+// UpdateAttributeOrder replaces one existing resource type's effective
+// attribute presentation order under optimistic concurrency.
+func (w *Writer) UpdateAttributeOrder(ctx context.Context, req AttributeOrderWriteRequest) (ResourceAttributeOrder, error) {
+	if err := validateAttributeOrderWriteRequest(req); err != nil {
+		return ResourceAttributeOrder{}, err
+	}
+	order, err := w.cap.UpdateAttributeOrder(ctx, CloneAttributeOrderWriteRequest(req))
+	if err != nil {
+		return ResourceAttributeOrder{}, err
+	}
+	return CloneResourceAttributeOrder(order), nil
 }
 
 func validateCatalogLifecycleRequest(req CatalogLifecycleRequest) error {
@@ -314,6 +328,28 @@ func validateValueShape(v Value) error {
 		if _, err := CanonicalDecimalString(v.Text); err != nil {
 			return NewError(InvalidArgument, "invalid decimal value")
 		}
+	}
+	return nil
+}
+
+func validateAttributeOrderWriteRequest(req AttributeOrderWriteRequest) error {
+	if strings.TrimSpace(req.Actor) == "" {
+		return NewError(InvalidArgument, "actor is required")
+	}
+	if strings.TrimSpace(req.Scope.ClassCode) == "" {
+		return NewError(InvalidArgument, "class code is required")
+	}
+	if strings.TrimSpace(req.Scope.FamilyCode) == "" {
+		return NewError(InvalidArgument, "family code is required")
+	}
+	if strings.TrimSpace(req.Scope.TypeCode) == "" {
+		return NewError(InvalidArgument, "type code is required")
+	}
+	if strings.TrimSpace(req.ExpectedOrderRevision) == "" {
+		return NewError(InvalidArgument, "expected order revision is required")
+	}
+	if len(req.OrderedAttributes) == 0 {
+		return NewError(InvalidArgument, "ordered attributes are required")
 	}
 	return nil
 }

@@ -7,15 +7,16 @@ import (
 )
 
 type fakeWriteCapabilities struct {
-	createCatalog      func(ctx context.Context, req CatalogWriteRequest) (CatalogRecord, error)
-	createResource     func(ctx context.Context, req ResourceWriteRequest) (Resource, error)
-	updateCatalog      func(ctx context.Context, req CatalogUpdateRequest) (CatalogRecord, error)
-	updateResource     func(ctx context.Context, req ResourceUpdateRequest) (Resource, error)
-	deactivateCatalog  func(ctx context.Context, req CatalogLifecycleRequest) (CatalogRecord, error)
-	reactivateCatalog  func(ctx context.Context, req CatalogLifecycleRequest) (CatalogRecord, error)
-	deactivateResource func(ctx context.Context, req ResourceLifecycleRequest) (Resource, error)
-	reactivateResource func(ctx context.Context, req ResourceLifecycleRequest) (Resource, error)
-	hardDeleteCatalog  func(ctx context.Context, req CatalogLifecycleRequest) error
+	createCatalog        func(ctx context.Context, req CatalogWriteRequest) (CatalogRecord, error)
+	createResource       func(ctx context.Context, req ResourceWriteRequest) (Resource, error)
+	updateCatalog        func(ctx context.Context, req CatalogUpdateRequest) (CatalogRecord, error)
+	updateResource       func(ctx context.Context, req ResourceUpdateRequest) (Resource, error)
+	deactivateCatalog    func(ctx context.Context, req CatalogLifecycleRequest) (CatalogRecord, error)
+	reactivateCatalog    func(ctx context.Context, req CatalogLifecycleRequest) (CatalogRecord, error)
+	deactivateResource   func(ctx context.Context, req ResourceLifecycleRequest) (Resource, error)
+	reactivateResource   func(ctx context.Context, req ResourceLifecycleRequest) (Resource, error)
+	hardDeleteCatalog    func(ctx context.Context, req CatalogLifecycleRequest) error
+	updateAttributeOrder func(ctx context.Context, req AttributeOrderWriteRequest) (ResourceAttributeOrder, error)
 }
 
 func (f *fakeWriteCapabilities) CreateCatalog(ctx context.Context, req CatalogWriteRequest) (CatalogRecord, error) {
@@ -52,6 +53,10 @@ func (f *fakeWriteCapabilities) ReactivateResource(ctx context.Context, req Reso
 
 func (f *fakeWriteCapabilities) HardDeleteCatalog(ctx context.Context, req CatalogLifecycleRequest) error {
 	return f.hardDeleteCatalog(ctx, req)
+}
+
+func (f *fakeWriteCapabilities) UpdateAttributeOrder(ctx context.Context, req AttributeOrderWriteRequest) (ResourceAttributeOrder, error) {
+	return f.updateAttributeOrder(ctx, req)
 }
 
 func validCatalogWriteRequest() CatalogWriteRequest {
@@ -91,6 +96,15 @@ func validResourceUpdateRequest() ResourceUpdateRequest {
 		ExpectedRevision: 1,
 		Scope:            ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"},
 		NaturalUnit:      "m",
+	}
+}
+
+func validAttributeOrderWriteRequest() AttributeOrderWriteRequest {
+	return AttributeOrderWriteRequest{
+		Actor:                 "PI",
+		Scope:                 ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"},
+		ExpectedOrderRevision: "v1:abc",
+		OrderedAttributes:     []AttributeOrderKey{{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"}},
 	}
 }
 
@@ -215,10 +229,10 @@ func TestWriter_CreateResource_ShapeValidation(t *testing.T) {
 
 func TestWriter_NoUngraduatedMethodExported(t *testing.T) {
 	typ := reflect.TypeOf((*WriteCapabilities)(nil)).Elem()
-	if typ.NumMethod() != 9 {
-		t.Fatalf("expected exactly 9 methods on WriteCapabilities, got %d: %v", typ.NumMethod(), typ)
+	if typ.NumMethod() != 10 {
+		t.Fatalf("expected exactly 10 methods on WriteCapabilities, got %d: %v", typ.NumMethod(), typ)
 	}
-	want := []string{"CreateCatalog", "CreateResource", "UpdateCatalog", "UpdateResource", "DeactivateCatalog", "ReactivateCatalog", "DeactivateResource", "ReactivateResource", "HardDeleteCatalog"}
+	want := []string{"CreateCatalog", "CreateResource", "UpdateCatalog", "UpdateResource", "DeactivateCatalog", "ReactivateCatalog", "DeactivateResource", "ReactivateResource", "HardDeleteCatalog", "UpdateAttributeOrder"}
 	for _, name := range want {
 		if _, ok := typ.MethodByName(name); !ok {
 			t.Fatalf("expected WriteCapabilities to declare %s", name)
@@ -232,7 +246,7 @@ func TestWriter_NoUngraduatedMethodExported(t *testing.T) {
 	for i := 0; i < writerType.NumMethod(); i++ {
 		name := writerType.Method(i).Name
 		if !allowed[name] {
-			t.Fatalf("unexpected exported Writer method %s; only Create/Update/Deactivate/Reactivate/HardDelete Catalog/Resource may be graduated so far; no HardDeleteResource stub allowed", name)
+			t.Fatalf("unexpected exported Writer method %s; only Create/Update/Deactivate/Reactivate/HardDelete Catalog/Resource and UpdateAttributeOrder may be graduated so far; no HardDeleteResource stub allowed", name)
 		}
 	}
 }
@@ -595,6 +609,75 @@ func TestWriter_UpdateResource_RevisionIncreasesOverExpected(t *testing.T) {
 	}
 	if res.Revision <= req.ExpectedRevision {
 		t.Fatalf("expected returned revision > supplied ExpectedRevision, got %d vs %d", res.Revision, req.ExpectedRevision)
+	}
+}
+
+func TestWriter_UpdateAttributeOrder_ShapeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*AttributeOrderWriteRequest)
+		wantErr bool
+	}{
+		{"valid", func(r *AttributeOrderWriteRequest) {}, false},
+		{"blank actor", func(r *AttributeOrderWriteRequest) { r.Actor = "" }, true},
+		{"blank class code", func(r *AttributeOrderWriteRequest) { r.Scope.ClassCode = "" }, true},
+		{"blank family code", func(r *AttributeOrderWriteRequest) { r.Scope.FamilyCode = "" }, true},
+		{"blank type code", func(r *AttributeOrderWriteRequest) { r.Scope.TypeCode = "" }, true},
+		{"blank expected order revision", func(r *AttributeOrderWriteRequest) { r.ExpectedOrderRevision = "" }, true},
+		{"empty ordered attributes", func(r *AttributeOrderWriteRequest) { r.OrderedAttributes = nil }, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := validAttributeOrderWriteRequest()
+			tt.mutate(&req)
+			cap := &fakeWriteCapabilities{
+				updateAttributeOrder: func(ctx context.Context, req AttributeOrderWriteRequest) (ResourceAttributeOrder, error) {
+					return ResourceAttributeOrder{Scope: req.Scope, OrderedAttributes: req.OrderedAttributes, OrderRevision: "v2:def"}, nil
+				},
+			}
+			w, err := NewWriter(cap)
+			if err != nil {
+				t.Fatalf("unexpected NewWriter error: %v", err)
+			}
+			_, err = w.UpdateAttributeOrder(context.Background(), req)
+			if tt.wantErr {
+				if !IsCode(err, InvalidArgument) {
+					t.Fatalf("expected INVALID_ARGUMENT, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestWriter_UpdateAttributeOrder_MapsResultAndClonesRequest(t *testing.T) {
+	var captured AttributeOrderWriteRequest
+	cap := &fakeWriteCapabilities{
+		updateAttributeOrder: func(ctx context.Context, req AttributeOrderWriteRequest) (ResourceAttributeOrder, error) {
+			captured = req
+			return ResourceAttributeOrder{Scope: req.Scope, OrderedAttributes: req.OrderedAttributes, OrderRevision: "v2:def"}, nil
+		},
+	}
+	w, err := NewWriter(cap)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	req := validAttributeOrderWriteRequest()
+	got, err := w.UpdateAttributeOrder(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.OrderRevision != "v2:def" || len(got.OrderedAttributes) != 1 {
+		t.Fatalf("unexpected mapped order: %+v", got)
+	}
+
+	req.OrderedAttributes[0].CharacteristicCode = "MUTATED"
+	got.OrderedAttributes[0].CharacteristicCode = "MUTATED"
+	if captured.OrderedAttributes[0].CharacteristicCode != "color" {
+		t.Fatalf("caller mutation after call leaked into the capability call: %+v", captured.OrderedAttributes[0])
 	}
 }
 

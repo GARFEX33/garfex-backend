@@ -15,6 +15,7 @@ type readerFakeCapabilities struct {
 	getResource         Resource
 	describeText        string
 	effectiveAttributes []EffectiveAttribute
+	attributeOrder      ResourceAttributeOrder
 	activeClassesErr    error
 	descriptorsErr      error
 	listErr             error
@@ -24,6 +25,7 @@ type readerFakeCapabilities struct {
 	describeErr         error
 	effectiveAttrsErr   error
 	evaluateAttrsErr    error
+	attributeOrderErr   error
 	activeClassesCalls  int
 	descriptorsCalls    int
 	listCalls           int
@@ -33,7 +35,9 @@ type readerFakeCapabilities struct {
 	describeCalls       int
 	effectiveAttrsCalls int
 	evaluateAttrsCalls  int
+	attributeOrderCalls int
 	evaluateAttrsValues []AttributeValue
+	attributeOrderScope ResourceScope
 }
 
 func (f *readerFakeCapabilities) ActiveClasses(ctx context.Context) ([]CatalogRecord, error) {
@@ -80,6 +84,12 @@ func (f *readerFakeCapabilities) EvaluateAttributes(ctx context.Context, scope R
 	f.evaluateAttrsCalls++
 	f.evaluateAttrsValues = values
 	return f.effectiveAttributes, f.evaluateAttrsErr
+}
+
+func (f *readerFakeCapabilities) AttributeOrderFor(ctx context.Context, scope ResourceScope) (ResourceAttributeOrder, error) {
+	f.attributeOrderCalls++
+	f.attributeOrderScope = scope
+	return f.attributeOrder, f.attributeOrderErr
 }
 
 func TestNewReadOnly_NilCapabilitiesIsInvalidArgument(t *testing.T) {
@@ -323,6 +333,48 @@ func TestReader_EvaluateAttributesClonesValuesAndResult(t *testing.T) {
 
 	got[0].Characteristic.Code = "mutated"
 	if sharedResult[0].Characteristic.Code != "color" {
+		t.Fatalf("capability state leaked after caller mutation")
+	}
+}
+
+func TestReader_AttributeOrderForValidatesScope(t *testing.T) {
+	fake := &readerFakeCapabilities{}
+	r, _ := NewReadOnly(fake)
+	_, err := r.AttributeOrderFor(context.Background(), ResourceScope{ClassCode: "", FamilyCode: "F", TypeCode: "T"})
+	if !IsCode(err, InvalidArgument) {
+		t.Fatalf("expected INVALID_ARGUMENT for empty class, got %v", err)
+	}
+	_, err = r.AttributeOrderFor(context.Background(), ResourceScope{ClassCode: "C", FamilyCode: "", TypeCode: "T"})
+	if !IsCode(err, InvalidArgument) {
+		t.Fatalf("expected INVALID_ARGUMENT for empty family, got %v", err)
+	}
+	_, err = r.AttributeOrderFor(context.Background(), ResourceScope{ClassCode: "C", FamilyCode: "F", TypeCode: ""})
+	if !IsCode(err, InvalidArgument) {
+		t.Fatalf("expected INVALID_ARGUMENT for empty type, got %v", err)
+	}
+}
+
+func TestReader_AttributeOrderForCopiesResult(t *testing.T) {
+	shared := ResourceAttributeOrder{
+		Scope:             ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"},
+		OrderedAttributes: []AttributeOrderKey{{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"}},
+		OrderRevision:     "v1:abc",
+	}
+	fake := &readerFakeCapabilities{attributeOrder: shared}
+	r, _ := NewReadOnly(fake)
+	wantScope := ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"}
+	got, err := r.AttributeOrderFor(context.Background(), wantScope)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fake.attributeOrderScope != wantScope {
+		t.Fatalf("scope not forwarded: %+v, want %+v", fake.attributeOrderScope, wantScope)
+	}
+	if got.OrderRevision != "v1:abc" || len(got.OrderedAttributes) != 1 {
+		t.Fatalf("unexpected order: %+v", got)
+	}
+	got.OrderedAttributes[0].CharacteristicCode = "mutated"
+	if shared.OrderedAttributes[0].CharacteristicCode != "color" {
 		t.Fatalf("capability state leaked after caller mutation")
 	}
 }

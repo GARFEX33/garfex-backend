@@ -27,6 +27,7 @@ func TestMapPrecedenceAndCategories(t *testing.T) {
 	}{
 		{"nil", nil, ""},
 		{"revision conflict", domain.ErrRevisionConflict, Conflict},
+		{"attribute order revision conflict", domain.ErrAttributeOrderRevisionConflict, Conflict},
 		{"identity conflict", domain.ErrIdentityConflict, IdentityConflict},
 		{"identity over integrity", fmt.Errorf("ctx: %w", domain.ErrIdentityConflict), IdentityConflict},
 		{"reactivation over validation", domain.WrapReactivationImpossible(domain.ErrResourceValidation), ReactivationImpossible},
@@ -45,6 +46,7 @@ func TestMapPrecedenceAndCategories(t *testing.T) {
 		{"resource not found", domain.ErrResourceNotFound, NotFound},
 		{"invalid argument sentinel", ErrInvalidArgument, InvalidArgument},
 		{"unavailable sentinel", ErrUnavailable, Unavailable},
+		{"attribute order unavailable", domain.ErrAttributeOrderUnavailable, Unavailable},
 		{"context canceled", context.Canceled, Unavailable},
 		{"context deadline exceeded", context.DeadlineExceeded, Unavailable},
 		{"unknown error", errors.New("boom"), Internal},

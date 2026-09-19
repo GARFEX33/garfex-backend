@@ -44,4 +44,34 @@ func TestDefensiveCopy(t *testing.T) {
 	if res.Attributes[0].Value.Text != "1" {
 		t.Fatalf("resource clone leaked")
 	}
+
+	keys := []AttributeOrderKey{{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"}}
+	keyscp := CloneAttributeOrderKeySlice(keys)
+	keyscp[0].CharacteristicCode = "z"
+	if keys[0].CharacteristicCode != "color" || CloneAttributeOrderKeySlice(nil) != nil {
+		t.Fatalf("attribute order key slice clone leaked")
+	}
+
+	order := ResourceAttributeOrder{
+		Scope:             ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"},
+		OrderedAttributes: []AttributeOrderKey{{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"}},
+		OrderRevision:     "v1:abc",
+	}
+	ordercp := CloneResourceAttributeOrder(order)
+	ordercp.OrderedAttributes[0].CharacteristicCode = "z"
+	if order.OrderedAttributes[0].CharacteristicCode != "color" {
+		t.Fatalf("resource attribute order clone leaked")
+	}
+
+	wreq := AttributeOrderWriteRequest{
+		Actor:                 "PI",
+		Scope:                 ResourceScope{ClassCode: "MAT", FamilyCode: "CONDUCTORES", TypeCode: "CABLE"},
+		ExpectedOrderRevision: "v1:abc",
+		OrderedAttributes:     []AttributeOrderKey{{SourceLevel: "TYPE", SourceCode: "CABLE", CharacteristicCode: "color"}},
+	}
+	wreqcp := CloneAttributeOrderWriteRequest(wreq)
+	wreqcp.OrderedAttributes[0].CharacteristicCode = "z"
+	if wreq.OrderedAttributes[0].CharacteristicCode != "color" {
+		t.Fatalf("attribute order write request clone leaked")
+	}
 }

@@ -48,6 +48,10 @@ func (f *externalFakeCapabilities) EvaluateAttributes(ctx context.Context, scope
 	return nil, nil
 }
 
+func (f *externalFakeCapabilities) AttributeOrderFor(ctx context.Context, scope resourcecore.ResourceScope) (resourcecore.ResourceAttributeOrder, error) {
+	return resourcecore.ResourceAttributeOrder{Scope: scope}, nil
+}
+
 func TestExternal_ConstructsReaderWithOnlyPublicTypes(t *testing.T) {
 	cap := &externalFakeCapabilities{
 		activeClasses: []resourcecore.CatalogRecord{{Kind: resourcecore.KindClass, ID: 1}},
@@ -151,6 +155,10 @@ func (f *externalFakeWriteCapabilities) ReactivateResource(ctx context.Context, 
 
 func (f *externalFakeWriteCapabilities) HardDeleteCatalog(ctx context.Context, req resourcecore.CatalogLifecycleRequest) error {
 	return nil
+}
+
+func (f *externalFakeWriteCapabilities) UpdateAttributeOrder(ctx context.Context, req resourcecore.AttributeOrderWriteRequest) (resourcecore.ResourceAttributeOrder, error) {
+	return resourcecore.ResourceAttributeOrder{Scope: req.Scope, OrderedAttributes: req.OrderedAttributes, OrderRevision: "v2:def"}, nil
 }
 
 func TestExternalWrite_ConsumerConstructsWriterUsingPublicTypesOnly(t *testing.T) {
