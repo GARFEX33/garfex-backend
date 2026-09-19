@@ -1,0 +1,110 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Serie="XHB" Folio="92712" Fecha="2026-07-30T14:17:31" Sello="PXNl8aBM0tVX19wDKlyl//c33U+rqdCgFwOYANOruvLPUALf63sIzwzAQhYnQsxIsIrdEnyqfNFG2Yq0ZpX0DGjuL4EYG5hBQ2/svtqAJxQg7l0TnDZ0eZFuZ9Ghrd28zIa849UDYoAPSJsnInuZkg+FV9u4Iq6k/NpYVISLMiyTwEMMi+p+JLS6aEKS2QJ7+Y096qR3wNEm7bG5do2QWkEWK89d+bf689519FkCNPp985gYiFDpHY6K9Bl2Rbk/WP8yRo6sODZAZKFyAex007+b4MXG08m/zNJzunx1baCt6GV2NBAYfCJ5hr9WklqVVdxbLH32wtrHp3TsTYRwRw==" FormaPago="03" NoCertificado="00001000000704613858" Certificado="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" CondicionesDePago="Contado CR" SubTotal="38177.84" Moneda="MXN" TipoCambio="1" Total="44286.29" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" LugarExpedicion="48338">
+  <cfdi:Emisor Rfc="EUR930324493" Nombre="EUROELECTRICA" RegimenFiscal="601" />
+  <cfdi:Receptor Rfc="GAJJ831028RZ6" Nombre="JUAN CARLOS GARCIA JIMENEZ" DomicilioFiscalReceptor="08930" RegimenFiscalReceptor="612" UsoCFDI="G03" />
+  <cfdi:Conceptos>
+    <cfdi:Concepto ClaveProdServ="40171600" NoIdentificacion="TPG19" Cantidad="2.000000" ClaveUnidad="H87" Unidad="PZA" Descripcion="TUBO PARED GRUESA DE 19MM (3/4)" ValorUnitario="152.520000" ObjetoImp="02" Importe="305.040000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="305.040000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="48.806400" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="40171600" NoIdentificacion="TPG13" Cantidad="2.000000" ClaveUnidad="H87" Unidad="PZA" Descripcion="TUBO PARED GRUESA DE 13MM (1/2)" ValorUnitario="120.540000" ObjetoImp="02" Importe="241.080000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="241.080000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="38.572800" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CCD10MT" Cantidad="75.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE DE COBRE DESNUDO (METRO) CAL 10 AWG" ValorUnitario="16.120000" ObjetoImp="02" Importe="1209.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="1209.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="193.440000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CV10NC" Cantidad="200.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE THWLS VINANEL XXI CAL 10 AWG 600V 90° COLOR NEGRO - CONDUMEX (CARRETE)" ValorUnitario="24.000000" ObjetoImp="02" Importe="4800.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="4800.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="768.000000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="39121434" NoIdentificacion="LB23" Cantidad="2.000000" ClaveUnidad="H87" Unidad="PZA" Descripcion="CONDULET SERIE 3 TIPO LB CON TAPA DE 19MM (3/4) CROUSE HINDS DOMEX" ValorUnitario="45.560000" ObjetoImp="02" Importe="91.120000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="91.120000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="14.579200" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="31161700" NoIdentificacion="MT25" Cantidad="30.000000" ClaveUnidad="H87" Unidad="PZA" Descripcion="MONITOR CONDUIT 25MM (1)" ValorUnitario="5.720000" ObjetoImp="02" Importe="171.600000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="171.600000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="27.456000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CV10NC" Cantidad="300.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE THWLS VINANEL XXI CAL 10 AWG 600V 90° COLOR NEGRO - CONDUMEX (CARRETE)" ValorUnitario="24.000000" ObjetoImp="02" Importe="7200.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="7200.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="1152.000000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CV10BC" Cantidad="300.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE THWLS VINANEL XXI CAL 10 AWG 600V 90° COLOR BLANCO - CONDUMEX (CARRETE)" ValorUnitario="24.000000" ObjetoImp="02" Importe="7200.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="7200.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="1152.000000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CV12NC" Cantidad="200.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE THWLS VINANEL XXI CAL 12 AWG 600V 90° COLOR NEGRO - CONDUMEX (CARRETE)" ValorUnitario="15.170000" ObjetoImp="02" Importe="3034.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="3034.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="485.440000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CV12BC" Cantidad="200.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE THWLS VINANEL XXI CAL 12 AWG 600V 90° COLOR BLANCO - CONDUMEX (CARRETE)" ValorUnitario="15.170000" ObjetoImp="02" Importe="3034.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="3034.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="485.440000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CV12VC" Cantidad="200.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE THWLS VINANEL XXI CAL 12 AWG 600V 90° COLOR VERDE - CONDUMEX (CARRETE)" ValorUnitario="15.170000" ObjetoImp="02" Importe="3034.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="3034.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="485.440000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="39121703" NoIdentificacion="31805" Cantidad="200.000000" ClaveUnidad="H87" Unidad="PZA" Descripcion="320392 COLLARIN PROTECCION UV 35 X 280 MM NEGRO MARCA LEGRAND" ValorUnitario="0.740000" ObjetoImp="02" Importe="148.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="148.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="23.680000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CV8N" Cantidad="180.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE THWLS VINANEL XXI CAL 8 AWG 600V 90° COLOR NEGRO - CONDUMEX" ValorUnitario="38.550000" ObjetoImp="02" Importe="6939.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="6939.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="1110.240000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ="26121600" NoIdentificacion="CV8NC" Cantidad="20.000000" ClaveUnidad="MTR" Unidad="METRO" Descripcion="CABLE THWLS VINANEL XXI CAL 8 AWG 600V 90° COLOR NEGRO - CONDUMEX (CARRETE)" ValorUnitario="38.550000" ObjetoImp="02" Importe="771.000000">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base="771.000000" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="123.360000" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+  </cfdi:Conceptos>
+  <cfdi:Impuestos TotalImpuestosTrasladados="6108.45">
+    <cfdi:Traslados>
+      <cfdi:Traslado Base="38177.84" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="6108.45" />
+    </cfdi:Traslados>
+  </cfdi:Impuestos>
+<cfdi:Complemento><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/cfd/TimbreFiscalDigital/TimbreFiscalDigitalv11.xsd" Version="1.1" UUID="B14D3FAF-8C53-11F1-A432-EFEF39770287" FechaTimbrado="2026-07-30T14:17:42" SelloCFD="PXNl8aBM0tVX19wDKlyl//c33U+rqdCgFwOYANOruvLPUALf63sIzwzAQhYnQsxIsIrdEnyqfNFG2Yq0ZpX0DGjuL4EYG5hBQ2/svtqAJxQg7l0TnDZ0eZFuZ9Ghrd28zIa849UDYoAPSJsnInuZkg+FV9u4Iq6k/NpYVISLMiyTwEMMi+p+JLS6aEKS2QJ7+Y096qR3wNEm7bG5do2QWkEWK89d+bf689519FkCNPp985gYiFDpHY6K9Bl2Rbk/WP8yRo6sODZAZKFyAex007+b4MXG08m/zNJzunx1baCt6GV2NBAYfCJ5hr9WklqVVdxbLH32wtrHp3TsTYRwRw==" NoCertificadoSAT="00001000000700047508" SelloSAT="fOWEDPvhLqM4dUJbYiUp2amVP3XbRayRgab92mmrP8hVXRoBG9i5GnP99HyzTR13pRQ1yKvm/m4FSKoVY5GJ5sy9J+g4nAwYOkqgQxD3OLpgzPmC7nhJgqW5ROhTKxPAThloxM/ZYg5MlILL5KS/yZ411/TpwGZw8XGT0XVGk6g3fEPgVLp98g5K+BZu53KteNxYV84uDGE3tQJlwlm7r9FpjWoWNXhLupQBpZBpjembWlzpl1SgnUmvmybGyBdnYEEoPzadNcjJp0axB4V2SapdXSVW8Myu7UBU5N/cN2WltXDkdKpXuKHoBrhkxH0ouj5vStQulUyP/A4h/ZKKTA==" RfcProvCertif="EME000602QR9" /></cfdi:Complemento></cfdi:Comprobante>
