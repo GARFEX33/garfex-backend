@@ -23,6 +23,15 @@ var (
 	ErrStaleMappingRevision     = errors.New("purchase master stale mapping revision")
 	ErrInvalidDecisionMetadata  = errors.New("purchase master invalid decision metadata")
 
+	// Line-centered resolution errors remain distinct so delivery adapters can
+	// map each business outcome without parsing messages.
+	ErrCommercialSupplierSKURequired  = errors.New("purchase master commercial supplier sku is required")
+	ErrCommercialSupplierSKUForbidden = errors.New("purchase master commercial supplier sku is forbidden")
+	ErrPurchaseLineStateConflict      = errors.New("purchase master purchase line state conflict")
+	ErrStaleResolutionRevision        = errors.New("purchase master stale resolution revision")
+	ErrMappingTargetConflict          = errors.New("purchase master mapping target conflict")
+	ErrPurchaseIntegrityConflict      = errors.New("purchase master integrity conflict")
+
 	// ErrMappingRevisionConflict is retained as the domain vocabulary for
 	// callers that describe a stale mapping revision as a conflict.
 	ErrMappingRevisionConflict = ErrStaleMappingRevision

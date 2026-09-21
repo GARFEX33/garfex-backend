@@ -27,6 +27,13 @@ func (s *Service) ListPurchaseLines(ctx context.Context, purchaseID int64) ([]do
 	return lines, wrap("list purchase lines", err)
 }
 
+// ListPurchaseLinesWorkbench returns the global, derived PurchaseLine read
+// projection for the workbench.
+func (s *Service) ListPurchaseLinesWorkbench(ctx context.Context, criteria domain.PurchaseLineWorkbenchCriteria) ([]domain.PurchaseLineWorkbenchRow, error) {
+	rows, err := s.repo.ListPurchaseLinesWorkbench(ctx, criteria)
+	return rows, wrap("list purchase lines workbench", err)
+}
+
 // ListPurchasesBySupplier answers "what have we bought from this supplier",
 // most recent purchase first.
 func (s *Service) ListPurchasesBySupplier(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Purchase, error) {

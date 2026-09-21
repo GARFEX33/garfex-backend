@@ -19,6 +19,7 @@ type stubService struct {
 	getPurchase                 func(ctx context.Context, id int64) (domain.Purchase, error)
 	getPurchaseByUUID           func(ctx context.Context, uuid string) (domain.Purchase, error)
 	listPurchaseLines           func(ctx context.Context, purchaseID int64) ([]domain.PurchaseLine, error)
+	listPurchaseLinesWorkbench  func(ctx context.Context, criteria domain.PurchaseLineWorkbenchCriteria) ([]domain.PurchaseLineWorkbenchRow, error)
 	listPurchasesBySupplier     func(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Purchase, error)
 	getSupplierProduct          func(ctx context.Context, id int64) (domain.SupplierProduct, error)
 	findSupplierProduct         func(ctx context.Context, supplierID int64, sku string) (domain.SupplierProduct, error)
@@ -30,9 +31,8 @@ type stubService struct {
 	exceptionalUnlink           func(context.Context, domain.ExceptionalUnlinkCommand) (domain.SupplierProduct, error)
 	reportIdentityConflict      func(context.Context, domain.ReportIdentityConflictCommand) (domain.SupplierProduct, error)
 	resolveIdentityConflict     func(context.Context, domain.ResolveIdentityConflictCommand) (domain.SupplierProduct, error)
-	markNotApplicable           func(context.Context, int64) (domain.PurchaseLine, error)
-	markConflict                func(context.Context, int64) (domain.PurchaseLine, error)
-	clearOverride               func(context.Context, int64) (domain.PurchaseLine, error)
+	resolvePurchaseLine         func(context.Context, domain.ResolvePurchaseLineCommand) (domain.ResolvePurchaseLineResult, error)
+	setResolutionOverride       func(context.Context, domain.SetResolutionOverrideCommand) (domain.PurchaseLine, error)
 }
 
 func (s *stubService) ImportCFDI(ctx context.Context, xml []byte, opts app.ImportOptions) (domain.ImportResult, error) {
@@ -46,6 +46,9 @@ func (s *stubService) GetPurchaseByUUID(ctx context.Context, uuid string) (domai
 }
 func (s *stubService) ListPurchaseLines(ctx context.Context, purchaseID int64) ([]domain.PurchaseLine, error) {
 	return s.listPurchaseLines(ctx, purchaseID)
+}
+func (s *stubService) ListPurchaseLinesWorkbench(ctx context.Context, criteria domain.PurchaseLineWorkbenchCriteria) ([]domain.PurchaseLineWorkbenchRow, error) {
+	return s.listPurchaseLinesWorkbench(ctx, criteria)
 }
 func (s *stubService) ListPurchasesBySupplier(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Purchase, error) {
 	return s.listPurchasesBySupplier(ctx, supplierID, criteria)
@@ -80,14 +83,11 @@ func (s *stubService) ReportIdentityConflict(ctx context.Context, command domain
 func (s *stubService) ResolveIdentityConflict(ctx context.Context, command domain.ResolveIdentityConflictCommand) (domain.SupplierProduct, error) {
 	return s.resolveIdentityConflict(ctx, command)
 }
-func (s *stubService) MarkNotApplicable(ctx context.Context, id int64) (domain.PurchaseLine, error) {
-	return s.markNotApplicable(ctx, id)
+func (s *stubService) ResolvePurchaseLine(ctx context.Context, command domain.ResolvePurchaseLineCommand) (domain.ResolvePurchaseLineResult, error) {
+	return s.resolvePurchaseLine(ctx, command)
 }
-func (s *stubService) MarkConflict(ctx context.Context, id int64) (domain.PurchaseLine, error) {
-	return s.markConflict(ctx, id)
-}
-func (s *stubService) ClearOverride(ctx context.Context, id int64) (domain.PurchaseLine, error) {
-	return s.clearOverride(ctx, id)
+func (s *stubService) SetResolutionOverride(ctx context.Context, command domain.SetResolutionOverrideCommand) (domain.PurchaseLine, error) {
+	return s.setResolutionOverride(ctx, command)
 }
 
 func samplePurchase() domain.Purchase {
@@ -215,6 +215,59 @@ func TestAdapter_ImportPurchase_MapsUnclassifiedErrorToInternal(t *testing.T) {
 	}
 }
 
+func TestAdapter_ListPurchaseLinesWorkbench_MapsAndOverfetches(t *testing.T) {
+	resourceID := int64(42)
+	supplierProductID := int64(7)
+	commercialSKU := "COMM-7"
+	identity := "v1|MATERIAL|CABLE"
+	name := "Cable"
+	revision := domain.MappingRevision(3)
+	stub := &stubService{listPurchaseLinesWorkbench: func(ctx context.Context, criteria domain.PurchaseLineWorkbenchCriteria) ([]domain.PurchaseLineWorkbenchRow, error) {
+		if criteria.Limit != 2 || criteria.Offset != 4 || criteria.EffectiveStatus != domain.LinkSuspended || criteria.SupplierID == nil || *criteria.SupplierID != 2 {
+			t.Fatalf("criteria = %+v, want over-fetch and filters preserved", criteria)
+		}
+		return []domain.PurchaseLineWorkbenchRow{{LineID: 10, LineNumber: 3, PurchaseID: 11, SupplierID: 2, SupplierDisplayName: "Supplier", Description: "Cable", SupplierSKU: "XML-7", CommercialSupplierSKU: &commercialSKU, Quantity: decimal.NewFromInt(2), UnitPrice: decimal.NewFromInt(12), Amount: decimal.NewFromInt(24), Currency: "MXN", SupplierProductID: &supplierProductID, ResourceID: &resourceID, ResourceIdentity: &identity, ResourceDisplayName: &name, MappingRevision: &revision, EffectiveStatus: domain.LinkSuspended, EffectiveCause: domain.MappingCauseResourceInactive}, {LineID: 9}}, nil
+	}}
+	adapter := NewAdapter(stub)
+	page, err := adapter.ListPurchaseLinesWorkbench(context.Background(), public.PurchaseLineQuery{Limit: 1, Offset: 4, SupplierID: ptrInt64(2), EffectiveStatus: public.LinkSuspended})
+	if err != nil {
+		t.Fatalf("ListPurchaseLinesWorkbench error = %v", err)
+	}
+	if len(page.Rows) != 1 || page.Rows[0].LineID != 10 || page.Rows[0].LineNumber != 3 || !page.HasNext || !page.HasPrevious {
+		t.Fatalf("page = %+v, want one mapped row with both pagination flags", page)
+	}
+	if page.Rows[0].CommercialSupplierSKU == nil || *page.Rows[0].CommercialSupplierSKU != commercialSKU || page.Rows[0].Quantity != "2" || page.Rows[0].MappingRevision == nil || *page.Rows[0].MappingRevision != public.MappingRevision(3) {
+		t.Fatalf("mapped row = %+v", page.Rows[0])
+	}
+}
+
+func TestAdapter_ListPurchaseLinesWorkbench_DefaultLimitIsFifty(t *testing.T) {
+	stub := &stubService{listPurchaseLinesWorkbench: func(_ context.Context, criteria domain.PurchaseLineWorkbenchCriteria) ([]domain.PurchaseLineWorkbenchRow, error) {
+		if criteria.Limit != 51 {
+			t.Fatalf("overfetch limit = %d, want 51", criteria.Limit)
+		}
+		return nil, nil
+	}}
+	adapter := NewAdapter(stub)
+	page, err := adapter.ListPurchaseLinesWorkbench(context.Background(), public.PurchaseLineQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Query.Limit != 50 {
+		t.Fatalf("effective public limit = %d, want 50", page.Query.Limit)
+	}
+}
+
+func TestEffectivePurchaseLineLimit_IsBounded(t *testing.T) {
+	for input, want := range map[int]int{-1: 50, 0: 50, 1: 1, 50: 50, 500: 50} {
+		if got := effectivePurchaseLineLimit(input); got != want {
+			t.Errorf("effectivePurchaseLineLimit(%d) = %d, want %d", input, got, want)
+		}
+	}
+}
+
+func ptrInt64(value int64) *int64 { return &value }
+
 func TestAdapter_ListPurchasesBySupplier_DerivesHasNext(t *testing.T) {
 	stub := &stubService{listPurchasesBySupplier: func(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Purchase, error) {
 		if criteria.Limit != 2 {
@@ -265,6 +318,45 @@ func TestAdapter_ConfirmMapping_MapsCurrentMapping(t *testing.T) {
 	}
 }
 
+func TestAdapter_ResolvePurchaseLine_MapsSnapshotAndResult(t *testing.T) {
+	productID := int64(7)
+	mappingRevision := public.MappingRevision(3)
+	stub := &stubService{resolvePurchaseLine: func(_ context.Context, command domain.ResolvePurchaseLineCommand) (domain.ResolvePurchaseLineResult, error) {
+		if command.ExpectedSupplierProductID == nil || *command.ExpectedSupplierProductID != productID || command.ExpectedMappingRevision == nil || *command.ExpectedMappingRevision != 3 || command.ExpectedResolutionRevision != 4 || command.Actor != "operator" {
+			t.Fatalf("command = %+v", command)
+		}
+		return domain.ResolvePurchaseLineResult{
+			Line:                          domain.PurchaseLine{ID: command.LineID, SupplierProductID: &productID, ResolutionRevision: 4, DerivedStatus: domain.LinkLinked},
+			SupplierProduct:               domain.SupplierProduct{ID: productID, MappingRevision: 4, CurrentMapping: domain.NewConfirmedSupplierProductMapping(command.ResourceID)},
+			CommercialIdentityDisposition: domain.CommercialIdentityReused,
+		}, nil
+	}}
+	adapter := NewAdapter(stub)
+	result, err := adapter.ResolvePurchaseLine(context.Background(), public.ResolvePurchaseLineRequest{
+		LineID: 9, ResourceID: 42, ExpectedSupplierProductID: &productID,
+		ExpectedMappingRevision: &mappingRevision, ExpectedResolutionRevision: 4, Actor: "operator",
+	})
+	if err != nil || result.Line.EffectiveStatus != public.LinkLinked || result.SupplierProduct.MappingRevision != 4 || result.CommercialIdentityDisposition != public.CommercialIdentityReused {
+		t.Fatalf("ResolvePurchaseLine = %+v, %v", result, err)
+	}
+}
+
+func TestAdapter_SetResolutionOverride_MapsRevision(t *testing.T) {
+	stub := &stubService{setResolutionOverride: func(_ context.Context, command domain.SetResolutionOverrideCommand) (domain.PurchaseLine, error) {
+		if command.ExpectedRevision != 2 || command.Override != domain.LinkNotApplicable || command.Actor != "operator" || command.Reason != "manual review" {
+			t.Fatalf("command = %+v", command)
+		}
+		return domain.PurchaseLine{ID: command.LineID, ResolutionRevision: 3, ResolutionOverride: command.Override, DerivedStatus: command.Override}, nil
+	}}
+	adapter := NewAdapter(stub)
+	line, err := adapter.SetResolutionOverride(context.Background(), public.SetResolutionOverrideRequest{
+		LineID: 9, Override: public.LinkNotApplicable, ExpectedRevision: 2, Actor: "operator", Reason: "manual review",
+	})
+	if err != nil || line.ResolutionRevision != 3 || line.EffectiveStatus != public.LinkNotApplicable {
+		t.Fatalf("SetResolutionOverride = %+v, %v", line, err)
+	}
+}
+
 func TestMapError_Categories(t *testing.T) {
 	tests := []struct {
 		name string
@@ -272,6 +364,17 @@ func TestMapError_Categories(t *testing.T) {
 		want public.ErrorCode
 	}{
 		{"purchase not found", domain.ErrPurchaseNotFound, public.NotFound},
+		{"purchase line not found", domain.ErrPurchaseLineNotFound, public.PurchaseLineNotFound},
+		{"resource not found", domain.ErrResourceNotFound, public.ResourceNotFound},
+		{"resource inactive", domain.ErrResourceInactive, public.ResourceInactive},
+		{"commercial sku required", domain.ErrCommercialSupplierSKURequired, public.CommercialSupplierSKURequired},
+		{"commercial sku forbidden", domain.ErrCommercialSupplierSKUForbidden, public.CommercialSupplierSKUForbidden},
+		{"line state conflict", domain.ErrPurchaseLineStateConflict, public.PurchaseLineStateConflict},
+		{"stale resolution revision", domain.ErrStaleResolutionRevision, public.StaleResolutionRevision},
+		{"stale mapping revision", domain.ErrStaleMappingRevision, public.StaleMappingRevision},
+		{"mapping target conflict", domain.ErrMappingTargetConflict, public.SupplierProductTargetConflict},
+		{"invalid mapping transition", domain.ErrInvalidMappingTransition, public.InvalidMappingTransition},
+		{"integrity conflict", domain.ErrPurchaseIntegrityConflict, public.IntegrityConflict},
 		{"purchase conflict", domain.ErrPurchaseConflict, public.Conflict},
 		{"purchase validation", domain.ErrValidation, public.Validation},
 		{"supplier not found", supplierdomain.ErrSupplierNotFound, public.NotFound},

@@ -30,6 +30,7 @@ type PurchaseLine struct {
 
 	SupplierProductID  *int64
 	ResolutionOverride LinkStatus
+	ResolutionRevision ResolutionRevision
 	// DerivedStatus and DerivedCause are read projections computed from the
 	// current mapping, Resource.Active, and ResolutionOverride. They are not
 	// persisted authority.

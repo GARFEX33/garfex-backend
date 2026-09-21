@@ -41,6 +41,31 @@ func TestMigration013SupplierProductMappingContract(t *testing.T) {
 	}
 }
 
+func TestMigration014PurchaseLineResolutionAuditContract(t *testing.T) {
+	up, err := os.ReadFile("000014_purchase_line_resolution_audit.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	down, err := os.ReadFile("000014_purchase_line_resolution_audit.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{
+		"resolution_revision", "purchase_line_resolution_audit", "previous_override",
+		"new_override", "previous_revision", "new_revision", "origin = 'manual'",
+		"garfex_admin", "garfex_app",
+	} {
+		if !strings.Contains(string(up), fragment) {
+			t.Fatalf("migration 000014 up missing %q", fragment)
+		}
+	}
+	for _, fragment := range []string{"DROP TABLE IF EXISTS public.purchase_line_resolution_audit", "DROP COLUMN IF EXISTS resolution_revision"} {
+		if !strings.Contains(string(down), fragment) {
+			t.Fatalf("migration 000014 down missing %q", fragment)
+		}
+	}
+}
+
 func TestMigration013DownDropsSupplierProductMappingResourceIndex(t *testing.T) {
 	down, err := os.ReadFile("000013_supplier_product_mapping.down.sql")
 	if err != nil {

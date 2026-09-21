@@ -13,6 +13,7 @@ type ReadCapabilities interface {
 	GetPurchase(ctx context.Context, id int64) (Purchase, error)
 	GetPurchaseByUUID(ctx context.Context, uuid string) (Purchase, error)
 	ListPurchaseLines(ctx context.Context, purchaseID int64) ([]PurchaseLine, error)
+	ListPurchaseLinesWorkbench(ctx context.Context, q PurchaseLineQuery) (PurchaseLinePage, error)
 	ListPurchasesBySupplier(ctx context.Context, supplierID int64, q ListCriteria) (PurchasePage, error)
 	GetSupplierProduct(ctx context.Context, id int64) (SupplierProduct, error)
 	FindSupplierProduct(ctx context.Context, supplierID int64, sku string) (SupplierProduct, error)
@@ -72,6 +73,21 @@ func (r *Reader) ListPurchaseLines(ctx context.Context, purchaseID int64) ([]Pur
 		return nil, err
 	}
 	return clonePurchaseLineSlice(lines), nil
+}
+
+// ListPurchaseLinesWorkbench returns a page of all purchase lines matching
+// the supplied read-only workbench query.
+func (r *Reader) ListPurchaseLinesWorkbench(ctx context.Context, q PurchaseLineQuery) (PurchaseLinePage, error) {
+	if err := validatePurchaseLineQuery(q); err != nil {
+		return PurchaseLinePage{}, err
+	}
+	page, err := r.cap.ListPurchaseLinesWorkbench(ctx, q)
+	if err != nil {
+		return PurchaseLinePage{}, err
+	}
+	page.Query = ClonePurchaseLineQuery(page.Query)
+	page.Rows = clonePurchaseLineRowSlice(page.Rows)
+	return page, nil
 }
 
 // ListPurchasesBySupplier answers "what have we bought from this
@@ -147,6 +163,33 @@ func (r *Reader) ListPurchaseLinesByResource(ctx context.Context, resourceID int
 }
 
 // ListMappingAudit returns the append-only confirmed mapping history.
+func validatePurchaseLineQuery(q PurchaseLineQuery) error {
+	if q.Limit < 0 || q.Limit > 50 {
+		return NewError(InvalidArgument, "limit must be between 1 and 50, or zero for the default")
+	}
+	if q.Offset < 0 {
+		return NewError(InvalidArgument, "offset must not be negative")
+	}
+	if q.SupplierID != nil && *q.SupplierID <= 0 {
+		return NewError(InvalidArgument, "supplier id must be positive when provided")
+	}
+	if q.DateFrom != nil && q.DateFrom.IsZero() {
+		return NewError(InvalidArgument, "date from must be valid when provided")
+	}
+	if q.DateTo != nil && q.DateTo.IsZero() {
+		return NewError(InvalidArgument, "date to must be valid when provided")
+	}
+	if q.DateFrom != nil && q.DateTo != nil && q.DateFrom.After(*q.DateTo) {
+		return NewError(InvalidArgument, "date from must not be after date to")
+	}
+	switch q.EffectiveStatus {
+	case "", LinkPending, LinkLinked, LinkSuspended, LinkNotApplicable, LinkConflict:
+		return nil
+	default:
+		return NewError(InvalidArgument, "invalid effective status")
+	}
+}
+
 func (r *Reader) ListMappingAudit(ctx context.Context, supplierProductID int64, q ListCriteria) (MappingAuditPage, error) {
 	if supplierProductID <= 0 {
 		return MappingAuditPage{}, NewError(InvalidArgument, "supplier product id must be positive")

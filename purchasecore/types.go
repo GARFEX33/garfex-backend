@@ -114,9 +114,45 @@ type PurchaseLine struct {
 	TaxWithheld        string
 	TaxObject          string
 	SupplierProductID  *int64
+	ResolutionRevision ResolutionRevision
 	ResolutionOverride LinkStatus
 	EffectiveStatus    LinkStatus
 	EffectiveCause     MappingCause
+}
+
+// PurchaseLineRow is the flattened public read model for the global
+// PurchaseLine workbench. Nullable fields are represented by pointers.
+type PurchaseLineRow struct {
+	LineID                int64
+	LineNumber            int
+	PurchaseID            int64
+	IssuedAt              time.Time
+	Series                string
+	Folio                 string
+	CFDIUUID              string
+	SupplierID            int64
+	SupplierDisplayName   string
+	Description           string
+	SupplierSKU           string
+	CommercialSupplierSKU *string
+	SATProductCode        string
+	Quantity              string
+	UnitCode              string
+	Unit                  string
+	UnitPrice             string
+	Amount                string
+	Currency              string
+	SupplierProductID     *int64
+	ResourceID            *int64
+	ResourceIdentity      *string
+	// ResourceDisplayName is the set-based Resource row display_name with
+	// identity fallback. It is not Resource Core's enriched Describe output.
+	ResourceDisplayName *string
+	MappingRevision     *MappingRevision
+	ResolutionRevision  ResolutionRevision
+	ResolutionOverride  LinkStatus
+	EffectiveStatus     LinkStatus
+	EffectiveCause      MappingCause
 }
 
 type SupplierProduct struct {

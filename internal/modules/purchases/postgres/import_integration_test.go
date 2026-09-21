@@ -129,9 +129,12 @@ func TestPurchaseImportIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ListPurchaseLines() = %v", err)
 		}
-		overridden, err := repo.MarkNotApplicable(ctx, lines[0].ID)
+		overridden, err := repo.SetResolutionOverride(ctx, domain.SetResolutionOverrideCommand{
+			LineID: lines[0].ID, Override: domain.LinkNotApplicable,
+			ExpectedRevision: lines[0].ResolutionRevision, Decision: mappingDecision(),
+		})
 		if err != nil {
-			t.Fatalf("MarkNotApplicable() = %v", err)
+			t.Fatalf("SetResolutionOverride() = %v", err)
 		}
 		if overridden.DerivedStatus != domain.LinkNotApplicable || overridden.ResolutionOverride != domain.LinkNotApplicable {
 			t.Fatalf("effective status = %q, override = %q, want NO_APLICA", overridden.DerivedStatus, overridden.ResolutionOverride)
@@ -262,6 +265,13 @@ WHERE supplier_product_id IN (
 	SELECT id FROM public.supplier_products WHERE supplier_id = $1
 )`
 
+const resolutionAuditCleanupSQL = `DELETE FROM public.purchase_line_resolution_audit
+WHERE purchase_line_id IN (
+	SELECT pl.id FROM public.purchase_lines pl
+	JOIN public.purchases p ON p.id = pl.purchase_id
+	WHERE p.supplier_id = $1
+)`
+
 func cleanupPurchaseFixtures(t *testing.T, adminPool *pgxpool.Pool, resourceID, supplierID int64) {
 	t.Helper()
 	ctx := context.Background()
@@ -271,6 +281,14 @@ func cleanupPurchaseFixtures(t *testing.T, adminPool *pgxpool.Pool, resourceID, 
 	} else if auditTable != nil {
 		if _, err := adminPool.Exec(ctx, mappingAuditCleanupSQL, supplierID); err != nil {
 			t.Errorf("cleanup mapping audit: %v", err)
+		}
+	}
+	var resolutionAuditTable *string
+	if err := adminPool.QueryRow(ctx, `SELECT to_regclass('public.purchase_line_resolution_audit')`).Scan(&resolutionAuditTable); err != nil {
+		t.Errorf("probe resolution audit table: %v", err)
+	} else if resolutionAuditTable != nil {
+		if _, err := adminPool.Exec(ctx, resolutionAuditCleanupSQL, supplierID); err != nil {
+			t.Errorf("cleanup resolution audit: %v", err)
 		}
 	}
 	if _, err := adminPool.Exec(ctx, `DELETE FROM public.purchases WHERE supplier_id = $1`, supplierID); err != nil {
