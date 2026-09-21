@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose a reviewed feature for garfex-api
+title: "feat: "
+labels:
+  - type:feature
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user or system problem this feature should solve.
+      placeholder: What is blocked or unnecessarily difficult today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the intended behavior and relevant API contract.
+      placeholder: What should change, and what should remain unchanged?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that must hold for this feature to be complete.
+      placeholder: |
+        - [ ] The API exposes...
+        - [ ] Tests verify...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add dependencies, rollout constraints, or links that reviewers should know.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: readiness
+    attributes:
+      label: Submission readiness
+      options:
+        - label: I verified that no open or closed issue already covers this request.
+          required: true
+        - label: I included enough acceptance criteria for implementation and review.
+          required: true
