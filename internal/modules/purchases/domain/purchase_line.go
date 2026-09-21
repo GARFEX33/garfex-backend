@@ -30,10 +30,11 @@ type PurchaseLine struct {
 
 	SupplierProductID  *int64
 	ResolutionOverride LinkStatus
-	// LinkStatus is a deprecated temporary compatibility read projection for
-	// later packages. It is not line-resolution authority and must not be
-	// used for mapping writes.
-	LinkStatus LinkStatus
+	// DerivedStatus and DerivedCause are read projections computed from the
+	// current mapping, Resource.Active, and ResolutionOverride. They are not
+	// persisted authority.
+	DerivedStatus LinkStatus
+	DerivedCause  MappingCause
 }
 
 // PurchaseLineDraft is the canonical, validated form of one concept about to

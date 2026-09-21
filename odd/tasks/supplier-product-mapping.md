@@ -47,8 +47,8 @@ documented last-seen description behavior.
 - Forecast: approximately 1,200–2,000 authored changed lines across domain, migration,
   PostgreSQL adapter, application, public contracts/bridge, and behavior/integration
   tests. This exceeds the ~400-line review threshold.
-- Chain strategy: `feature-branch-chain`; planned slices are SP-1, SP-2, and SP-3/SP-4,
-  with exact commit boundaries recorded as each work unit closes.
+- Chain strategy: `feature-branch-chain`; planned slices are SP-1, SP-2/SP-3, and
+  SP-4, with exact commit boundaries recorded as each work unit closes.
 - Branch: `feat/supplier-product-mapping`.
 
 ## TDD
@@ -82,21 +82,26 @@ Focused checks:
 Rollback boundary:
 - Purchase-domain mapping/audit/override files and their focused tests only.
 
-### SP-2 — Atomic persistence, migration, and import projection
-Status: pending.
+### SP-2 — Atomic persistence and semantic Core surface
+Status: done.
 Route: delegated writer; multi-file non-trivial write trigger.
 
-- [ ] Add reviewed migration support for mapping revision/conflict authority,
+- [x] Add reviewed migration support for mapping revision/conflict authority,
       append-only audit, and line override migration without a second effective-state
       authority.
-- [ ] Implement atomic PostgreSQL mapping transitions with row locking, CAS, audit
+- [x] Implement atomic PostgreSQL mapping transitions with row locking, CAS, audit
       insertion, and active-Resource validation.
-- [ ] Update SupplierProduct import upsert for last-seen description and return the
+- [x] Update SupplierProduct import upsert for last-seen description and return the
       confirmed/effective mapping projection without advanced resolution.
-- [ ] Derive effective line state in reads/import/history using Resource.Active;
+- [x] Derive effective line state in reads/import/history using Resource.Active;
       remove mapping-driven line-status cascades.
-- [ ] Add DB-free adapter tests and gated integration coverage for CAS, atomicity,
+- [x] Add DB-free adapter tests and gated integration coverage for CAS, atomicity,
       audit, description, active/inactive resources, overrides, and retroactive history.
+- [x] Replace ambiguous app/repository writes with semantic confirm, correct,
+      exceptional unlink, report/resolve identity conflict, and line-override use cases.
+- [x] Expose ExpectedRevision, explicit actor/origin/reason metadata, audit reads,
+      effective status, and causes through purchasecore and its sole bridge.
+- [x] Remove unsafe public writes rather than retaining wrappers that bypass CAS/audit.
 
 Acceptance:
 - No partial mapping-without-audit commit is possible.
@@ -105,6 +110,7 @@ Acceptance:
 
 Focused checks:
 - `go test ./internal/modules/purchases/postgres -count=1`
+- `go test ./internal/modules/purchases/app ./purchasecore ./internal/bridge/purchasecore -count=1`
 - `go test ./migrations -count=1`
 
 Runtime harness:
@@ -115,17 +121,19 @@ Rollback boundary:
 - The new purchase mapping migration and Purchase PostgreSQL adapter/test changes.
 
 ### SP-3 — Application use cases and public Purchase Core contract
-Status: pending.
-Route: delegated writer; multi-file non-trivial write trigger.
+Status: merged into SP-2; no independent work-unit boundary.
+Route: executed by the SP-2 delegated writer because persistence, semantic commands,
+and removal of the legacy write path must land atomically to avoid an unsafe or
+uncompilable intermediate commit.
 
-- [ ] Replace ambiguous link/unlink/status writes with semantic confirm, correct,
+- [x] Replace ambiguous link/unlink/status writes with semantic confirm, correct,
       exceptional unlink, report/resolve identity conflict, and line-override use cases.
-- [ ] Expose ExpectedRevision and explicit actor/origin/reason metadata.
-- [ ] Add mapping audit reads and effective line state/causes to public Purchase Core.
-- [ ] Update the sole purchasecore bridge and compile-time contract assertions.
-- [ ] Remove or explicitly retire public writes that cannot preserve CAS and semantic
+- [x] Expose ExpectedRevision and explicit actor/origin/reason metadata.
+- [x] Add mapping audit reads and effective line state/causes to public Purchase Core.
+- [x] Update the sole purchasecore bridge and compile-time contract assertions.
+- [x] Remove or explicitly retire public writes that cannot preserve CAS and semantic
       intent; do not retain unsafe wrappers.
-- [ ] Add application, public-contract, and bridge tests.
+- [x] Add application, public-contract, and bridge tests.
 
 Acceptance:
 - Public callers cannot write PENDING/LINKED/SUSPENDED directly.
@@ -139,16 +147,16 @@ Rollback boundary:
 - Purchase app/public-contract/bridge changes and their tests.
 
 ### SP-4 — Composition, compatibility cleanup, and full verification
-Status: pending.
+Status: done.
 Route: delegated writer for remaining code/docs; verification routed separately under
 orchestrator policy.
 
-- [ ] Wire the evolved Purchase Core without coupling Resource Master lifecycle writes
+- [x] Wire the evolved Purchase Core without coupling Resource Master lifecycle writes
       to mapping revisions or audit.
-- [ ] Update repository-facing documentation whose public handles or mapping semantics
+- [x] Update repository-facing documentation whose public handles or mapping semantics
       are stale.
-- [ ] Verify no candidate/DecisionProvider/AI infrastructure entered the diff.
-- [ ] Run focused and full project checks and record every observed result.
+- [x] Verify no candidate/DecisionProvider/AI infrastructure entered the diff.
+- [x] Run focused and full project checks and record every observed result.
 
 Required checks:
 - `gofmt -l .`
@@ -173,8 +181,8 @@ Rollback boundary:
 - SP-1 domain implementation returned from the delegated writer within its allowed
   surfaces; persistence, application, public contracts, migrations, and wiring remain
   untouched.
-- SP-1 implementation and independent verification are complete; its work-unit commit
-  is the remaining closure action.
+- SP-1 implementation, verification, and work-unit commit are complete at
+  `3ec662a32f40f4d38e71c100417e8ee4f04bea5a`.
 - The SP-1 slice exceeds ~400 authored lines because the domain model, behavior tests,
   and five compile-preserving consumers are one smallest coherent green unit. Splitting
   before the compatibility adaptations leaves the repository uncompilable, so no
@@ -242,5 +250,106 @@ SP-1 writer evidence:
 - Rollback boundary: remove the four new domain mapping/resolution files and restore
   the eleven touched domain/compatibility files; SP-2 has not started.
 
-## Next step
-Create the SP-1 conventional work-unit commit, record its identity, then start SP-2.
+- Post-commit verifier confirmed `3ec662a` is a valid closed boundary against
+  `34ff871`; both focused and full DSN-unset suites passed and the tree stayed clean.
+- SP-2 is now the sole active work unit. SP-3 was merged into the same vertical slice:
+  committing persistence without the semantic app/public surface would leave either an
+  unsafe legacy bypass or an uncompilable intermediate boundary.
+
+SP-2/SP-3 writer evidence:
+- Persistence RED was observed before implementation from missing mapping SQL/error
+  symbols. Separate RED evidence was not captured for every later behavior group; this
+  strict-TDD process gap is recorded honestly and cannot be reconstructed.
+- Focused PostgreSQL, app/purchasecore/bridge, and migration suites passed; the full
+  repository suite passed with integration DSNs unset; touched Go files were gofmt-clean
+  and `git diff --check` was clean.
+- Migration 000013, atomic CAS/audit paths, derived line resolution, last-seen import,
+  semantic app/public commands, audit reads, and bridge mappings were implemented.
+- DB-gated import/mapping integration scenarios skipped because database access was not
+  authorized. Real migration and transaction behavior remain unverified.
+- Current slice is approximately 982 tracked additions and 590 deletions plus seven new
+  files; it is the smallest safe vertical boundary because persistence and removal of
+  legacy public writes must land together.
+- Native assessment was unavailable, so RDD-off policy required a fresh independent
+  verifier before this work unit could close.
+- Independent verifier: PARTIAL. All five authorized DSN-unset/static commands passed,
+  but four findings block closure: inactive Resource state is discarded before the
+  public SupplierProduct projection; the mapping integration test unconditionally skips
+  even with a DSN; down migration maps inactive Resources to legacy VINCULADO; and
+  cross-resource transitions lock expected/target Resources without canonical ordering.
+- Accepted corrections: carry Resource.Active only as a non-authoritative read snapshot
+  into effective public projection; remove the unconditional integration skip; down-map
+  inactive Resources to legacy PENDIENTE; lock unique involved Resources in ascending ID
+  order before validation to avoid cross-correction deadlocks.
+- Correction RED: focused tests failed on missing `ResourceActive`, missing
+  `orderedResourceIDs`, and the unsafe inactive down-projection. Correction GREEN:
+  PostgreSQL passed 5 tests, app/public/bridge passed 49 tests, migrations passed 6 tests,
+  and the full DSN-unset suite passed; formatting and diff checks were clean.
+- The integration scenario now has only the repository DSN gate and covers migration
+  presence, confirmation, stale CAS, audit persistence, inactive rollback, and unlink;
+  it has not yet executed against PostgreSQL.
+- Parent readback found and corrected one additional semantic issue: activity validation
+  applied to current Resources as well as selected targets. Focused RED failed on missing
+  target-only policy; GREEN passed 7 PostgreSQL tests and the full DSN-unset suite.
+  Current inactive Resources may now be corrected away from, unlinked, conflict-reported,
+  or resolved away from; only a newly selected target must be active.
+- Fresh independent re-verification remained PARTIAL with two final source blockers:
+  idempotent reconfirmation checked inactivity before recognizing a no-op, and integration
+  cleanup violated the audit FK's `ON DELETE RESTRICT` order.
+- Correction RED failed on missing no-op lock policy and audit cleanup SQL. GREEN passed
+  9 PostgreSQL tests and the full DSN-unset suite. Idempotent reconfirmation now precedes
+  target activity validation, and shared cleanup removes audit rows before SupplierProducts
+  while tolerating pre-000013 schemas.
+- Parent readback then caught a narrow no-op projection regression: successful inactive
+  reconfirmation cleared its already-loaded ResourceActive snapshot. RED failed on missing
+  refresh policy; GREEN passed 10 PostgreSQL tests and the full DSN-unset suite. Unchanged
+  transitions now preserve the loaded snapshot; changed transitions refresh or clear it.
+- Final independent source re-verification: PASS. PostgreSQL, app/public/bridge,
+  migrations, full DSN-unset, and diff checks passed; all prior findings were closed.
+- The user authorized one uniquely named disposable database in the existing local
+  PostgreSQL service. First runtime run applied migrations 000001-000013 and passed the
+  full Purchase PostgreSQL package, including import and mapping integration scenarios.
+  The subsequent 000013 down succeeded, but re-up produced a genuine RED because the
+  down migration left `supplier_products_mapping_resource_idx`; the disposable database
+  was dropped and its absence confirmed.
+- Runtime correction RED added an exact source assertion for the missing rollback index;
+  GREEN added the matching `DROP INDEX IF EXISTS`. Migration tests passed 7 entries and
+  the full DSN-unset suite remained green.
+- A fresh disposable database then applied migrations 000001-000013 cleanly, passed the
+  full Purchase PostgreSQL package, completed 000013 down/up cleanly, and passed the
+  mapping integration scenario again after the round trip. The exact database was dropped
+  and `pg_database` confirmed a remaining count of zero; no shared database, role, normal
+  volume, or persistent fixture was modified.
+- Parent final checks passed: `gofmt -l .` empty, `go vet ./...` clean,
+  `golangci-lint run ./...` reported 0 issues, full DSN-unset tests passed, and
+  `git diff --check` was clean. No local `go build` ran.
+- Final independent correction verification: PASS. It matched the down/up index names,
+  repeated all static suites successfully, found no remaining blocker, and accepted the
+  runtime transcript explicitly as parent evidence rather than claiming to rerun it.
+- SP-2/SP-3 committed as `651f87d5da0d91d950a5a92e4921e9a0ac66f3d5` with message
+  `feat(purchases): persist supplier product mappings`; the worktree was clean afterward.
+- Parent post-commit focused and full DSN-unset suites passed. Independent post-commit
+  verifier: PASS; it confirmed the exact `3ec662a..651f87d` boundary, clean worktree,
+  reviewed file scope, formatting, vet, lint, focused tests, migrations, and full suite.
+
+SP-4 evidence:
+- README now describes all three Core areas, lists the exact six public Application
+  handles, and gives the concise Purchase mapping/derived-status contract with a pointer
+  to `purchasecore/doc.go`.
+- `TestOpenIntegrationExposesSixLiveHandles` now asserts both Purchase handles in the
+  existing composition scenario; no new runtime behavior or DB requirement was added.
+- Current Purchase source/public grep found no legacy generic link/unlink/status writes
+  and no candidate, DecisionProvider, confidence, AI/LLM, approval, event bus, or outbox
+  infrastructure. Historical ODD evidence was not misclassified as current API surface.
+- Parent final checks passed: root and purchasecore/bridge focused tests, `gofmt -l .`,
+  `go vet ./...`, `golangci-lint run ./...` (0 issues), full DSN-unset suite, and
+  `git diff --check`.
+- Independent SP-4 verifier: PASS. It confirmed the exact three-file scope, six-handle
+  documentation/assertion, accurate task evidence, clean forbidden-concept audit, and
+  all seven requested checks; SP-4 is safe to commit.
+
+## Completion
+SP-4 was committed with `docs(core): document purchase core composition`. The immediate
+post-commit full DSN-unset suite passed and `git status --short` was empty. The approved
+SupplierProduct mapping implementation is complete on `feat/supplier-product-mapping`;
+no local `go build` ran and no disposable PostgreSQL database remains.

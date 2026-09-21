@@ -15,18 +15,24 @@ import (
 )
 
 type stubService struct {
-	importCFDI                    func(ctx context.Context, xml []byte, opts app.ImportOptions) (domain.ImportResult, error)
-	getPurchase                   func(ctx context.Context, id int64) (domain.Purchase, error)
-	getPurchaseByUUID             func(ctx context.Context, uuid string) (domain.Purchase, error)
-	listPurchaseLines             func(ctx context.Context, purchaseID int64) ([]domain.PurchaseLine, error)
-	listPurchasesBySupplier       func(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Purchase, error)
-	getSupplierProduct            func(ctx context.Context, id int64) (domain.SupplierProduct, error)
-	findSupplierProduct           func(ctx context.Context, supplierID int64, sku string) (domain.SupplierProduct, error)
-	listSupplierProducts          func(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.SupplierProduct, error)
-	listPurchaseLinesByResource   func(ctx context.Context, resourceID int64, criteria domain.ListCriteria) ([]domain.PurchaseLineHistory, error)
-	linkSupplierProductToResource func(ctx context.Context, supplierProductID, resourceID int64) (domain.SupplierProduct, error)
-	unlinkSupplierProduct         func(ctx context.Context, supplierProductID int64) (domain.SupplierProduct, error)
-	setPurchaseLineLinkStatus     func(ctx context.Context, lineID int64, status domain.LinkStatus) (domain.PurchaseLine, error)
+	importCFDI                  func(ctx context.Context, xml []byte, opts app.ImportOptions) (domain.ImportResult, error)
+	getPurchase                 func(ctx context.Context, id int64) (domain.Purchase, error)
+	getPurchaseByUUID           func(ctx context.Context, uuid string) (domain.Purchase, error)
+	listPurchaseLines           func(ctx context.Context, purchaseID int64) ([]domain.PurchaseLine, error)
+	listPurchasesBySupplier     func(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Purchase, error)
+	getSupplierProduct          func(ctx context.Context, id int64) (domain.SupplierProduct, error)
+	findSupplierProduct         func(ctx context.Context, supplierID int64, sku string) (domain.SupplierProduct, error)
+	listSupplierProducts        func(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.SupplierProduct, error)
+	listPurchaseLinesByResource func(ctx context.Context, resourceID int64, criteria domain.ListCriteria) ([]domain.PurchaseLineHistory, error)
+	listMappingAudit            func(ctx context.Context, supplierProductID int64, criteria domain.ListCriteria) ([]domain.MappingAuditEntry, error)
+	confirmMapping              func(context.Context, domain.ConfirmMappingCommand) (domain.SupplierProduct, error)
+	correctMapping              func(context.Context, domain.CorrectMappingCommand) (domain.SupplierProduct, error)
+	exceptionalUnlink           func(context.Context, domain.ExceptionalUnlinkCommand) (domain.SupplierProduct, error)
+	reportIdentityConflict      func(context.Context, domain.ReportIdentityConflictCommand) (domain.SupplierProduct, error)
+	resolveIdentityConflict     func(context.Context, domain.ResolveIdentityConflictCommand) (domain.SupplierProduct, error)
+	markNotApplicable           func(context.Context, int64) (domain.PurchaseLine, error)
+	markConflict                func(context.Context, int64) (domain.PurchaseLine, error)
+	clearOverride               func(context.Context, int64) (domain.PurchaseLine, error)
 }
 
 func (s *stubService) ImportCFDI(ctx context.Context, xml []byte, opts app.ImportOptions) (domain.ImportResult, error) {
@@ -56,14 +62,32 @@ func (s *stubService) ListSupplierProducts(ctx context.Context, supplierID int64
 func (s *stubService) ListPurchaseLinesByResource(ctx context.Context, resourceID int64, criteria domain.ListCriteria) ([]domain.PurchaseLineHistory, error) {
 	return s.listPurchaseLinesByResource(ctx, resourceID, criteria)
 }
-func (s *stubService) LinkSupplierProductToResource(ctx context.Context, supplierProductID, resourceID int64) (domain.SupplierProduct, error) {
-	return s.linkSupplierProductToResource(ctx, supplierProductID, resourceID)
+func (s *stubService) ListMappingAudit(ctx context.Context, id int64, criteria domain.ListCriteria) ([]domain.MappingAuditEntry, error) {
+	return s.listMappingAudit(ctx, id, criteria)
 }
-func (s *stubService) UnlinkSupplierProduct(ctx context.Context, supplierProductID int64) (domain.SupplierProduct, error) {
-	return s.unlinkSupplierProduct(ctx, supplierProductID)
+func (s *stubService) ConfirmMapping(ctx context.Context, command domain.ConfirmMappingCommand) (domain.SupplierProduct, error) {
+	return s.confirmMapping(ctx, command)
 }
-func (s *stubService) SetPurchaseLineLinkStatus(ctx context.Context, lineID int64, status domain.LinkStatus) (domain.PurchaseLine, error) {
-	return s.setPurchaseLineLinkStatus(ctx, lineID, status)
+func (s *stubService) CorrectMapping(ctx context.Context, command domain.CorrectMappingCommand) (domain.SupplierProduct, error) {
+	return s.correctMapping(ctx, command)
+}
+func (s *stubService) ExceptionalUnlink(ctx context.Context, command domain.ExceptionalUnlinkCommand) (domain.SupplierProduct, error) {
+	return s.exceptionalUnlink(ctx, command)
+}
+func (s *stubService) ReportIdentityConflict(ctx context.Context, command domain.ReportIdentityConflictCommand) (domain.SupplierProduct, error) {
+	return s.reportIdentityConflict(ctx, command)
+}
+func (s *stubService) ResolveIdentityConflict(ctx context.Context, command domain.ResolveIdentityConflictCommand) (domain.SupplierProduct, error) {
+	return s.resolveIdentityConflict(ctx, command)
+}
+func (s *stubService) MarkNotApplicable(ctx context.Context, id int64) (domain.PurchaseLine, error) {
+	return s.markNotApplicable(ctx, id)
+}
+func (s *stubService) MarkConflict(ctx context.Context, id int64) (domain.PurchaseLine, error) {
+	return s.markConflict(ctx, id)
+}
+func (s *stubService) ClearOverride(ctx context.Context, id int64) (domain.PurchaseLine, error) {
+	return s.clearOverride(ctx, id)
 }
 
 func samplePurchase() domain.Purchase {
@@ -212,22 +236,32 @@ func TestAdapter_ListPurchasesBySupplier_DerivesHasNext(t *testing.T) {
 	}
 }
 
-func TestAdapter_LinkSupplierProductToResource_MapsFields(t *testing.T) {
+func TestMapSupplierProduct_UsesResourceActivityProjection(t *testing.T) {
 	resourceID := int64(42)
-	stub := &stubService{linkSupplierProductToResource: func(ctx context.Context, supplierProductID, gotResourceID int64) (domain.SupplierProduct, error) {
-		return domain.SupplierProduct{
-			ID:             supplierProductID,
-			CurrentMapping: domain.SupplierProductMapping{ResourceID: &gotResourceID},
-		}, nil
+	inactive := false
+	got := mapSupplierProduct(domain.SupplierProduct{CurrentMapping: domain.SupplierProductMapping{ResourceID: &resourceID}, ResourceActive: &inactive})
+	if got.MappingState != public.MappingStateSuspended || got.MappingCause != public.MappingCauseResourceInactive {
+		t.Fatalf("inactive projection = %+v, want SUSPENDED/RESOURCE_INACTIVE", got)
+	}
+	active := true
+	got = mapSupplierProduct(domain.SupplierProduct{CurrentMapping: domain.SupplierProductMapping{ResourceID: &resourceID}, ResourceActive: &active})
+	if got.MappingState != public.MappingStateConfirmed || got.MappingCause != public.MappingCauseNone {
+		t.Fatalf("active projection = %+v, want CONFIRMED/NONE", got)
+	}
+}
+
+func TestAdapter_ConfirmMapping_MapsCurrentMapping(t *testing.T) {
+	resourceID := int64(42)
+	stub := &stubService{confirmMapping: func(ctx context.Context, command domain.ConfirmMappingCommand) (domain.SupplierProduct, error) {
+		return domain.SupplierProduct{ID: command.SupplierProductID, CurrentMapping: domain.SupplierProductMapping{ResourceID: &resourceID}, MappingRevision: 1}, nil
 	}}
 	adapter := NewAdapter(stub)
-
-	got, err := adapter.LinkSupplierProductToResource(context.Background(), public.LinkSupplierProductRequest{Actor: "PI", SupplierProductID: 1, ResourceID: resourceID})
+	got, err := adapter.ConfirmMapping(context.Background(), public.ConfirmMappingRequest{SupplierProductID: 1, ResourceID: resourceID, Decision: public.MappingDecisionMetadata{Actor: "PI", Origin: public.MappingOriginManual, At: time.Now()}})
 	if err != nil {
-		t.Fatalf("LinkSupplierProductToResource error = %v", err)
+		t.Fatalf("ConfirmMapping error = %v", err)
 	}
-	if got.ResourceID == nil || *got.ResourceID != resourceID {
-		t.Fatalf("ResourceID = %v, want %d", got.ResourceID, resourceID)
+	if got.CurrentMapping.ResourceID == nil || *got.CurrentMapping.ResourceID != resourceID || got.MappingRevision != 1 {
+		t.Fatalf("mapping = %+v", got)
 	}
 }
 

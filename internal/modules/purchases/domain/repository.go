@@ -21,6 +21,8 @@ type ListCriteria struct {
 // Repository is the persistence port for the Purchase and Price History
 // core.
 type Repository interface {
+	MappingRepository
+
 	// Import atomically persists draft: the purchase, all of its lines, and
 	// the supplier-product relations they resolve to, or persists nothing.
 	//
@@ -43,18 +45,11 @@ type Repository interface {
 	FindSupplierProduct(ctx context.Context, supplierID int64, sku string) (SupplierProduct, error)
 	ListSupplierProducts(ctx context.Context, supplierID int64, criteria ListCriteria) ([]SupplierProduct, error)
 
-	// LinkSupplierProductToResource relates supplierProductID to resourceID
-	// and cascades every PENDIENTE line referencing it to VINCULADO; lines
-	// already marked NO_APLICA or CONFLICTO are left untouched.
-	LinkSupplierProductToResource(ctx context.Context, supplierProductID, resourceID int64) (SupplierProduct, error)
-	// UnlinkSupplierProduct removes the Resource Master relation and
-	// cascades every VINCULADO line referencing it back to PENDIENTE.
-	UnlinkSupplierProduct(ctx context.Context, supplierProductID int64) (SupplierProduct, error)
-
-	// SetPurchaseLineLinkStatus manually overrides one line's LinkStatus,
-	// for cases automatic resolution must not decide: marking a line
-	// NO_APLICA, or resolving a CONFLICTO.
-	SetPurchaseLineLinkStatus(ctx context.Context, lineID int64, status LinkStatus) (PurchaseLine, error)
+	// MarkNotApplicable and MarkConflict store explicit line overrides; the
+	// derived effective status is never written directly.
+	MarkNotApplicable(context.Context, int64) (PurchaseLine, error)
+	MarkConflict(context.Context, int64) (PurchaseLine, error)
+	ClearOverride(context.Context, int64) (PurchaseLine, error)
 
 	// ListPurchaseLinesByResource supports the "who has sold this resource,
 	// at what price, when" history view, most recent purchase first. It

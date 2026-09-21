@@ -39,9 +39,15 @@ type service interface {
 	FindSupplierProduct(ctx context.Context, supplierID int64, sku string) (domain.SupplierProduct, error)
 	ListSupplierProducts(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.SupplierProduct, error)
 	ListPurchaseLinesByResource(ctx context.Context, resourceID int64, criteria domain.ListCriteria) ([]domain.PurchaseLineHistory, error)
-	LinkSupplierProductToResource(ctx context.Context, supplierProductID, resourceID int64) (domain.SupplierProduct, error)
-	UnlinkSupplierProduct(ctx context.Context, supplierProductID int64) (domain.SupplierProduct, error)
-	SetPurchaseLineLinkStatus(ctx context.Context, lineID int64, status domain.LinkStatus) (domain.PurchaseLine, error)
+	ListMappingAudit(ctx context.Context, supplierProductID int64, criteria domain.ListCriteria) ([]domain.MappingAuditEntry, error)
+	ConfirmMapping(ctx context.Context, command domain.ConfirmMappingCommand) (domain.SupplierProduct, error)
+	CorrectMapping(ctx context.Context, command domain.CorrectMappingCommand) (domain.SupplierProduct, error)
+	ExceptionalUnlink(ctx context.Context, command domain.ExceptionalUnlinkCommand) (domain.SupplierProduct, error)
+	ReportIdentityConflict(ctx context.Context, command domain.ReportIdentityConflictCommand) (domain.SupplierProduct, error)
+	ResolveIdentityConflict(ctx context.Context, command domain.ResolveIdentityConflictCommand) (domain.SupplierProduct, error)
+	MarkNotApplicable(ctx context.Context, lineID int64) (domain.PurchaseLine, error)
+	MarkConflict(ctx context.Context, lineID int64) (domain.PurchaseLine, error)
+	ClearOverride(ctx context.Context, lineID int64) (domain.PurchaseLine, error)
 }
 
 // Adapter implements public.ReadCapabilities and public.WriteCapabilities
@@ -166,41 +172,83 @@ func (a *Adapter) ListPurchaseLinesByResource(ctx context.Context, resourceID in
 		return public.PurchaseLineHistoryPage{}, mapError(err)
 	}
 	end, hasNext := trimToPage(len(history), limit)
-	return public.PurchaseLineHistoryPage{
-		Query:       public.ListCriteria{Limit: limit, Offset: q.Offset},
-		History:     mapPurchaseLineHistorySlice(history[:end]),
-		HasPrevious: q.Offset > 0,
-		HasNext:     hasNext,
-	}, nil
+	return public.PurchaseLineHistoryPage{Query: public.ListCriteria{Limit: limit, Offset: q.Offset}, History: mapPurchaseLineHistorySlice(history[:end]), HasPrevious: q.Offset > 0, HasNext: hasNext}, nil
 }
 
-// LinkSupplierProductToResource relates a supplier product to a Resource
-// Master entry. req.Actor is diagnostic-only attribution.
-func (a *Adapter) LinkSupplierProductToResource(ctx context.Context, req public.LinkSupplierProductRequest) (public.SupplierProduct, error) {
-	ctx = core.WithActor(ctx, req.Actor)
-	sp, err := a.service.LinkSupplierProductToResource(ctx, req.SupplierProductID, req.ResourceID)
+func (a *Adapter) ListMappingAudit(ctx context.Context, supplierProductID int64, q public.ListCriteria) (public.MappingAuditPage, error) {
+	limit := effectiveLimit(q.Limit)
+	entries, err := a.service.ListMappingAudit(ctx, supplierProductID, domain.ListCriteria{Limit: limit + 1, Offset: q.Offset})
+	if err != nil {
+		return public.MappingAuditPage{}, mapError(err)
+	}
+	end, hasNext := trimToPage(len(entries), limit)
+	mapped := make([]public.MappingAuditEntry, end)
+	for i := range mapped {
+		mapped[i] = mapMappingAuditEntry(entries[i])
+	}
+	return public.MappingAuditPage{Query: public.ListCriteria{Limit: limit, Offset: q.Offset}, Entries: mapped, HasPrevious: q.Offset > 0, HasNext: hasNext}, nil
+}
+
+func decisionMetadata(decision public.MappingDecisionMetadata) domain.MappingDecisionMetadata {
+	return domain.MappingDecisionMetadata{Actor: decision.Actor, Origin: domain.MappingOrigin(decision.Origin), Reason: decision.Reason, At: decision.At}
+}
+
+func (a *Adapter) ConfirmMapping(ctx context.Context, req public.ConfirmMappingRequest) (public.SupplierProduct, error) {
+	sp, err := a.service.ConfirmMapping(ctx, domain.ConfirmMappingCommand{SupplierProductID: req.SupplierProductID, ResourceID: req.ResourceID, ExpectedRevision: domain.MappingRevision(req.ExpectedRevision), Decision: decisionMetadata(req.Decision)})
 	if err != nil {
 		return public.SupplierProduct{}, mapError(err)
 	}
 	return mapSupplierProduct(sp), nil
 }
 
-// UnlinkSupplierProduct removes a supplier product's Resource Master
-// relation. req.Actor is diagnostic-only attribution.
-func (a *Adapter) UnlinkSupplierProduct(ctx context.Context, req public.UnlinkSupplierProductRequest) (public.SupplierProduct, error) {
-	ctx = core.WithActor(ctx, req.Actor)
-	sp, err := a.service.UnlinkSupplierProduct(ctx, req.SupplierProductID)
+func (a *Adapter) CorrectMapping(ctx context.Context, req public.CorrectMappingRequest) (public.SupplierProduct, error) {
+	sp, err := a.service.CorrectMapping(ctx, domain.CorrectMappingCommand{SupplierProductID: req.SupplierProductID, ExpectedCurrentResource: req.ExpectedCurrentResourceID, ResourceID: req.ResourceID, ExpectedRevision: domain.MappingRevision(req.ExpectedRevision), Decision: decisionMetadata(req.Decision)})
 	if err != nil {
 		return public.SupplierProduct{}, mapError(err)
 	}
 	return mapSupplierProduct(sp), nil
 }
 
-// SetPurchaseLineLinkStatus manually overrides one line's linking state.
-// req.Actor is diagnostic-only attribution.
-func (a *Adapter) SetPurchaseLineLinkStatus(ctx context.Context, req public.SetPurchaseLineLinkStatusRequest) (public.PurchaseLine, error) {
-	ctx = core.WithActor(ctx, req.Actor)
-	line, err := a.service.SetPurchaseLineLinkStatus(ctx, req.PurchaseLineID, domain.LinkStatus(req.Status))
+func (a *Adapter) ExceptionalUnlink(ctx context.Context, req public.ExceptionalUnlinkRequest) (public.SupplierProduct, error) {
+	sp, err := a.service.ExceptionalUnlink(ctx, domain.ExceptionalUnlinkCommand{SupplierProductID: req.SupplierProductID, ExpectedCurrentResource: req.ExpectedCurrentResourceID, ExpectedRevision: domain.MappingRevision(req.ExpectedRevision), Decision: decisionMetadata(req.Decision)})
+	if err != nil {
+		return public.SupplierProduct{}, mapError(err)
+	}
+	return mapSupplierProduct(sp), nil
+}
+
+func (a *Adapter) ReportIdentityConflict(ctx context.Context, req public.ReportIdentityConflictRequest) (public.SupplierProduct, error) {
+	sp, err := a.service.ReportIdentityConflict(ctx, domain.ReportIdentityConflictCommand{SupplierProductID: req.SupplierProductID, ExpectedCurrentResource: req.ExpectedCurrentResourceID, ExpectedRevision: domain.MappingRevision(req.ExpectedRevision), Decision: decisionMetadata(req.Decision)})
+	if err != nil {
+		return public.SupplierProduct{}, mapError(err)
+	}
+	return mapSupplierProduct(sp), nil
+}
+
+func (a *Adapter) ResolveIdentityConflict(ctx context.Context, req public.ResolveIdentityConflictRequest) (public.SupplierProduct, error) {
+	sp, err := a.service.ResolveIdentityConflict(ctx, domain.ResolveIdentityConflictCommand{SupplierProductID: req.SupplierProductID, ExpectedCurrentResource: req.ExpectedCurrentResourceID, ResourceID: req.ResourceID, ExpectedRevision: domain.MappingRevision(req.ExpectedRevision), Decision: decisionMetadata(req.Decision)})
+	if err != nil {
+		return public.SupplierProduct{}, mapError(err)
+	}
+	return mapSupplierProduct(sp), nil
+}
+
+func (a *Adapter) MarkNotApplicable(ctx context.Context, lineID int64) (public.PurchaseLine, error) {
+	line, err := a.service.MarkNotApplicable(ctx, lineID)
+	if err != nil {
+		return public.PurchaseLine{}, mapError(err)
+	}
+	return mapPurchaseLine(line), nil
+}
+func (a *Adapter) MarkConflict(ctx context.Context, lineID int64) (public.PurchaseLine, error) {
+	line, err := a.service.MarkConflict(ctx, lineID)
+	if err != nil {
+		return public.PurchaseLine{}, mapError(err)
+	}
+	return mapPurchaseLine(line), nil
+}
+func (a *Adapter) ClearOverride(ctx context.Context, lineID int64) (public.PurchaseLine, error) {
+	line, err := a.service.ClearOverride(ctx, lineID)
 	if err != nil {
 		return public.PurchaseLine{}, mapError(err)
 	}
@@ -260,23 +308,25 @@ func mapPurchaseSlice(purchases []domain.Purchase) []public.Purchase {
 
 func mapPurchaseLine(l domain.PurchaseLine) public.PurchaseLine {
 	return public.PurchaseLine{
-		ID:                l.ID,
-		PurchaseID:        l.PurchaseID,
-		LineNumber:        l.LineNumber,
-		Description:       l.Description,
-		SupplierSKU:       l.SupplierSKU,
-		SATProductCode:    l.SATProductCode,
-		Quantity:          l.Quantity.String(),
-		UnitCode:          l.UnitCode,
-		Unit:              l.Unit,
-		UnitPrice:         l.UnitPrice.String(),
-		Amount:            l.Amount.String(),
-		Discount:          l.Discount.String(),
-		TaxTransferred:    l.TaxTransferred.String(),
-		TaxWithheld:       l.TaxWithheld.String(),
-		TaxObject:         l.TaxObject,
-		SupplierProductID: copyInt64(l.SupplierProductID),
-		LinkStatus:        public.LinkStatus(l.LinkStatus),
+		ID:                 l.ID,
+		PurchaseID:         l.PurchaseID,
+		LineNumber:         l.LineNumber,
+		Description:        l.Description,
+		SupplierSKU:        l.SupplierSKU,
+		SATProductCode:     l.SATProductCode,
+		Quantity:           l.Quantity.String(),
+		UnitCode:           l.UnitCode,
+		Unit:               l.Unit,
+		UnitPrice:          l.UnitPrice.String(),
+		Amount:             l.Amount.String(),
+		Discount:           l.Discount.String(),
+		TaxTransferred:     l.TaxTransferred.String(),
+		TaxWithheld:        l.TaxWithheld.String(),
+		TaxObject:          l.TaxObject,
+		SupplierProductID:  copyInt64(l.SupplierProductID),
+		ResolutionOverride: public.LinkStatus(l.ResolutionOverride),
+		EffectiveStatus:    public.LinkStatus(l.DerivedStatus),
+		EffectiveCause:     public.MappingCause(l.DerivedCause),
 	}
 }
 
@@ -289,15 +339,16 @@ func mapPurchaseLineSlice(lines []domain.PurchaseLine) []public.PurchaseLine {
 }
 
 func mapSupplierProduct(sp domain.SupplierProduct) public.SupplierProduct {
+	active := true
+	if sp.ResourceActive != nil {
+		active = *sp.ResourceActive
+	}
 	return public.SupplierProduct{
-		ID:          sp.ID,
-		SupplierID:  sp.SupplierID,
-		SupplierSKU: sp.SupplierSKU,
-		Description: sp.Description,
-		ResourceID:  copyInt64(sp.CurrentMapping.ResourceID),
-		Notes:       sp.Notes,
-		CreatedAt:   sp.CreatedAt,
-		UpdatedAt:   sp.UpdatedAt,
+		ID: sp.ID, SupplierID: sp.SupplierID, SupplierSKU: sp.SupplierSKU, Description: sp.Description,
+		CurrentMapping:  public.SupplierProductMapping{ResourceID: copyInt64(sp.CurrentMapping.ResourceID), IdentityConflict: sp.CurrentMapping.IdentityConflict},
+		MappingRevision: public.MappingRevision(sp.MappingRevision), ResourceActive: copyBool(sp.ResourceActive),
+		MappingState: public.MappingState(sp.CurrentMapping.State(active)), MappingCause: public.MappingCause(sp.CurrentMapping.Cause(active)),
+		Notes: sp.Notes, CreatedAt: sp.CreatedAt, UpdatedAt: sp.UpdatedAt,
 	}
 }
 
@@ -310,16 +361,16 @@ func mapSupplierProductSlice(products []domain.SupplierProduct) []public.Supplie
 }
 
 func mapPurchaseLineHistory(h domain.PurchaseLineHistory) public.PurchaseLineHistory {
-	return public.PurchaseLineHistory{
-		Line:            mapPurchaseLine(h.Line),
-		SupplierProduct: mapSupplierProduct(h.SupplierProduct),
-		PurchaseID:      h.PurchaseID,
-		PurchaseUUID:    h.PurchaseUUID,
-		SupplierID:      h.SupplierID,
-		BranchID:        copyInt64(h.BranchID),
-		IssuedAt:        h.IssuedAt,
-		Currency:        h.Currency,
-	}
+	return public.PurchaseLineHistory{Line: mapPurchaseLine(h.Line), SupplierProduct: mapSupplierProduct(h.SupplierProduct), PurchaseID: h.PurchaseID, PurchaseUUID: h.PurchaseUUID, SupplierID: h.SupplierID, BranchID: copyInt64(h.BranchID), IssuedAt: h.IssuedAt, Currency: h.Currency}
+}
+
+func mapMappingAuditEntry(entry domain.MappingAuditEntry) public.MappingAuditEntry {
+	return public.MappingAuditEntry{SupplierProductID: entry.SupplierProductID,
+		PreviousMapping: public.SupplierProductMapping{ResourceID: copyInt64(entry.PreviousMapping.ResourceID), IdentityConflict: entry.PreviousMapping.IdentityConflict},
+		NewMapping:      public.SupplierProductMapping{ResourceID: copyInt64(entry.NewMapping.ResourceID), IdentityConflict: entry.NewMapping.IdentityConflict},
+		PreviousState:   public.MappingState(entry.PreviousState), NewState: public.MappingState(entry.NewState),
+		PreviousRevision: public.MappingRevision(entry.PreviousRevision), NewRevision: public.MappingRevision(entry.NewRevision),
+		Operation: public.MappingOperation(entry.Operation), Decision: public.MappingDecisionMetadata{Actor: entry.Decision.Actor, Origin: public.MappingOrigin(entry.Decision.Origin), Reason: entry.Decision.Reason, At: entry.Decision.At}}
 }
 
 func mapPurchaseLineHistorySlice(history []domain.PurchaseLineHistory) []public.PurchaseLineHistory {
@@ -335,6 +386,14 @@ func copyInt64(id *int64) *int64 {
 		return nil
 	}
 	v := *id
+	return &v
+}
+
+func copyBool(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	v := *value
 	return &v
 }
 
@@ -359,8 +418,12 @@ func mapError(err error) error {
 		return public.NewError(public.NotFound, "purchase master record not found")
 	case errors.Is(err, domain.ErrConflict), errors.Is(err, supplierdomain.ErrConflict):
 		return public.NewError(public.Conflict, "purchase master conflict")
-	case errors.Is(err, domain.ErrValidation), errors.Is(err, supplierdomain.ErrValidation):
+	case errors.Is(err, domain.ErrValidation), errors.Is(err, supplierdomain.ErrValidation), errors.Is(err, domain.ErrInvalidMappingTransition), errors.Is(err, domain.ErrResourceInactive):
 		return public.NewError(public.Validation, "purchase master validation failed")
+	case errors.Is(err, domain.ErrStaleMappingRevision), errors.Is(err, domain.ErrCommitAmbiguous):
+		return public.NewError(public.Conflict, "purchase master mapping conflict")
+	case errors.Is(err, domain.ErrResourceNotFound):
+		return public.NewError(public.NotFound, "purchase master resource not found")
 	default:
 		return public.NewError(public.Internal, "purchase master operation failed")
 	}

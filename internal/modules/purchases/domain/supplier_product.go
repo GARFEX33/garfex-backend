@@ -20,9 +20,12 @@ type SupplierProduct struct {
 	Description     string
 	CurrentMapping  SupplierProductMapping
 	MappingRevision MappingRevision
-	Notes           string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// ResourceActive is a read-only snapshot supplied by Resource Master. It
+	// is never mapping authority and is not persisted by Purchase Core.
+	ResourceActive *bool
+	Notes          string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // NewSupplierProductIdentity validates the identity fields required to
