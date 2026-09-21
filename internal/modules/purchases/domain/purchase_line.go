@@ -8,8 +8,9 @@ import (
 
 // PurchaseLine is one concept of a Purchase, preserved as a historical fact.
 // Its original fields are never overwritten by later purchases or by
-// classification/normalization work; only SupplierProductID and LinkStatus
-// change after import, and only as an explicit relation correction.
+// classification/normalization work; only SupplierProductID and its
+// line-specific resolution override change after import. Effective
+// PENDING/LINKED/SUSPENDED status is derived.
 type PurchaseLine struct {
 	ID             int64
 	PurchaseID     int64
@@ -27,8 +28,13 @@ type PurchaseLine struct {
 	TaxWithheld    decimal.Decimal
 	TaxObject      string
 
-	SupplierProductID *int64
-	LinkStatus        LinkStatus
+	SupplierProductID  *int64
+	ResolutionOverride LinkStatus
+	// DerivedStatus and DerivedCause are read projections computed from the
+	// current mapping, Resource.Active, and ResolutionOverride. They are not
+	// persisted authority.
+	DerivedStatus LinkStatus
+	DerivedCause  MappingCause
 }
 
 // PurchaseLineDraft is the canonical, validated form of one concept about to

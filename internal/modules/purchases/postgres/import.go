@@ -45,18 +45,14 @@ func (r *repository) Import(ctx context.Context, draft domain.PurchaseDraft) (do
 	lines := make([]domain.PurchaseLine, 0, len(draft.Lines))
 	for _, lineDraft := range draft.Lines {
 		var supplierProductID *int64
-		status := domain.LinkPending
 		if lineDraft.HasSupplierIdentity() {
-			id, resourceID, err := upsertSupplierProduct(ctx, tx, draft.Supplier.SupplierID, lineDraft.SupplierSKU, lineDraft.Description)
+			product, err := upsertSupplierProduct(ctx, tx, draft.Supplier.SupplierID, lineDraft.SupplierSKU, lineDraft.Description)
 			if err != nil {
 				return domain.ImportResult{}, err
 			}
-			supplierProductID = &id
-			if resourceID != nil {
-				status = domain.LinkLinked
-			}
+			supplierProductID = &product.ID
 		}
-		line, err := insertPurchaseLine(ctx, tx, purchase.ID, lineDraft, supplierProductID, status)
+		line, err := insertPurchaseLine(ctx, tx, purchase.ID, lineDraft, supplierProductID)
 		if err != nil {
 			return domain.ImportResult{}, err
 		}

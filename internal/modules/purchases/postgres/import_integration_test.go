@@ -58,8 +58,8 @@ func TestPurchaseImportIntegration(t *testing.T) {
 	if len(first.Lines) != 1 || first.Lines[0].SupplierProductID == nil {
 		t.Fatalf("Lines = %+v, want one line with a resolved supplier product", first.Lines)
 	}
-	if first.Lines[0].LinkStatus != domain.LinkPending {
-		t.Fatalf("LinkStatus = %q, want PENDIENTE for a brand new supplier product", first.Lines[0].LinkStatus)
+	if first.Lines[0].DerivedStatus != domain.LinkPending {
+		t.Fatalf("effective status = %q, want PENDIENTE for a brand new supplier product", first.Lines[0].DerivedStatus)
 	}
 	supplierProductID := *first.Lines[0].SupplierProductID
 
@@ -100,17 +100,18 @@ func TestPurchaseImportIntegration(t *testing.T) {
 		t.Fatal("expected the same supplier product reused across purchases sharing the same SKU")
 	}
 
-	t.Run("linking cascades to every referencing pending line", func(t *testing.T) {
-		if _, err := repo.LinkSupplierProductToResource(ctx, supplierProductID, resourceID); err != nil {
-			t.Fatalf("LinkSupplierProductToResource() = %v", err)
-		}
+	confirmed, err := repo.ConfirmMapping(ctx, domain.ConfirmMappingCommand{SupplierProductID: supplierProductID, ResourceID: resourceID, Decision: mappingDecision()})
+	if err != nil {
+		t.Fatalf("ConfirmMapping() = %v", err)
+	}
+	t.Run("mapping derives linked status for every referencing pending line", func(t *testing.T) {
 		for _, purchaseID := range []int64{first.Purchase.ID, second.Purchase.ID} {
 			lines, err := repo.ListPurchaseLines(ctx, purchaseID)
 			if err != nil {
 				t.Fatalf("ListPurchaseLines(%d) = %v", purchaseID, err)
 			}
-			if lines[0].LinkStatus != domain.LinkLinked {
-				t.Fatalf("purchase %d line status = %q, want VINCULADO", purchaseID, lines[0].LinkStatus)
+			if lines[0].DerivedStatus != domain.LinkLinked {
+				t.Fatalf("purchase %d line effective status = %q, want VINCULADO", purchaseID, lines[0].DerivedStatus)
 			}
 		}
 
@@ -128,33 +129,37 @@ func TestPurchaseImportIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ListPurchaseLines() = %v", err)
 		}
-		overridden, err := repo.SetPurchaseLineLinkStatus(ctx, lines[0].ID, domain.LinkNotApplicable)
+		overridden, err := repo.MarkNotApplicable(ctx, lines[0].ID)
 		if err != nil {
-			t.Fatalf("SetPurchaseLineLinkStatus() = %v", err)
+			t.Fatalf("MarkNotApplicable() = %v", err)
 		}
-		if overridden.LinkStatus != domain.LinkNotApplicable {
-			t.Fatalf("LinkStatus = %q, want NO_APLICA", overridden.LinkStatus)
+		if overridden.DerivedStatus != domain.LinkNotApplicable || overridden.ResolutionOverride != domain.LinkNotApplicable {
+			t.Fatalf("effective status = %q, override = %q, want NO_APLICA", overridden.DerivedStatus, overridden.ResolutionOverride)
 		}
 
-		if _, err := repo.UnlinkSupplierProduct(ctx, supplierProductID); err != nil {
-			t.Fatalf("UnlinkSupplierProduct() = %v", err)
+		if _, err := repo.ExceptionalUnlink(ctx, domain.ExceptionalUnlinkCommand{SupplierProductID: supplierProductID, ExpectedCurrentResource: resourceID, ExpectedRevision: confirmed.MappingRevision, Decision: mappingDecision()}); err != nil {
+			t.Fatalf("ExceptionalUnlink() = %v", err)
 		}
 		unlinkedLines, err := repo.ListPurchaseLines(ctx, first.Purchase.ID)
 		if err != nil {
 			t.Fatalf("ListPurchaseLines() = %v", err)
 		}
-		if unlinkedLines[0].LinkStatus != domain.LinkNotApplicable {
-			t.Fatalf("LinkStatus = %q, want the manual NO_APLICA override to survive unlink", unlinkedLines[0].LinkStatus)
+		if unlinkedLines[0].DerivedStatus != domain.LinkNotApplicable {
+			t.Fatalf("effective status = %q, want the manual NO_APLICA override to survive unlink", unlinkedLines[0].DerivedStatus)
 		}
 
 		otherLines, err := repo.ListPurchaseLines(ctx, second.Purchase.ID)
 		if err != nil {
 			t.Fatalf("ListPurchaseLines() = %v", err)
 		}
-		if otherLines[0].LinkStatus != domain.LinkPending {
-			t.Fatalf("LinkStatus = %q, want PENDIENTE after unlink", otherLines[0].LinkStatus)
+		if otherLines[0].DerivedStatus != domain.LinkPending {
+			t.Fatalf("effective status = %q, want PENDIENTE after unlink", otherLines[0].DerivedStatus)
 		}
 	})
+}
+
+func mappingDecision() domain.MappingDecisionMetadata {
+	return domain.MappingDecisionMetadata{Actor: "integration-test", Origin: domain.MappingOriginManual, Reason: "integration test decision", At: time.Now()}
 }
 
 func buildTestDraft(supplierID int64, uuid, sku, total string) domain.PurchaseDraft {
@@ -252,9 +257,22 @@ func createTestResource(t *testing.T, ctx context.Context, pool *pgxpool.Pool, u
 	return stored.ID
 }
 
+const mappingAuditCleanupSQL = `DELETE FROM public.supplier_product_mapping_audit
+WHERE supplier_product_id IN (
+	SELECT id FROM public.supplier_products WHERE supplier_id = $1
+)`
+
 func cleanupPurchaseFixtures(t *testing.T, adminPool *pgxpool.Pool, resourceID, supplierID int64) {
 	t.Helper()
 	ctx := context.Background()
+	var auditTable *string
+	if err := adminPool.QueryRow(ctx, `SELECT to_regclass('public.supplier_product_mapping_audit')`).Scan(&auditTable); err != nil {
+		t.Errorf("probe mapping audit table: %v", err)
+	} else if auditTable != nil {
+		if _, err := adminPool.Exec(ctx, mappingAuditCleanupSQL, supplierID); err != nil {
+			t.Errorf("cleanup mapping audit: %v", err)
+		}
+	}
 	if _, err := adminPool.Exec(ctx, `DELETE FROM public.purchases WHERE supplier_id = $1`, supplierID); err != nil {
 		t.Errorf("cleanup purchases: %v", err)
 	}

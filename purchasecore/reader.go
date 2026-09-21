@@ -18,6 +18,7 @@ type ReadCapabilities interface {
 	FindSupplierProduct(ctx context.Context, supplierID int64, sku string) (SupplierProduct, error)
 	ListSupplierProducts(ctx context.Context, supplierID int64, q ListCriteria) (SupplierProductPage, error)
 	ListPurchaseLinesByResource(ctx context.Context, resourceID int64, q ListCriteria) (PurchaseLineHistoryPage, error)
+	ListMappingAudit(ctx context.Context, supplierProductID int64, q ListCriteria) (MappingAuditPage, error)
 }
 
 // Reader is the public read-only Purchase and Price History contract. It
@@ -142,5 +143,18 @@ func (r *Reader) ListPurchaseLinesByResource(ctx context.Context, resourceID int
 		return PurchaseLineHistoryPage{}, err
 	}
 	page.History = clonePurchaseLineHistorySlice(page.History)
+	return page, nil
+}
+
+// ListMappingAudit returns the append-only confirmed mapping history.
+func (r *Reader) ListMappingAudit(ctx context.Context, supplierProductID int64, q ListCriteria) (MappingAuditPage, error) {
+	if supplierProductID <= 0 {
+		return MappingAuditPage{}, NewError(InvalidArgument, "supplier product id must be positive")
+	}
+	page, err := r.cap.ListMappingAudit(ctx, supplierProductID, q)
+	if err != nil {
+		return MappingAuditPage{}, err
+	}
+	page.Entries = cloneMappingAuditSlice(page.Entries)
 	return page, nil
 }
