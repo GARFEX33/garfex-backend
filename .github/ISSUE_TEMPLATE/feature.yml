@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose an approved product or engineering capability.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - status:needs-review
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the concrete problem or limitation.
+      placeholder: What cannot be done safely or clearly today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the observable result, not only an implementation.
+      placeholder: What should users or maintainers be able to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and constraints
+      description: State required boundaries, compatibility needs, and explicit non-goals.
+      placeholder: What is included and excluded?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List the verifiable conditions required to close the issue.
+      placeholder: |-
+        - [ ] First verifiable condition
+        - [ ] Second verifiable condition
+    validations:
+      required: true
