@@ -40,6 +40,8 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 		serveSupplierCFDIPreview(w, r, supplierReader)
 	case "/v1/purchases":
 		servePurchaseImport(w, r, purchaseWriter)
+	case "/v1/purchase-lines":
+		servePurchaseLineWorkbench(w, r, purchaseReader)
 	case "/openapi.yaml":
 		serveGet(w, r, serveOpenAPI)
 	case "/docs":
@@ -101,16 +103,16 @@ func route(w http.ResponseWriter, r *http.Request, reader CatalogReader, supplie
 			servePurchaseDetail(w, r, purchaseReader, id)
 			return
 		}
-		if id, ok := supplierProductLinkPath(r.URL.Path); ok {
-			serveSupplierProductLink(w, r, purchaseWriter, id)
+		if id, action, ok := supplierProductMappingPath(r.URL.Path); ok {
+			serveSupplierProductMapping(w, r, purchaseWriter, id, action)
 			return
 		}
-		if id, ok := supplierProductUnlinkPath(r.URL.Path); ok {
-			serveSupplierProductUnlink(w, r, purchaseWriter, id)
+		if id, ok := purchaseLineResolvePath(r.URL.Path); ok {
+			servePurchaseLineResolve(w, r, purchaseWriter, id)
 			return
 		}
-		if id, ok := purchaseLineLinkStatusPath(r.URL.Path); ok {
-			servePurchaseLineLinkStatus(w, r, purchaseWriter, id)
+		if id, ok := purchaseLineResolutionOverridePath(r.URL.Path); ok {
+			servePurchaseLineResolutionOverride(w, r, purchaseWriter, id)
 			return
 		}
 		if id, ok := supplierProductDetailPath(r.URL.Path); ok {
@@ -354,27 +356,35 @@ func supplierProductDetailPath(path string) (id string, ok bool) {
 	return id, ok && id != "" && !strings.Contains(id, "/")
 }
 
-func supplierProductLinkPath(path string) (id string, ok bool) {
-	return supplierProductActionPath(path, "/link")
-}
-
-func supplierProductUnlinkPath(path string) (id string, ok bool) {
-	return supplierProductActionPath(path, "/unlink")
-}
-
-func supplierProductActionPath(path, suffix string) (id string, ok bool) {
+func supplierProductMappingPath(path string) (id, action string, ok bool) {
 	const prefix = "/v1/supplier-products/"
+	const separator = "/mapping/"
 	remainder, ok := strings.CutPrefix(path, prefix)
 	if !ok {
-		return "", false
+		return "", "", false
 	}
-	id, ok = strings.CutSuffix(remainder, suffix)
-	return id, ok && id != "" && !strings.Contains(id, "/")
+	id, action, ok = strings.Cut(remainder, separator)
+	if !ok || id == "" || action == "" || strings.Contains(id, "/") || strings.Contains(action, "/") {
+		return "", "", false
+	}
+	switch action {
+	case "confirm", "correct", "retire", "report-conflict", "resolve-conflict":
+		return id, action, true
+	default:
+		return "", "", false
+	}
 }
 
-func purchaseLineLinkStatusPath(path string) (id string, ok bool) {
+func purchaseLineResolvePath(path string) (id string, ok bool) {
+	return purchaseLineActionPath(path, "/resolve")
+}
+
+func purchaseLineResolutionOverridePath(path string) (id string, ok bool) {
+	return purchaseLineActionPath(path, "/resolution-override")
+}
+
+func purchaseLineActionPath(path, suffix string) (id string, ok bool) {
 	const prefix = "/v1/purchase-lines/"
-	const suffix = "/link-status"
 	remainder, ok := strings.CutPrefix(path, prefix)
 	if !ok {
 		return "", false

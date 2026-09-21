@@ -21,6 +21,7 @@ type PurchaseReader interface {
 	GetPurchase(context.Context, int64) (purchasecore.Purchase, error)
 	GetPurchaseByUUID(context.Context, string) (purchasecore.Purchase, error)
 	ListPurchaseLines(context.Context, int64) ([]purchasecore.PurchaseLine, error)
+	ListPurchaseLinesWorkbench(context.Context, purchasecore.PurchaseLineQuery) (purchasecore.PurchaseLinePage, error)
 	ListPurchasesBySupplier(context.Context, int64, purchasecore.ListCriteria) (purchasecore.PurchasePage, error)
 	GetSupplierProduct(context.Context, int64) (purchasecore.SupplierProduct, error)
 	FindSupplierProduct(context.Context, int64, string) (purchasecore.SupplierProduct, error)
@@ -28,13 +29,17 @@ type PurchaseReader interface {
 	ListPurchaseLinesByResource(context.Context, int64, purchasecore.ListCriteria) (purchasecore.PurchaseLineHistoryPage, error)
 }
 
-// PurchaseWriter is the narrow Core capability required by the CFDI import
-// route and the manual relation-correction routes.
+// PurchaseWriter is the narrow Core capability required by purchase import,
+// explicit SupplierProduct mapping transitions, and line resolution.
 type PurchaseWriter interface {
 	ImportPurchase(context.Context, purchasecore.ImportRequest) (purchasecore.ImportResult, error)
-	LinkSupplierProductToResource(context.Context, purchasecore.LinkSupplierProductRequest) (purchasecore.SupplierProduct, error)
-	UnlinkSupplierProduct(context.Context, purchasecore.UnlinkSupplierProductRequest) (purchasecore.SupplierProduct, error)
-	SetPurchaseLineLinkStatus(context.Context, purchasecore.SetPurchaseLineLinkStatusRequest) (purchasecore.PurchaseLine, error)
+	ConfirmMapping(context.Context, purchasecore.ConfirmMappingRequest) (purchasecore.SupplierProduct, error)
+	CorrectMapping(context.Context, purchasecore.CorrectMappingRequest) (purchasecore.SupplierProduct, error)
+	ExceptionalUnlink(context.Context, purchasecore.ExceptionalUnlinkRequest) (purchasecore.SupplierProduct, error)
+	ReportIdentityConflict(context.Context, purchasecore.ReportIdentityConflictRequest) (purchasecore.SupplierProduct, error)
+	ResolveIdentityConflict(context.Context, purchasecore.ResolveIdentityConflictRequest) (purchasecore.SupplierProduct, error)
+	ResolvePurchaseLine(context.Context, purchasecore.ResolvePurchaseLineRequest) (purchasecore.ResolvePurchaseLineResult, error)
+	SetResolutionOverride(context.Context, purchasecore.SetResolutionOverrideRequest) (purchasecore.PurchaseLine, error)
 }
 
 type purchaseResponse struct {
@@ -68,34 +73,72 @@ type xmlDocumentResponse struct {
 }
 
 type purchaseLineResponse struct {
-	ID                string  `json:"id"`
-	PurchaseID        string  `json:"purchaseId"`
-	LineNumber        int     `json:"lineNumber"`
-	Description       string  `json:"description"`
-	SupplierSKU       string  `json:"supplierSku"`
-	SATProductCode    string  `json:"satProductCode"`
-	Quantity          string  `json:"quantity"`
-	UnitCode          string  `json:"unitCode"`
-	Unit              string  `json:"unit"`
-	UnitPrice         string  `json:"unitPrice"`
-	Amount            string  `json:"amount"`
-	Discount          string  `json:"discount"`
-	TaxTransferred    string  `json:"taxTransferred"`
-	TaxWithheld       string  `json:"taxWithheld"`
-	TaxObject         string  `json:"taxObject"`
-	SupplierProductID *string `json:"supplierProductId"`
-	LinkStatus        string  `json:"linkStatus"`
+	ID                 string  `json:"id"`
+	PurchaseID         string  `json:"purchaseId"`
+	LineNumber         int     `json:"lineNumber"`
+	Description        string  `json:"description"`
+	SupplierSKU        string  `json:"supplierSku"`
+	SATProductCode     string  `json:"satProductCode"`
+	Quantity           string  `json:"quantity"`
+	UnitCode           string  `json:"unitCode"`
+	Unit               string  `json:"unit"`
+	UnitPrice          string  `json:"unitPrice"`
+	Amount             string  `json:"amount"`
+	Discount           string  `json:"discount"`
+	TaxTransferred     string  `json:"taxTransferred"`
+	TaxWithheld        string  `json:"taxWithheld"`
+	TaxObject          string  `json:"taxObject"`
+	SupplierProductID  *string `json:"supplierProductId"`
+	ResolutionRevision string  `json:"resolutionRevision"`
+	ResolutionOverride string  `json:"resolutionOverride"`
+	EffectiveStatus    string  `json:"effectiveStatus"`
+	EffectiveCause     string  `json:"effectiveCause"`
+}
+
+type purchaseLineWorkbenchRowResponse struct {
+	LineID                string  `json:"lineId"`
+	PurchaseID            string  `json:"purchaseId"`
+	LineNumber            int     `json:"lineNumber"`
+	IssuedAt              string  `json:"issuedAt"`
+	Series                string  `json:"series"`
+	Folio                 string  `json:"folio"`
+	CFDIUUID              string  `json:"cfdiUuid"`
+	SupplierID            string  `json:"supplierId"`
+	SupplierDisplayName   string  `json:"supplierDisplayName"`
+	Description           string  `json:"description"`
+	SupplierSKU           string  `json:"supplierSku"`
+	CommercialSupplierSKU *string `json:"commercialSupplierSku"`
+	SATProductCode        string  `json:"satProductCode"`
+	Quantity              string  `json:"quantity"`
+	UnitCode              string  `json:"unitCode"`
+	Unit                  string  `json:"unit"`
+	UnitPrice             string  `json:"unitPrice"`
+	Amount                string  `json:"amount"`
+	Currency              string  `json:"currency"`
+	SupplierProductID     *string `json:"supplierProductId"`
+	MappingRevision       *string `json:"mappingRevision"`
+	ResolutionRevision    string  `json:"resolutionRevision"`
+	ResourceID            *string `json:"resourceId"`
+	ResourceIdentity      *string `json:"resourceIdentity"`
+	ResourceDisplayName   *string `json:"resourceDisplayName"`
+	ResolutionOverride    string  `json:"resolutionOverride"`
+	EffectiveStatus       string  `json:"effectiveStatus"`
+	EffectiveCause        string  `json:"effectiveCause"`
 }
 
 type supplierProductResponse struct {
-	ID          string  `json:"id"`
-	SupplierID  string  `json:"supplierId"`
-	SupplierSKU string  `json:"supplierSku"`
-	Description string  `json:"description"`
-	ResourceID  *string `json:"resourceId"`
-	Notes       string  `json:"notes"`
-	CreatedAt   string  `json:"createdAt"`
-	UpdatedAt   string  `json:"updatedAt"`
+	ID              string  `json:"id"`
+	SupplierID      string  `json:"supplierId"`
+	SupplierSKU     string  `json:"supplierSku"`
+	Description     string  `json:"description"`
+	ResourceID      *string `json:"resourceId"`
+	MappingRevision string  `json:"mappingRevision"`
+	ResourceActive  *bool   `json:"resourceActive"`
+	MappingState    string  `json:"mappingState"`
+	MappingCause    string  `json:"mappingCause"`
+	Notes           string  `json:"notes"`
+	CreatedAt       string  `json:"createdAt"`
+	UpdatedAt       string  `json:"updatedAt"`
 }
 
 type purchaseLineHistoryResponse struct {
@@ -136,23 +179,26 @@ func mapPurchase(p purchasecore.Purchase) purchaseResponse {
 
 func mapPurchaseLine(l purchasecore.PurchaseLine) purchaseLineResponse {
 	return purchaseLineResponse{
-		ID:                strconv.FormatInt(l.ID, 10),
-		PurchaseID:        strconv.FormatInt(l.PurchaseID, 10),
-		LineNumber:        l.LineNumber,
-		Description:       l.Description,
-		SupplierSKU:       l.SupplierSKU,
-		SATProductCode:    l.SATProductCode,
-		Quantity:          l.Quantity,
-		UnitCode:          l.UnitCode,
-		Unit:              l.Unit,
-		UnitPrice:         l.UnitPrice,
-		Amount:            l.Amount,
-		Discount:          l.Discount,
-		TaxTransferred:    l.TaxTransferred,
-		TaxWithheld:       l.TaxWithheld,
-		TaxObject:         l.TaxObject,
-		SupplierProductID: formatOptionalID(l.SupplierProductID),
-		LinkStatus:        string(l.LinkStatus),
+		ID:                 strconv.FormatInt(l.ID, 10),
+		PurchaseID:         strconv.FormatInt(l.PurchaseID, 10),
+		LineNumber:         l.LineNumber,
+		Description:        l.Description,
+		SupplierSKU:        l.SupplierSKU,
+		SATProductCode:     l.SATProductCode,
+		Quantity:           l.Quantity,
+		UnitCode:           l.UnitCode,
+		Unit:               l.Unit,
+		UnitPrice:          l.UnitPrice,
+		Amount:             l.Amount,
+		Discount:           l.Discount,
+		TaxTransferred:     l.TaxTransferred,
+		TaxWithheld:        l.TaxWithheld,
+		TaxObject:          l.TaxObject,
+		SupplierProductID:  formatOptionalID(l.SupplierProductID),
+		ResolutionRevision: strconv.FormatUint(uint64(l.ResolutionRevision), 10),
+		ResolutionOverride: string(l.ResolutionOverride),
+		EffectiveStatus:    string(l.EffectiveStatus),
+		EffectiveCause:     string(l.EffectiveCause),
 	}
 }
 
@@ -164,16 +210,53 @@ func mapPurchaseLines(lines []purchasecore.PurchaseLine) []purchaseLineResponse 
 	return out
 }
 
+func mapPurchaseLineWorkbenchRow(row purchasecore.PurchaseLineRow) purchaseLineWorkbenchRowResponse {
+	return purchaseLineWorkbenchRowResponse{
+		LineID:                strconv.FormatInt(row.LineID, 10),
+		PurchaseID:            strconv.FormatInt(row.PurchaseID, 10),
+		LineNumber:            row.LineNumber,
+		IssuedAt:              formatCFDIDate(row.IssuedAt),
+		Series:                row.Series,
+		Folio:                 row.Folio,
+		CFDIUUID:              row.CFDIUUID,
+		SupplierID:            strconv.FormatInt(row.SupplierID, 10),
+		SupplierDisplayName:   row.SupplierDisplayName,
+		Description:           row.Description,
+		SupplierSKU:           row.SupplierSKU,
+		CommercialSupplierSKU: row.CommercialSupplierSKU,
+		SATProductCode:        row.SATProductCode,
+		Quantity:              row.Quantity,
+		UnitCode:              row.UnitCode,
+		Unit:                  row.Unit,
+		UnitPrice:             row.UnitPrice,
+		Amount:                row.Amount,
+		Currency:              row.Currency,
+		SupplierProductID:     formatOptionalID(row.SupplierProductID),
+		MappingRevision:       formatOptionalMappingRevision(row.MappingRevision),
+		ResolutionRevision:    strconv.FormatUint(uint64(row.ResolutionRevision), 10),
+		ResourceID:            formatOptionalID(row.ResourceID),
+		ResourceIdentity:      row.ResourceIdentity,
+		ResourceDisplayName:   row.ResourceDisplayName,
+		ResolutionOverride:    string(row.ResolutionOverride),
+		EffectiveStatus:       string(row.EffectiveStatus),
+		EffectiveCause:        string(row.EffectiveCause),
+	}
+}
+
 func mapSupplierProduct(sp purchasecore.SupplierProduct) supplierProductResponse {
 	return supplierProductResponse{
-		ID:          strconv.FormatInt(sp.ID, 10),
-		SupplierID:  strconv.FormatInt(sp.SupplierID, 10),
-		SupplierSKU: sp.SupplierSKU,
-		Description: sp.Description,
-		ResourceID:  formatOptionalID(sp.ResourceID),
-		Notes:       sp.Notes,
-		CreatedAt:   sp.CreatedAt.UTC().Format(time.RFC3339Nano),
-		UpdatedAt:   sp.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		ID:              strconv.FormatInt(sp.ID, 10),
+		SupplierID:      strconv.FormatInt(sp.SupplierID, 10),
+		SupplierSKU:     sp.SupplierSKU,
+		Description:     sp.Description,
+		ResourceID:      formatOptionalID(sp.CurrentMapping.ResourceID),
+		MappingRevision: strconv.FormatUint(uint64(sp.MappingRevision), 10),
+		ResourceActive:  sp.ResourceActive,
+		MappingState:    string(sp.MappingState),
+		MappingCause:    string(sp.MappingCause),
+		Notes:           sp.Notes,
+		CreatedAt:       sp.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:       sp.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
@@ -198,6 +281,14 @@ func formatOptionalID(id *int64) *string {
 	return &text
 }
 
+func formatOptionalMappingRevision(revision *purchasecore.MappingRevision) *string {
+	if revision == nil {
+		return nil
+	}
+	text := strconv.FormatUint(uint64(*revision), 10)
+	return &text
+}
+
 func writePurchaseError(w http.ResponseWriter, err error) {
 	status, message := purchaseError(err)
 	code := purchasecore.Code(err)
@@ -213,7 +304,9 @@ func writePurchaseError(w http.ResponseWriter, err error) {
 // static, developer-authored string safe to return verbatim to the client.
 func isPurchaseValidationCode(code purchasecore.ErrorCode) bool {
 	switch code {
-	case purchasecore.InvalidArgument, purchasecore.Validation:
+	case purchasecore.InvalidArgument, purchasecore.Validation,
+		purchasecore.ResourceInactive, purchasecore.CommercialSupplierSKURequired,
+		purchasecore.CommercialSupplierSKUForbidden:
 		return true
 	default:
 		return false
@@ -224,11 +317,15 @@ func purchaseError(err error) (int, string) {
 	switch purchasecore.Code(err) {
 	case purchasecore.InvalidArgument:
 		return http.StatusBadRequest, "invalid request"
-	case purchasecore.NotFound:
+	case purchasecore.NotFound, purchasecore.PurchaseLineNotFound, purchasecore.ResourceNotFound:
 		return http.StatusNotFound, "not found"
-	case purchasecore.Conflict:
+	case purchasecore.Conflict, purchasecore.PurchaseLineStateConflict,
+		purchasecore.StaleResolutionRevision, purchasecore.StaleMappingRevision,
+		purchasecore.SupplierProductTargetConflict, purchasecore.InvalidMappingTransition,
+		purchasecore.IntegrityConflict:
 		return http.StatusConflict, "conflict"
-	case purchasecore.Validation:
+	case purchasecore.Validation, purchasecore.ResourceInactive,
+		purchasecore.CommercialSupplierSKURequired, purchasecore.CommercialSupplierSKUForbidden:
 		return http.StatusUnprocessableEntity, "validation failed"
 	case purchasecore.Internal:
 		return http.StatusInternalServerError, "internal server error"

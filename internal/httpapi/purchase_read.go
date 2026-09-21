@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/GARFEX33/garfex-costos-unitarios/purchasecore"
 )
@@ -24,6 +25,12 @@ type purchaseLineHistoryPageResponse struct {
 	History     []purchaseLineHistoryResponse `json:"history"`
 	HasPrevious bool                          `json:"hasPrevious"`
 	HasNext     bool                          `json:"hasNext"`
+}
+
+type purchaseLineWorkbenchPageResponse struct {
+	Lines       []purchaseLineWorkbenchRowResponse `json:"lines"`
+	HasPrevious bool                               `json:"hasPrevious"`
+	HasNext     bool                               `json:"hasNext"`
 }
 
 func servePurchaseDetail(w http.ResponseWriter, r *http.Request, reader PurchaseReader, id string) {
@@ -88,6 +95,131 @@ func servePurchaseLines(w http.ResponseWriter, r *http.Request, reader PurchaseR
 		return
 	}
 	writeJSON(w, http.StatusOK, mapPurchaseLines(lines))
+}
+
+func servePurchaseLineWorkbench(w http.ResponseWriter, r *http.Request, reader PurchaseReader) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+		return
+	}
+	query, ok := purchaseLineWorkbenchQuery(r)
+	if !ok {
+		writePurchaseError(w, purchasecore.NewError(purchasecore.InvalidArgument, "invalid purchase line query"))
+		return
+	}
+	if reader == nil {
+		writePurchaseError(w, purchasecore.NewError(purchasecore.Internal, "purchase reader unavailable"))
+		return
+	}
+	page, err := reader.ListPurchaseLinesWorkbench(r.Context(), query)
+	if err != nil {
+		writePurchaseError(w, err)
+		return
+	}
+	lines := make([]purchaseLineWorkbenchRowResponse, len(page.Rows))
+	for i, row := range page.Rows {
+		lines[i] = mapPurchaseLineWorkbenchRow(row)
+	}
+	writeJSON(w, http.StatusOK, purchaseLineWorkbenchPageResponse{
+		Lines:       lines,
+		HasPrevious: page.HasPrevious,
+		HasNext:     page.HasNext,
+	})
+}
+
+func purchaseLineWorkbenchQuery(r *http.Request) (purchasecore.PurchaseLineQuery, bool) {
+	values, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return purchasecore.PurchaseLineQuery{}, false
+	}
+	query := purchasecore.PurchaseLineQuery{Limit: defaultPurchaseLimit}
+	if raw, present := values["supplierId"]; present {
+		if len(raw) == 0 {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		supplierID, ok := positiveInt64(raw[0])
+		if !ok {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		query.SupplierID = &supplierID
+	}
+	if raw, present := values["status"]; present {
+		if len(raw) == 0 {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		query.EffectiveStatus = purchasecore.LinkStatus(raw[0])
+		if !validPurchaseLineStatus(query.EffectiveStatus) {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+	}
+	if raw, present := values["dateFrom"]; present {
+		if len(raw) == 0 {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		dateFrom, ok := parsePurchaseLineDate(raw[0], false)
+		if !ok {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		query.DateFrom = dateFrom
+	}
+	if raw, present := values["dateTo"]; present {
+		if len(raw) == 0 {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		dateTo, ok := parsePurchaseLineDate(raw[0], true)
+		if !ok {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		query.DateTo = dateTo
+	}
+	if query.DateFrom != nil && query.DateTo != nil && query.DateFrom.After(*query.DateTo) {
+		return purchasecore.PurchaseLineQuery{}, false
+	}
+	query.InvoiceText = values.Get("invoice")
+	query.SupplierSKU = values.Get("supplierSku")
+	query.Description = values.Get("description")
+	if raw, present := values["limit"]; present {
+		if len(raw) == 0 {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		limit, err := strconv.Atoi(raw[0])
+		if err != nil || limit < 1 || limit > maximumPurchaseLimit {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		query.Limit = limit
+	}
+	if raw, present := values["offset"]; present {
+		if len(raw) == 0 {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		offset, err := strconv.Atoi(raw[0])
+		if err != nil || offset < 0 {
+			return purchasecore.PurchaseLineQuery{}, false
+		}
+		query.Offset = offset
+	}
+	return query, true
+}
+
+func parsePurchaseLineDate(value string, endOfDay bool) (*time.Time, bool) {
+	date, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return nil, false
+	}
+	if endOfDay {
+		date = time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, int(time.Second-time.Nanosecond), time.UTC)
+	}
+	return &date, true
+}
+
+func validPurchaseLineStatus(status purchasecore.LinkStatus) bool {
+	switch status {
+	case purchasecore.LinkPending, purchasecore.LinkLinked, purchasecore.LinkSuspended, purchasecore.LinkNotApplicable, purchasecore.LinkConflict:
+		return true
+	default:
+		return false
+	}
 }
 
 func serveSupplierPurchases(w http.ResponseWriter, r *http.Request, reader PurchaseReader, supplierID string) {

@@ -138,15 +138,26 @@ func TestOpenAPIDescribesOnlyImplementedBusinessPath(t *testing.T) {
 		"  /v1/resources:\n", "  /v1/resources/{classCode}/{identityV1}:\n", "  /v1/resources/{classCode}/{identityV1}/describe:\n",
 		"  /v1/resources/{id}:\n", "  /v1/resources/{id}/deactivate:\n", "  /v1/resources/{id}/reactivate:\n",
 		"  /v1/cfdi/parse:\n", "  /v1/suppliers/from-cfdi/preview:\n", "  /v1/types/{typeCode}/attributes/effective:\n", "  /v1/types/{typeCode}/attributes/evaluate:\n",
+		"  /v1/purchase-lines:\n", "  /v1/supplier-products/{id}/mapping/confirm:\n", "  /v1/supplier-products/{id}/mapping/correct:\n",
+		"  /v1/supplier-products/{id}/mapping/retire:\n", "  /v1/supplier-products/{id}/mapping/report-conflict:\n", "  /v1/supplier-products/{id}/mapping/resolve-conflict:\n",
+		"  /v1/purchase-lines/{lineId}/resolve:\n", "  /v1/purchase-lines/{lineId}/resolution-override:\n",
 		"  /openapi.yaml:\n", "  /docs:\n",
 	} {
 		if !strings.Contains(body, path) {
 			t.Errorf("OpenAPI document does not contain %q", path)
 		}
 	}
-	for _, path := range []string{"/v1/catalog/records"} {
+	for _, path := range []string{
+		"/v1/catalog/records",
+		"  /v1/supplier-products/{id}/link:\n",
+		"  /v1/supplier-products/{id}/unlink:\n",
+		"  /v1/purchase-lines/{id}/link-status:\n",
+		"LinkSupplierProductRequest",
+		"UnlinkSupplierProductRequest",
+		"SetLinkStatusRequest",
+	} {
 		if strings.Contains(body, path) {
-			t.Errorf("OpenAPI document advertises unimplemented path %q", path)
+			t.Errorf("OpenAPI document advertises legacy or unimplemented path/schema %q", path)
 		}
 	}
 }
@@ -175,5 +186,39 @@ func TestDocsUsesScalarDeclarativeCDNInitialization(t *testing.T) {
 	}
 	if strings.Contains(body, "createApiReference") {
 		t.Error("documentation page uses an unsupported imperative Scalar initializer")
+	}
+}
+
+func TestPurchaseMutationPathHelpers(t *testing.T) {
+	for _, test := range []struct {
+		path   string
+		action string
+	}{
+		{"/v1/supplier-products/9/mapping/confirm", "confirm"},
+		{"/v1/supplier-products/9/mapping/correct", "correct"},
+		{"/v1/supplier-products/9/mapping/retire", "retire"},
+		{"/v1/supplier-products/9/mapping/report-conflict", "report-conflict"},
+		{"/v1/supplier-products/9/mapping/resolve-conflict", "resolve-conflict"},
+	} {
+		id, action, ok := supplierProductMappingPath(test.path)
+		if !ok || id != "9" || action != test.action {
+			t.Errorf("supplierProductMappingPath(%q) = %q, %q, %t", test.path, id, action, ok)
+		}
+	}
+	if id, ok := purchaseLineResolvePath("/v1/purchase-lines/11/resolve"); !ok || id != "11" {
+		t.Errorf("purchaseLineResolvePath = %q, %t", id, ok)
+	}
+	if id, ok := purchaseLineResolutionOverridePath("/v1/purchase-lines/11/resolution-override"); !ok || id != "11" {
+		t.Errorf("purchaseLineResolutionOverridePath = %q, %t", id, ok)
+	}
+	for _, path := range []string{
+		"/v1/supplier-products/9/link",
+		"/v1/supplier-products/9/unlink",
+		"/v1/purchase-lines/11/link-status",
+		"/v1/supplier-products/9/mapping/unknown",
+	} {
+		if _, _, ok := supplierProductMappingPath(path); ok {
+			t.Errorf("supplierProductMappingPath(%q) unexpectedly matched", path)
+		}
 	}
 }

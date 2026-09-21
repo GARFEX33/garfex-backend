@@ -13,26 +13,46 @@ import (
 )
 
 type purchaseWriterFuncs struct {
-	importPurchase    func(context.Context, purchasecore.ImportRequest) (purchasecore.ImportResult, error)
-	linkProduct       func(context.Context, purchasecore.LinkSupplierProductRequest) (purchasecore.SupplierProduct, error)
-	unlinkProduct     func(context.Context, purchasecore.UnlinkSupplierProductRequest) (purchasecore.SupplierProduct, error)
-	setLineLinkStatus func(context.Context, purchasecore.SetPurchaseLineLinkStatusRequest) (purchasecore.PurchaseLine, error)
+	importPurchase          func(context.Context, purchasecore.ImportRequest) (purchasecore.ImportResult, error)
+	confirmMapping          func(context.Context, purchasecore.ConfirmMappingRequest) (purchasecore.SupplierProduct, error)
+	correctMapping          func(context.Context, purchasecore.CorrectMappingRequest) (purchasecore.SupplierProduct, error)
+	exceptionalUnlink       func(context.Context, purchasecore.ExceptionalUnlinkRequest) (purchasecore.SupplierProduct, error)
+	reportIdentityConflict  func(context.Context, purchasecore.ReportIdentityConflictRequest) (purchasecore.SupplierProduct, error)
+	resolveIdentityConflict func(context.Context, purchasecore.ResolveIdentityConflictRequest) (purchasecore.SupplierProduct, error)
+	resolvePurchaseLine     func(context.Context, purchasecore.ResolvePurchaseLineRequest) (purchasecore.ResolvePurchaseLineResult, error)
+	setResolutionOverride   func(context.Context, purchasecore.SetResolutionOverrideRequest) (purchasecore.PurchaseLine, error)
 }
 
 func (f purchaseWriterFuncs) ImportPurchase(ctx context.Context, req purchasecore.ImportRequest) (purchasecore.ImportResult, error) {
 	return f.importPurchase(ctx, req)
 }
 
-func (f purchaseWriterFuncs) LinkSupplierProductToResource(ctx context.Context, req purchasecore.LinkSupplierProductRequest) (purchasecore.SupplierProduct, error) {
-	return f.linkProduct(ctx, req)
+func (f purchaseWriterFuncs) ConfirmMapping(ctx context.Context, req purchasecore.ConfirmMappingRequest) (purchasecore.SupplierProduct, error) {
+	return f.confirmMapping(ctx, req)
 }
 
-func (f purchaseWriterFuncs) UnlinkSupplierProduct(ctx context.Context, req purchasecore.UnlinkSupplierProductRequest) (purchasecore.SupplierProduct, error) {
-	return f.unlinkProduct(ctx, req)
+func (f purchaseWriterFuncs) CorrectMapping(ctx context.Context, req purchasecore.CorrectMappingRequest) (purchasecore.SupplierProduct, error) {
+	return f.correctMapping(ctx, req)
 }
 
-func (f purchaseWriterFuncs) SetPurchaseLineLinkStatus(ctx context.Context, req purchasecore.SetPurchaseLineLinkStatusRequest) (purchasecore.PurchaseLine, error) {
-	return f.setLineLinkStatus(ctx, req)
+func (f purchaseWriterFuncs) ExceptionalUnlink(ctx context.Context, req purchasecore.ExceptionalUnlinkRequest) (purchasecore.SupplierProduct, error) {
+	return f.exceptionalUnlink(ctx, req)
+}
+
+func (f purchaseWriterFuncs) ReportIdentityConflict(ctx context.Context, req purchasecore.ReportIdentityConflictRequest) (purchasecore.SupplierProduct, error) {
+	return f.reportIdentityConflict(ctx, req)
+}
+
+func (f purchaseWriterFuncs) ResolveIdentityConflict(ctx context.Context, req purchasecore.ResolveIdentityConflictRequest) (purchasecore.SupplierProduct, error) {
+	return f.resolveIdentityConflict(ctx, req)
+}
+
+func (f purchaseWriterFuncs) ResolvePurchaseLine(ctx context.Context, req purchasecore.ResolvePurchaseLineRequest) (purchasecore.ResolvePurchaseLineResult, error) {
+	return f.resolvePurchaseLine(ctx, req)
+}
+
+func (f purchaseWriterFuncs) SetResolutionOverride(ctx context.Context, req purchasecore.SetResolutionOverrideRequest) (purchasecore.PurchaseLine, error) {
+	return f.setResolutionOverride(ctx, req)
 }
 
 func purchaseImportRequest(t *testing.T, fields map[string]string, includeFile bool) *http.Request {

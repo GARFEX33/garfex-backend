@@ -2,6 +2,8 @@ github.com/GARFEX33/garfex-costos-unitarios v0.3.0 h1:EhOonKeOFQFL9PYcl4sil/k+PP
 github.com/GARFEX33/garfex-costos-unitarios v0.3.0/go.mod h1:6KMHQKdUIwkLu66oGfZO9s0dmQH5TG/OhFWlgPOph4Y=
 github.com/GARFEX33/garfex-costos-unitarios v0.4.0 h1:0uT0u+aNVgOSf5yvkJNmrid1mhCIhJfhjNa77N1nLP0=
 github.com/GARFEX33/garfex-costos-unitarios v0.4.0/go.mod h1:6KMHQKdUIwkLu66oGfZO9s0dmQH5TG/OhFWlgPOph4Y=
+github.com/GARFEX33/garfex-costos-unitarios v0.4.1-0.20260921042807-59ae0e4c350f h1:MQsaijYxpqXXiIkOhIOG2rdTxCAa5lOJ6bw78regRCk=
+github.com/GARFEX33/garfex-costos-unitarios v0.4.1-0.20260921042807-59ae0e4c350f/go.mod h1:6KMHQKdUIwkLu66oGfZO9s0dmQH5TG/OhFWlgPOph4Y=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

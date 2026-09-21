@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -12,14 +13,15 @@ import (
 )
 
 type purchaseReaderFuncs struct {
-	getPurchase             func(context.Context, int64) (purchasecore.Purchase, error)
-	getPurchaseByUUID       func(context.Context, string) (purchasecore.Purchase, error)
-	listPurchaseLines       func(context.Context, int64) ([]purchasecore.PurchaseLine, error)
-	listPurchasesBySupplier func(context.Context, int64, purchasecore.ListCriteria) (purchasecore.PurchasePage, error)
-	getSupplierProduct      func(context.Context, int64) (purchasecore.SupplierProduct, error)
-	findSupplierProduct     func(context.Context, int64, string) (purchasecore.SupplierProduct, error)
-	listSupplierProducts    func(context.Context, int64, purchasecore.ListCriteria) (purchasecore.SupplierProductPage, error)
-	listByResource          func(context.Context, int64, purchasecore.ListCriteria) (purchasecore.PurchaseLineHistoryPage, error)
+	getPurchase                func(context.Context, int64) (purchasecore.Purchase, error)
+	getPurchaseByUUID          func(context.Context, string) (purchasecore.Purchase, error)
+	listPurchaseLines          func(context.Context, int64) ([]purchasecore.PurchaseLine, error)
+	listPurchaseLinesWorkbench func(context.Context, purchasecore.PurchaseLineQuery) (purchasecore.PurchaseLinePage, error)
+	listPurchasesBySupplier    func(context.Context, int64, purchasecore.ListCriteria) (purchasecore.PurchasePage, error)
+	getSupplierProduct         func(context.Context, int64) (purchasecore.SupplierProduct, error)
+	findSupplierProduct        func(context.Context, int64, string) (purchasecore.SupplierProduct, error)
+	listSupplierProducts       func(context.Context, int64, purchasecore.ListCriteria) (purchasecore.SupplierProductPage, error)
+	listByResource             func(context.Context, int64, purchasecore.ListCriteria) (purchasecore.PurchaseLineHistoryPage, error)
 }
 
 func (f purchaseReaderFuncs) GetPurchase(ctx context.Context, id int64) (purchasecore.Purchase, error) {
@@ -32,6 +34,10 @@ func (f purchaseReaderFuncs) GetPurchaseByUUID(ctx context.Context, uuid string)
 
 func (f purchaseReaderFuncs) ListPurchaseLines(ctx context.Context, purchaseID int64) ([]purchasecore.PurchaseLine, error) {
 	return f.listPurchaseLines(ctx, purchaseID)
+}
+
+func (f purchaseReaderFuncs) ListPurchaseLinesWorkbench(ctx context.Context, q purchasecore.PurchaseLineQuery) (purchasecore.PurchaseLinePage, error) {
+	return f.listPurchaseLinesWorkbench(ctx, q)
 }
 
 func (f purchaseReaderFuncs) ListPurchasesBySupplier(ctx context.Context, supplierID int64, q purchasecore.ListCriteria) (purchasecore.PurchasePage, error) {
@@ -133,7 +139,7 @@ func TestGetPurchaseByUUID(t *testing.T) {
 
 func TestListPurchaseLines(t *testing.T) {
 	lines := []purchasecore.PurchaseLine{
-		{ID: 1, PurchaseID: 7, LineNumber: 1, Description: "CABLE", SupplierSKU: "CAB-1", Quantity: "10", UnitPrice: "10.00", Amount: "100.00", LinkStatus: purchasecore.LinkPending},
+		{ID: 1, PurchaseID: 7, LineNumber: 1, Description: "CABLE", SupplierSKU: "CAB-1", Quantity: "10", UnitPrice: "10.00", Amount: "100.00", EffectiveStatus: purchasecore.LinkPending},
 	}
 	reader := purchaseReaderFuncs{listPurchaseLines: func(_ context.Context, purchaseID int64) ([]purchasecore.PurchaseLine, error) {
 		if purchaseID != 7 {
@@ -151,10 +157,159 @@ func TestListPurchaseLines(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body) != 1 || body[0]["supplierSku"] != "CAB-1" || body[0]["linkStatus"] != "PENDIENTE" {
+	if len(body) != 1 || body[0]["supplierSku"] != "CAB-1" || body[0]["effectiveStatus"] != "PENDIENTE" {
 		t.Fatalf("body = %#v", body)
 	}
 }
+
+func TestListPurchaseLinesWorkbenchForwardsQueryAndMapsPage(t *testing.T) {
+	productID := int64(17)
+	mappingRevision := purchasecore.MappingRevision(4)
+	resourceID := int64(23)
+	resourceIdentity := "ELEC-001"
+	resourceDisplayName := "Cable eléctrico"
+	issuedAt := time.Date(2026, 3, 5, 14, 30, 0, 0, time.UTC)
+	wantQuery := purchasecore.PurchaseLineQuery{
+		Limit:           12,
+		Offset:          5,
+		SupplierID:      int64Pointer(42),
+		EffectiveStatus: purchasecore.LinkConflict,
+		DateFrom:        timePointer(time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)),
+		DateTo:          timePointer(time.Date(2026, 3, 7, 23, 59, 59, 999999999, time.UTC)),
+		InvoiceText:     "Factura 7",
+		SupplierSKU:     "SKU-X",
+		Description:     "CABLE",
+	}
+	rows := []purchasecore.PurchaseLineRow{
+		{
+			LineID:                9,
+			LineNumber:            2,
+			PurchaseID:            7,
+			IssuedAt:              issuedAt,
+			Series:                "A",
+			Folio:                 "7",
+			CFDIUUID:              samplePurchase.CFDIUUID,
+			SupplierID:            42,
+			SupplierDisplayName:   "Proveedor",
+			Description:           "CABLE",
+			SupplierSKU:           "SKU-X",
+			CommercialSupplierSKU: stringPointer("COMM-X"),
+			SATProductCode:        "3912",
+			Quantity:              "3",
+			UnitCode:              "H87",
+			Unit:                  "PIEZA",
+			UnitPrice:             "10.00",
+			Amount:                "30.00",
+			Currency:              "MXN",
+			SupplierProductID:     &productID,
+			MappingRevision:       &mappingRevision,
+			ResolutionRevision:    6,
+			ResourceID:            &resourceID,
+			ResourceIdentity:      &resourceIdentity,
+			ResourceDisplayName:   &resourceDisplayName,
+			ResolutionOverride:    purchasecore.LinkConflict,
+			EffectiveStatus:       purchasecore.LinkConflict,
+			EffectiveCause:        "MANUAL_OVERRIDE",
+		},
+		{LineID: 8, PurchaseID: 7, LineNumber: 1, IssuedAt: issuedAt, ResolutionOverride: purchasecore.LinkStatusNone, EffectiveStatus: purchasecore.LinkPending, EffectiveCause: purchasecore.MappingCauseUnresolved},
+	}
+	var gotQuery purchasecore.PurchaseLineQuery
+	reader := purchaseReaderFuncs{listPurchaseLinesWorkbench: func(_ context.Context, q purchasecore.PurchaseLineQuery) (purchasecore.PurchaseLinePage, error) {
+		gotQuery = q
+		return purchasecore.PurchaseLinePage{Rows: rows, HasPrevious: true, HasNext: false}, nil
+	}}
+	h := NewRouter(nil, nil, nil, nil, nil, nil, reader, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/purchase-lines?supplierId=42&status=CONFLICTO&dateFrom=2026-03-05&dateTo=2026-03-07&invoice=Factura+7&supplierSku=SKU-X&description=CABLE&limit=12&offset=5", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if gotQuery.Limit != wantQuery.Limit || gotQuery.Offset != wantQuery.Offset || gotQuery.EffectiveStatus != wantQuery.EffectiveStatus || gotQuery.InvoiceText != wantQuery.InvoiceText || gotQuery.SupplierSKU != wantQuery.SupplierSKU || gotQuery.Description != wantQuery.Description {
+		t.Fatalf("query = %#v, want %#v", gotQuery, wantQuery)
+	}
+	if gotQuery.SupplierID == nil || *gotQuery.SupplierID != *wantQuery.SupplierID || !gotQuery.DateFrom.Equal(*wantQuery.DateFrom) || !gotQuery.DateTo.Equal(*wantQuery.DateTo) {
+		t.Fatalf("query dates/ids = %#v, want %#v", gotQuery, wantQuery)
+	}
+	var body purchaseLineWorkbenchPageResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.HasPrevious || body.HasNext || len(body.Lines) != 2 {
+		t.Fatalf("page = %#v", body)
+	}
+	if !reflect.DeepEqual(body.Lines[0], mapPurchaseLineWorkbenchRow(rows[0])) || !reflect.DeepEqual(body.Lines[1], mapPurchaseLineWorkbenchRow(rows[1])) {
+		t.Fatalf("lines = %#v", body.Lines)
+	}
+	validateSchemaJSON(t, catalogSchema(t, "PurchaseLineWorkbenchPage"), body)
+}
+
+func TestListPurchaseLinesWorkbenchRejectsInvalidQueryWithoutCoreCall(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		query string
+	}{
+		{name: "supplier id zero", query: "supplierId=0"},
+		{name: "supplier id leading zero", query: "supplierId=01"},
+		{name: "supplier id decimal", query: "supplierId=1.5"},
+		{name: "status", query: "status=UNKNOWN"},
+		{name: "date from", query: "dateFrom=2026-02-30"},
+		{name: "date to", query: "dateTo=not-a-date"},
+		{name: "date range", query: "dateFrom=2026-03-07&dateTo=2026-03-05"},
+		{name: "limit zero", query: "limit=0"},
+		{name: "limit above maximum", query: "limit=51"},
+		{name: "limit malformed", query: "limit=large"},
+		{name: "offset negative", query: "offset=-1"},
+		{name: "offset malformed", query: "offset=large"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			reader := purchaseReaderFuncs{listPurchaseLinesWorkbench: func(context.Context, purchasecore.PurchaseLineQuery) (purchasecore.PurchaseLinePage, error) {
+				calls++
+				return purchasecore.PurchaseLinePage{}, nil
+			}}
+			h := NewRouter(nil, nil, nil, nil, nil, nil, reader, nil)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/purchase-lines?"+test.query, nil))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d, body = %s", rec.Code, http.StatusBadRequest, rec.Body)
+			}
+			if calls != 0 {
+				t.Fatalf("Core calls = %d, want 0", calls)
+			}
+		})
+	}
+}
+
+func TestListPurchaseLinesWorkbenchMethodMissingReaderAndCoreError(t *testing.T) {
+	h := NewRouter(nil, nil, nil, nil, nil, nil, purchaseReaderFuncs{}, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/purchase-lines", nil))
+	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != http.MethodGet {
+		t.Fatalf("method mismatch = status %d, allow %q", rec.Code, rec.Header().Get("Allow"))
+	}
+
+	rec = httptest.NewRecorder()
+	h = NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/purchase-lines", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("missing reader status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+
+	h = NewRouter(nil, nil, nil, nil, nil, nil, purchaseReaderFuncs{listPurchaseLinesWorkbench: func(context.Context, purchasecore.PurchaseLineQuery) (purchasecore.PurchaseLinePage, error) {
+		return purchasecore.PurchaseLinePage{}, purchasecore.NewError(purchasecore.Conflict, "core failure")
+	}}, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/purchase-lines", nil))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("Core error status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+}
+
+func int64Pointer(value int64) *int64 { return &value }
+
+func stringPointer(value string) *string { return &value }
+
+func timePointer(value time.Time) *time.Time { return &value }
 
 func TestListPurchasesBySupplierPaginates(t *testing.T) {
 	var gotSupplierID int64
@@ -245,7 +400,7 @@ func TestListSupplierProducts(t *testing.T) {
 
 func TestListPurchaseLinesByResource(t *testing.T) {
 	history := purchasecore.PurchaseLineHistory{
-		Line:            purchasecore.PurchaseLine{ID: 1, PurchaseID: 7, LinkStatus: purchasecore.LinkLinked},
+		Line:            purchasecore.PurchaseLine{ID: 1, PurchaseID: 7, EffectiveStatus: purchasecore.LinkLinked},
 		SupplierProduct: sampleSupplierProduct,
 		PurchaseID:      7,
 		PurchaseUUID:    samplePurchase.CFDIUUID,
@@ -269,7 +424,7 @@ func TestListPurchaseLinesByResource(t *testing.T) {
 func TestPurchaseReadRoutesRejectOtherMethods(t *testing.T) {
 	h := NewRouter(nil, nil, nil, nil, nil, nil, purchaseReaderFuncs{}, nil)
 	for _, path := range []string{
-		"/v1/purchases/7", "/v1/purchases/by-uuid/x", "/v1/purchases/7/lines",
+		"/v1/purchases/7", "/v1/purchases/by-uuid/x", "/v1/purchases/7/lines", "/v1/purchase-lines",
 		"/v1/suppliers/3/purchases", "/v1/suppliers/3/products", "/v1/suppliers/3/products/find",
 		"/v1/supplier-products/9", "/v1/resources/42/purchase-history",
 	} {
@@ -284,7 +439,7 @@ func TestPurchaseReadRoutesRejectOtherMethods(t *testing.T) {
 func TestPurchaseReadRoutesRejectMissingReader(t *testing.T) {
 	h := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil)
 	for _, path := range []string{
-		"/v1/purchases/7", "/v1/purchases/by-uuid/x", "/v1/purchases/7/lines",
+		"/v1/purchases/7", "/v1/purchases/by-uuid/x", "/v1/purchases/7/lines", "/v1/purchase-lines",
 		"/v1/suppliers/3/purchases", "/v1/suppliers/3/products", "/v1/suppliers/3/products/find?sku=x",
 		"/v1/supplier-products/9", "/v1/resources/42/purchase-history",
 	} {

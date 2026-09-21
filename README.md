@@ -45,6 +45,34 @@ OpenAPI document (`GET /openapi.yaml`), browsable interactively at `GET /docs`
 - **CFDI** — `POST /v1/cfdi/parse` reads a CFDI 4.0 XML (multipart `file` field
   or raw body) and returns all its data plus a `supplierDraft` built from the
   Emisor, to prefill a supplier form. Stateless: nothing is stored.
+- **Purchase workbench** — `GET /v1/purchase-lines` is the authoritative,
+  paginated cross-document view. It supports supplier, effective-status,
+  inclusive issue-date, invoice, immutable XML supplier-SKU, description, limit,
+  and offset filters.
+- **Purchase resolution** — `POST /v1/purchase-lines/{lineId}/resolve` resolves
+  a line through its SupplierProduct and `POST
+  /v1/purchase-lines/{lineId}/resolution-override` records only the valid
+  `NONE`, `NO_APLICA`, or `CONFLICTO` line override.
+- **Supplier-product mapping** — `POST
+  /v1/supplier-products/{id}/mapping/{confirm|correct|retire|report-conflict|resolve-conflict}`
+  publishes the explicit optimistic-concurrency transitions. Legacy `/link`,
+  `/unlink`, and `/link-status` routes are not part of the API and return 404.
+
+### ODD decisions and contracts
+
+- Core remains the authority for the workbench projection, mapping revisions,
+  resolution revisions, and all mutation state transitions; this API only
+  validates transport input and maps typed outcomes.
+- Purchase IDs, Resource IDs, SupplierProduct IDs, revisions, and decimal values
+  are JSON strings. The XML `supplierSku` is immutable. A commercial SKU is used
+  only when the expected SupplierProduct snapshot is null.
+- Mutation requests carry actor/reason plus expected revisions and, where
+  applicable, the expected current Resource. Clients reread authoritative state
+  after success, conflict, or an ambiguous failure; the contract does not allow
+  blind retries.
+- Machine outcomes use the existing `{error, code, detail?}` error shape. 404,
+  409, and 422 responses document the purchase-specific codes in the embedded
+  OpenAPI contract.
 
 The Scalar page loads a pinned external browser dependency from jsDelivr
 (`@scalar/api-reference@1.25.0`); interactive docs require browser network access.

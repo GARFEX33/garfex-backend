@@ -3,7 +3,7 @@ module github.com/GARFEX33/garfex-api
 go 1.26.5
 
 require (
-	github.com/GARFEX33/garfex-costos-unitarios v0.4.0
+	github.com/GARFEX33/garfex-costos-unitarios v0.4.1-0.20260921042807-59ae0e4c350f
 	github.com/getkin/kin-openapi v0.149.0
 )
 

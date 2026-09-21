@@ -860,6 +860,56 @@ paths:
             NOT_CFDI, UNSUPPORTED_VERSION, INVALID_CFDI.
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchase-lines:
+    get:
+      summary: List the purchase-line workbench
+      description: >-
+        Returns the server-authoritative cross-document workbench, ordered by
+        issuedAt descending and then lineId descending. `supplierSku` is the
+        immutable XML supplier SKU evidence. Dates are inclusive calendar dates;
+        dateTo includes the complete day. After a successful mutation, a
+        conflict, or an ambiguous failure, reread this workbench rather than
+        retrying blindly.
+      parameters:
+        - name: supplierId
+          in: query
+          schema: { type: string, pattern: '^[1-9][0-9]*$', maxLength: 19, description: 'Strict positive decimal supplier identifier; runtime rejects values exceeding int64 9223372036854775807.' }
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDIENTE, VINCULADO, SUSPENDIDO, NO_APLICA, CONFLICTO] }
+        - name: dateFrom
+          in: query
+          description: Inclusive CFDI issue date in YYYY-MM-DD format.
+          schema: { type: string, format: date, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - name: dateTo
+          in: query
+          description: Inclusive CFDI issue date in YYYY-MM-DD format; the whole day is included.
+          schema: { type: string, format: date, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - name: invoice
+          in: query
+          schema: { type: string }
+        - name: supplierSku
+          in: query
+          description: Immutable supplier SKU copied from the purchase XML.
+          schema: { type: string }
+        - name: description
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Purchase-line workbench page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseLineWorkbenchPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
   /v1/purchases:
     post:
       summary: Import a CFDI purchase document
@@ -880,7 +930,7 @@ paths:
               properties:
                 file: { type: string, format: binary, description: The CFDI XML file. }
                 actor: { type: string }
-                branchId: { type: string, description: 'Optional strict positive decimal branch identifier.' }
+                branchId: { type: string, description: 'Optional strict positive decimal branch identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
       responses:
         '201':
           description: Purchase imported
@@ -1042,10 +1092,14 @@ paths:
         '400': { $ref: '#/components/responses/InvalidArgument' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
-  /v1/supplier-products/{id}/link:
+  /v1/supplier-products/{id}/mapping/confirm:
     post:
-      summary: Link a supplier product to a Resource Master entry
-      description: Every PENDIENTE purchase line already referencing this supplier product becomes VINCULADO; future purchase lines resolving to it reuse the relation automatically.
+      summary: Confirm a supplier-product mapping
+      description: >-
+        Conditionally confirms the selected active Resource for this
+        SupplierProduct. The expected mapping revision is authoritative; after
+        success, conflict, or an ambiguous failure, reread the SupplierProduct
+        and do not retry blindly.
       parameters:
         - name: id
           in: path
@@ -1055,23 +1109,29 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/LinkSupplierProductRequest'
+            schema: { $ref: '#/components/schemas/ConfirmMappingRequest' }
       responses:
         '200':
-          description: Updated supplier product
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierProduct'
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
         '400': { $ref: '#/components/responses/InvalidArgument' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { $ref: '#/components/responses/Unprocessable' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Selected Resource cannot be used (`RESOURCE_INACTIVE` or `VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '500': { $ref: '#/components/responses/Internal' }
-  /v1/supplier-products/{id}/unlink:
+  /v1/supplier-products/{id}/mapping/correct:
     post:
-      summary: Remove a supplier product's Resource Master relation
-      description: Every VINCULADO purchase line referencing this supplier product reverts to PENDIENTE.
+      summary: Correct a supplier-product mapping
+      description: >-
+        Replaces the current Resource only when both the expected current
+        Resource and mapping revision match. Reread after every result; this
+        operation is not a blind-idempotent retry contract.
       parameters:
         - name: id
           in: path
@@ -1081,23 +1141,29 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/UnlinkSupplierProductRequest'
+            schema: { $ref: '#/components/schemas/CorrectMappingRequest' }
       responses:
         '200':
-          description: Updated supplier product
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierProduct'
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
         '400': { $ref: '#/components/responses/InvalidArgument' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { $ref: '#/components/responses/Unprocessable' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Selected Resource cannot be used (`RESOURCE_INACTIVE` or `VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '500': { $ref: '#/components/responses/Internal' }
-  /v1/purchase-lines/{id}/link-status:
+  /v1/supplier-products/{id}/mapping/retire:
     post:
-      summary: Manually override a purchase line's link status
-      description: For cases automatic resolution must not decide on its own -- marking a line NO_APLICA, or resolving a CONFLICTO a human has reviewed.
+      summary: Retire a supplier-product mapping
+      description: >-
+        Removes the current mapping only when the expected current Resource and
+        mapping revision match. Reread after success, conflict, or ambiguous
+        failure; do not retry blindly.
       parameters:
         - name: id
           in: path
@@ -1107,18 +1173,148 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/SetLinkStatusRequest'
+            schema: { $ref: '#/components/schemas/RetireMappingRequest' }
       responses:
         '200':
-          description: Updated purchase line
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PurchaseLine'
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
         '400': { $ref: '#/components/responses/InvalidArgument' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { $ref: '#/components/responses/Unprocessable' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/mapping/report-conflict:
+    post:
+      summary: Report a supplier-product identity conflict
+      description: >-
+        Records an identity conflict after checking the expected current
+        Resource and mapping revision. Reread after any result and never retry
+        an ambiguous failure blindly.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportMappingConflictRequest' }
+      responses:
+        '200':
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/mapping/resolve-conflict:
+    post:
+      summary: Resolve a supplier-product identity conflict
+      description: >-
+        Selects the canonical active Resource only when the expected current
+        Resource and mapping revision match. Reread after every result; do not
+        retry an ambiguous failure blindly.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveMappingConflictRequest' }
+      responses:
+        '200':
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `SUPPLIER_PRODUCT_TARGET_CONFLICT`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Selected Resource cannot be used (`RESOURCE_INACTIVE` or `VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchase-lines/{lineId}/resolve:
+    post:
+      summary: Resolve one purchase line
+      description: >-
+        Resolves one line transactionally through its SupplierProduct. The
+        expected SupplierProduct id and mapping revision are required snapshot
+        fields and may each be null for an unassociated line. A non-empty
+        commercialSupplierSku applies only when expectedSupplierProductId is
+        null; it creates or reuses the commercial identity. The XML
+        supplierSku is immutable evidence and is never changed by this action.
+        After success, conflict, or an ambiguous failure, reread the line and
+        workbench; do not retry blindly.
+      parameters:
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolvePurchaseLineRequest' }
+      responses:
+        '200':
+          description: Authoritative line, SupplierProduct, and commercial identity disposition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/ResolvePurchaseLineResponse' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: Purchase line or selected Resource was not found (`PURCHASE_LINE_NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Authoritative state or snapshot conflict (`PURCHASE_LINE_STATE_CONFLICT`, `STALE_RESOLUTION_REVISION`, `STALE_MAPPING_REVISION`, `SUPPLIER_PRODUCT_TARGET_CONFLICT`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Resolution validation failed (`COMMERCIAL_SUPPLIER_SKU_REQUIRED`, `COMMERCIAL_SUPPLIER_SKU_FORBIDDEN`, `RESOURCE_INACTIVE`, or `VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchase-lines/{lineId}/resolution-override:
+    post:
+      summary: Set a purchase-line resolution override
+      description: >-
+        Sets the line-specific override under the expected resolution revision.
+        Only NONE, NO_APLICA, and CONFLICTO are accepted. Reread after success,
+        conflict, or ambiguous failure; do not retry blindly.
+      parameters:
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolutionOverrideRequest' }
+      responses:
+        '200':
+          description: Authoritative PurchaseLine after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseLine' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: Purchase line was not found (`PURCHASE_LINE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Resolution state or revision conflict (`PURCHASE_LINE_STATE_CONFLICT`, `STALE_RESOLUTION_REVISION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Override validation failed (`VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '500': { $ref: '#/components/responses/Internal' }
   /v1/resources/{id}/purchase-history:
     get:
@@ -1555,6 +1751,7 @@ components:
         satSeal: { type: string }
     Error:
       type: object
+      additionalProperties: false
       required: [error]
       properties:
         error:
@@ -1585,6 +1782,17 @@ components:
             - CONFLICT
             - UNAVAILABLE
             - INTERNAL
+            - PURCHASE_LINE_NOT_FOUND
+            - RESOURCE_NOT_FOUND
+            - RESOURCE_INACTIVE
+            - COMMERCIAL_SUPPLIER_SKU_REQUIRED
+            - COMMERCIAL_SUPPLIER_SKU_FORBIDDEN
+            - PURCHASE_LINE_STATE_CONFLICT
+            - STALE_RESOLUTION_REVISION
+            - STALE_MAPPING_REVISION
+            - SUPPLIER_PRODUCT_TARGET_CONFLICT
+            - INVALID_MAPPING_TRANSITION
+            - INTEGRITY_CONFLICT
         detail:
           type: string
           description: >-
@@ -1859,35 +2067,83 @@ components:
     PurchaseLine:
       type: object
       additionalProperties: false
-      required: [id, purchaseId, lineNumber, description, supplierSku, satProductCode, quantity, unitCode, unit, unitPrice, amount, discount, taxTransferred, taxWithheld, taxObject, supplierProductId, linkStatus]
+      required: [id, purchaseId, lineNumber, description, supplierSku, satProductCode, quantity, unitCode, unit, unitPrice, amount, discount, taxTransferred, taxWithheld, taxObject, supplierProductId, resolutionRevision, resolutionOverride, effectiveStatus, effectiveCause]
       properties:
-        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
-        purchaseId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        id: { type: string, description: 'Decimal integer identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        purchaseId: { type: string, description: 'Decimal integer identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
         lineNumber: { type: integer }
         description: { type: string }
-        supplierSku: { type: string }
+        supplierSku: { type: string, description: Immutable supplier SKU copied from the purchase XML. }
         satProductCode: { type: string }
-        quantity: { type: string }
+        quantity: { type: string, description: Decimal quantity represented as a string. }
         unitCode: { type: string }
         unit: { type: string }
-        unitPrice: { type: string }
-        amount: { type: string }
-        discount: { type: string }
-        taxTransferred: { type: string }
-        taxWithheld: { type: string }
+        unitPrice: { type: string, description: Decimal amount represented as a string. }
+        amount: { type: string, description: Decimal amount represented as a string. }
+        discount: { type: string, description: Decimal amount represented as a string. }
+        taxTransferred: { type: string, description: Decimal amount represented as a string. }
+        taxWithheld: { type: string, description: Decimal amount represented as a string. }
         taxObject: { type: string }
-        supplierProductId: { type: string, nullable: true, description: Decimal integer identifier; null until this line is linked. }
-        linkStatus: { type: string, enum: [PENDIENTE, VINCULADO, NO_APLICA, CONFLICTO] }
+        supplierProductId: { type: string, nullable: true, description: 'Decimal SupplierProduct identifier; null until this line is associated with a SupplierProduct; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        resolutionRevision: { type: string, description: 'Unsigned decimal resolution revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resolutionOverride: { type: string, enum: [NONE, NO_APLICA, CONFLICTO] }
+        effectiveStatus: { type: string, enum: [PENDIENTE, VINCULADO, SUSPENDIDO, NO_APLICA, CONFLICTO] }
+        effectiveCause: { type: string, description: Machine-readable reason supplied by Core for the effective status. }
+    PurchaseLineWorkbenchRow:
+      type: object
+      additionalProperties: false
+      required: [lineId, purchaseId, lineNumber, issuedAt, series, folio, cfdiUuid, supplierId, supplierDisplayName, description, supplierSku, commercialSupplierSku, satProductCode, quantity, unitCode, unit, unitPrice, amount, currency, supplierProductId, mappingRevision, resolutionRevision, resourceId, resourceIdentity, resourceDisplayName, resolutionOverride, effectiveStatus, effectiveCause]
+      properties:
+        lineId: { type: string, description: 'Decimal line identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        purchaseId: { type: string, description: 'Decimal purchase identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        lineNumber: { type: integer }
+        issuedAt: { type: string, description: CFDI issue date-time without a zone. }
+        series: { type: string }
+        folio: { type: string }
+        cfdiUuid: { type: string }
+        supplierId: { type: string, description: 'Decimal supplier identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        supplierDisplayName: { type: string }
+        description: { type: string }
+        supplierSku: { type: string, description: Immutable supplier SKU evidence from XML. }
+        commercialSupplierSku: { type: string, nullable: true, description: Commercial SupplierProduct identity; null when no commercial identity is associated. }
+        satProductCode: { type: string }
+        quantity: { type: string, description: Decimal quantity represented as a string. }
+        unitCode: { type: string }
+        unit: { type: string }
+        unitPrice: { type: string, description: Decimal amount represented as a string. }
+        amount: { type: string, description: Decimal amount represented as a string. }
+        currency: { type: string }
+        supplierProductId: { type: string, nullable: true, description: 'Decimal SupplierProduct identifier; null when no commercial identity is associated; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        mappingRevision: { type: string, nullable: true, description: 'Unsigned decimal mapping revision; zero is allowed; null when no SupplierProduct mapping snapshot exists; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resolutionRevision: { type: string, description: 'Unsigned decimal resolution revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resourceId: { type: string, nullable: true, description: 'Decimal Resource identifier; null when no Resource is selected; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        resourceIdentity: { type: string, nullable: true }
+        resourceDisplayName: { type: string, nullable: true }
+        resolutionOverride: { type: string, enum: [NONE, NO_APLICA, CONFLICTO] }
+        effectiveStatus: { type: string, enum: [PENDIENTE, VINCULADO, SUSPENDIDO, NO_APLICA, CONFLICTO] }
+        effectiveCause: { type: string, description: Machine-readable reason supplied by Core for the effective status. }
+    PurchaseLineWorkbenchPage:
+      type: object
+      additionalProperties: false
+      required: [lines, hasPrevious, hasNext]
+      properties:
+        lines: { type: array, items: { $ref: '#/components/schemas/PurchaseLineWorkbenchRow' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
     SupplierProduct:
       type: object
       additionalProperties: false
-      required: [id, supplierId, supplierSku, description, resourceId, notes, createdAt, updatedAt]
+      required: [id, supplierId, supplierSku, description, resourceId, mappingRevision, resourceActive, mappingState, mappingCause, notes, createdAt, updatedAt]
       properties:
-        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
-        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        id: { type: string, description: 'Strict positive decimal SupplierProduct identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        supplierId: { type: string, description: 'Strict positive decimal supplier identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
         supplierSku: { type: string }
-        description: { type: string, description: Last-seen description for this SKU; informational only. }
-        resourceId: { type: string, nullable: true, description: Decimal integer identifier of the linked Resource Master entry; null when unlinked. }
+        description: { type: string, description: Last-seen description for this commercial SKU; informational only. }
+        resourceId: { type: string, nullable: true, description: 'Strict positive decimal Resource identifier; null when unresolved; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        mappingRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resourceActive: { type: boolean, nullable: true, description: Non-authoritative Resource activity snapshot; null when no Resource is selected. }
+        mappingState: { type: string, enum: [UNRESOLVED, CONFIRMED, SUSPENDED, IDENTITY_CONFLICT] }
+        mappingCause: { type: string, enum: [NONE, UNRESOLVED, RESOURCE_INACTIVE, IDENTITY_CONFLICT] }
         notes: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -1936,23 +2192,98 @@ components:
         purchase: { $ref: '#/components/schemas/Purchase' }
         lines: { type: array, items: { $ref: '#/components/schemas/PurchaseLine' } }
         alreadyExisted: { type: boolean, description: True when the document's fiscal UUID was already registered with matching content; no additional write happened. }
-    LinkSupplierProductRequest:
+    MappingDecisionFields:
       type: object
       additionalProperties: false
-      required: [actor, resourceId]
+      required: [actor, reason, expectedRevision]
       properties:
         actor: { type: string }
-        resourceId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
-    UnlinkSupplierProductRequest:
+        reason: { type: string }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    ConfirmMappingRequest:
       type: object
       additionalProperties: false
-      required: [actor]
+      required: [actor, reason, resourceId, expectedRevision]
       properties:
         actor: { type: string }
-    SetLinkStatusRequest:
+        reason: { type: string }
+        resourceId: { type: string, description: 'Strict positive decimal Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    CorrectMappingRequest:
       type: object
       additionalProperties: false
-      required: [actor, status]
+      required: [actor, reason, expectedCurrentResourceId, resourceId, expectedRevision]
       properties:
         actor: { type: string }
-        status: { type: string, enum: [PENDIENTE, VINCULADO, NO_APLICA, CONFLICTO] }
+        reason: { type: string }
+        expectedCurrentResourceId: { type: string, description: 'Strict positive decimal current Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        resourceId: { type: string, description: 'Strict positive decimal replacement Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    RetireMappingRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, expectedCurrentResourceId, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        expectedCurrentResourceId: { type: string, description: 'Strict positive decimal current Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    ReportMappingConflictRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, expectedCurrentResourceId, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        expectedCurrentResourceId: { type: string, description: 'Strict positive decimal current Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    ResolveMappingConflictRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, expectedCurrentResourceId, resourceId, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        expectedCurrentResourceId: { type: string, description: 'Strict positive decimal current Resource identifier retained under conflict; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        resourceId: { type: string, description: 'Strict positive decimal canonical Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    ResolvePurchaseLineRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, resourceId, expectedSupplierProductId, expectedMappingRevision, expectedResolutionRevision, commercialSupplierSku]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        resourceId: { type: string, description: 'Strict positive decimal Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedSupplierProductId: { type: string, nullable: true, description: 'Strict positive decimal SupplierProduct identifier snapshot; null for an unassociated line; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedMappingRevision: { type: string, nullable: true, description: 'Unsigned decimal mapping revision snapshot; zero is allowed; null when expectedSupplierProductId is null; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        expectedResolutionRevision: { type: string, description: 'Unsigned decimal line-resolution revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        commercialSupplierSku: { type: string, description: Commercial SKU used only when expectedSupplierProductId is null; the XML supplierSku is never changed. }
+    ResolutionOverrideRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, override, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        override: { type: string, enum: [NONE, NO_APLICA, CONFLICTO] }
+        expectedRevision: { type: string, description: 'Unsigned decimal resolution revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    CommercialIdentity:
+      type: object
+      additionalProperties: false
+      required: [supplierProductId, supplierId, commercialSupplierSku, disposition, mappingRevision, resourceId]
+      properties:
+        supplierProductId: { type: string, description: 'Strict positive decimal SupplierProduct identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        supplierId: { type: string, description: 'Strict positive decimal supplier identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        commercialSupplierSku: { type: string }
+        disposition: { type: string, enum: [CREATED, REUSED, ALREADY_MAPPED] }
+        mappingRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resourceId: { type: string, nullable: true, description: 'Strict positive decimal Resource identifier; null when unresolved; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+    ResolvePurchaseLineResponse:
+      type: object
+      additionalProperties: false
+      required: [line, supplierProduct, commercialIdentity]
+      properties:
+        line: { $ref: '#/components/schemas/PurchaseLine' }
+        supplierProduct: { $ref: '#/components/schemas/SupplierProduct' }
+        commercialIdentity: { $ref: '#/components/schemas/CommercialIdentity' }
