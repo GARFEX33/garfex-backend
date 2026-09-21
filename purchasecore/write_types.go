@@ -32,9 +32,21 @@ type ResolvePurchaseLineRequest struct {
 	Reason                     string
 }
 
+// CommercialIdentityDisposition reports whether ResolvePurchaseLine created
+// the SupplierProduct identity, reused it while changing its mapping, or found
+// it already mapped to the requested active Resource.
+type CommercialIdentityDisposition string
+
+const (
+	CommercialIdentityCreated       CommercialIdentityDisposition = "CREATED"
+	CommercialIdentityReused        CommercialIdentityDisposition = "REUSED"
+	CommercialIdentityAlreadyMapped CommercialIdentityDisposition = "ALREADY_MAPPED"
+)
+
 type ResolvePurchaseLineResult struct {
-	Line            PurchaseLine
-	SupplierProduct SupplierProduct
+	Line                          PurchaseLine
+	SupplierProduct               SupplierProduct
+	CommercialIdentityDisposition CommercialIdentityDisposition
 }
 
 // SetResolutionOverrideRequest stores only NONE, NO_APLICA, or CONFLICTO.

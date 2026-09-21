@@ -168,7 +168,7 @@ func (r *memoryRepository) ListPurchaseLinesWorkbench(_ context.Context, criteri
 				continue
 			}
 			row := domain.PurchaseLineWorkbenchRow{
-				LineID: line.ID, PurchaseID: purchase.ID, IssuedAt: purchase.IssuedAt, Series: purchase.Series, Folio: purchase.Folio,
+				LineID: line.ID, LineNumber: line.LineNumber, PurchaseID: purchase.ID, IssuedAt: purchase.IssuedAt, Series: purchase.Series, Folio: purchase.Folio,
 				CFDIUUID: purchase.CFDIUUID, SupplierID: purchase.Supplier.SupplierID, SupplierDisplayName: strconv.FormatInt(purchase.Supplier.SupplierID, 10),
 				Description: line.Description, SupplierSKU: line.SupplierSKU, SATProductCode: line.SATProductCode, Quantity: line.Quantity,
 				UnitCode: line.UnitCode, Unit: line.Unit, UnitPrice: line.UnitPrice, Amount: line.Amount, Currency: purchase.Currency,
@@ -383,8 +383,11 @@ func (r *memoryRepository) ResolvePurchaseLine(_ context.Context, command domain
 				return domain.ResolvePurchaseLineResult{}, domain.ErrPurchaseLineStateConflict
 			}
 			var product domain.SupplierProduct
+			identityCreated := false
 			if line.SupplierProductID == nil {
-				id := r.getOrCreateSupplierProduct(r.purchasesByID[purchaseID].Supplier.SupplierID, command.CommercialSupplierSKU, line.Description)
+				supplierID := r.purchasesByID[purchaseID].Supplier.SupplierID
+				identityCreated = !r.hasSupplierProduct(supplierID, command.CommercialSupplierSKU)
+				id := r.getOrCreateSupplierProduct(supplierID, command.CommercialSupplierSKU, line.Description)
 				line.SupplierProductID = &id
 				product = r.supplierProducts[id]
 			} else {
@@ -406,10 +409,27 @@ func (r *memoryRepository) ResolvePurchaseLine(_ context.Context, command domain
 			line = r.refreshLine(line)
 			lines[i] = line
 			r.lines[purchaseID] = lines
-			return domain.ResolvePurchaseLineResult{Line: line, SupplierProduct: product}, nil
+			disposition := domain.CommercialIdentityAlreadyMapped
+			if identityCreated {
+				disposition = domain.CommercialIdentityCreated
+			} else if transition.Changed {
+				disposition = domain.CommercialIdentityReused
+			}
+			return domain.ResolvePurchaseLineResult{
+				Line: line, SupplierProduct: product, CommercialIdentityDisposition: disposition,
+			}, nil
 		}
 	}
 	return domain.ResolvePurchaseLineResult{}, domain.ErrPurchaseLineNotFound
+}
+
+func (r *memoryRepository) hasSupplierProduct(supplierID int64, sku string) bool {
+	for _, product := range r.supplierProducts {
+		if product.SupplierID == supplierID && product.SupplierSKU == sku {
+			return true
+		}
+	}
+	return false
 }
 
 func sameTestID(left, right *int64) bool {

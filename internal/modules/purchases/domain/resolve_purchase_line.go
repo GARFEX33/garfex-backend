@@ -16,9 +16,21 @@ type ResolvePurchaseLineCommand struct {
 	Decision                   MappingDecisionMetadata
 }
 
+// CommercialIdentityDisposition reports how line resolution used the
+// SupplierProduct commercial identity without requiring an adapter to infer
+// transactional history from the returned snapshots.
+type CommercialIdentityDisposition string
+
+const (
+	CommercialIdentityCreated       CommercialIdentityDisposition = "CREATED"
+	CommercialIdentityReused        CommercialIdentityDisposition = "REUSED"
+	CommercialIdentityAlreadyMapped CommercialIdentityDisposition = "ALREADY_MAPPED"
+)
+
 // ResolvePurchaseLineResult returns enough authoritative state for a delivery
 // adapter to answer the mutation without reconstructing Purchase Core rules.
 type ResolvePurchaseLineResult struct {
-	Line            PurchaseLine
-	SupplierProduct SupplierProduct
+	Line                          PurchaseLine
+	SupplierProduct               SupplierProduct
+	CommercialIdentityDisposition CommercialIdentityDisposition
 }

@@ -161,8 +161,9 @@ func (fakeWriteCapabilities) ResolveIdentityConflict(ctx context.Context, req pu
 func (fakeWriteCapabilities) ResolvePurchaseLine(ctx context.Context, req purchasecore.ResolvePurchaseLineRequest) (purchasecore.ResolvePurchaseLineResult, error) {
 	productID := int64(3)
 	return purchasecore.ResolvePurchaseLineResult{
-		Line:            purchasecore.PurchaseLine{ID: req.LineID, SupplierProductID: &productID, ResolutionRevision: req.ExpectedResolutionRevision, EffectiveStatus: purchasecore.LinkLinked},
-		SupplierProduct: purchasecore.SupplierProduct{ID: productID, CurrentMapping: purchasecore.SupplierProductMapping{ResourceID: &req.ResourceID}},
+		Line:                          purchasecore.PurchaseLine{ID: req.LineID, SupplierProductID: &productID, ResolutionRevision: req.ExpectedResolutionRevision, EffectiveStatus: purchasecore.LinkLinked},
+		SupplierProduct:               purchasecore.SupplierProduct{ID: productID, CurrentMapping: purchasecore.SupplierProductMapping{ResourceID: &req.ResourceID}},
+		CommercialIdentityDisposition: purchasecore.CommercialIdentityCreated,
 	}, nil
 }
 func (fakeWriteCapabilities) SetResolutionOverride(ctx context.Context, req purchasecore.SetResolutionOverrideRequest) (purchasecore.PurchaseLine, error) {
@@ -190,7 +191,7 @@ func TestExternalConsumer_ImportsAndLinks(t *testing.T) {
 	resolved, err := writer.ResolvePurchaseLine(ctx, purchasecore.ResolvePurchaseLineRequest{
 		LineID: 9, ResourceID: 2, CommercialSupplierSKU: "SKU-POSTERIOR", Actor: "PI",
 	})
-	if err != nil || resolved.Line.EffectiveStatus != purchasecore.LinkLinked {
+	if err != nil || resolved.Line.EffectiveStatus != purchasecore.LinkLinked || resolved.CommercialIdentityDisposition != purchasecore.CommercialIdentityCreated {
 		t.Fatalf("ResolvePurchaseLine = %#v, %v", resolved, err)
 	}
 	got, err := writer.SetResolutionOverride(ctx, purchasecore.SetResolutionOverrideRequest{

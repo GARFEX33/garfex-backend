@@ -124,6 +124,7 @@ type PurchaseLine struct {
 // PurchaseLine workbench. Nullable fields are represented by pointers.
 type PurchaseLineRow struct {
 	LineID                int64
+	LineNumber            int
 	PurchaseID            int64
 	IssuedAt              time.Time
 	Series                string

@@ -273,7 +273,10 @@ func (a *Adapter) ResolvePurchaseLine(ctx context.Context, req public.ResolvePur
 	if err != nil {
 		return public.ResolvePurchaseLineResult{}, mapError(err)
 	}
-	return public.ResolvePurchaseLineResult{Line: mapPurchaseLine(result.Line), SupplierProduct: mapSupplierProduct(result.SupplierProduct)}, nil
+	return public.ResolvePurchaseLineResult{
+		Line: mapPurchaseLine(result.Line), SupplierProduct: mapSupplierProduct(result.SupplierProduct),
+		CommercialIdentityDisposition: public.CommercialIdentityDisposition(result.CommercialIdentityDisposition),
+	}, nil
 }
 
 func (a *Adapter) SetResolutionOverride(ctx context.Context, req public.SetResolutionOverrideRequest) (public.PurchaseLine, error) {
@@ -385,7 +388,7 @@ func mapPurchaseLineRow(row domain.PurchaseLineWorkbenchRow) public.PurchaseLine
 		mappingRevision = &revision
 	}
 	return public.PurchaseLineRow{
-		LineID: row.LineID, PurchaseID: row.PurchaseID, IssuedAt: row.IssuedAt, Series: row.Series, Folio: row.Folio,
+		LineID: row.LineID, LineNumber: row.LineNumber, PurchaseID: row.PurchaseID, IssuedAt: row.IssuedAt, Series: row.Series, Folio: row.Folio,
 		CFDIUUID: row.CFDIUUID, SupplierID: row.SupplierID, SupplierDisplayName: row.SupplierDisplayName,
 		Description: row.Description, SupplierSKU: row.SupplierSKU, CommercialSupplierSKU: copyString(row.CommercialSupplierSKU),
 		SATProductCode: row.SATProductCode, Quantity: row.Quantity.String(), UnitCode: row.UnitCode, Unit: row.Unit,

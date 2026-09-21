@@ -43,7 +43,7 @@ func TestResolvePurchaseLineIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolvePurchaseLine() = %v", err)
 		}
-		if result.Line.DerivedStatus != domain.LinkLinked || result.SupplierProduct.MappingRevision != 1 {
+		if result.Line.DerivedStatus != domain.LinkLinked || result.SupplierProduct.MappingRevision != 1 || result.CommercialIdentityDisposition != domain.CommercialIdentityReused {
 			t.Fatalf("result = %+v / %+v", result.Line, result.SupplierProduct)
 		}
 	})
@@ -67,7 +67,7 @@ func TestResolvePurchaseLineIntegration(t *testing.T) {
 		if result.Line.SupplierSKU != "" {
 			t.Fatalf("XML supplier sku mutated to %q", result.Line.SupplierSKU)
 		}
-		if result.SupplierProduct.SupplierSKU != "POSTERIOR-"+unique || result.Line.SupplierProductID == nil {
+		if result.SupplierProduct.SupplierSKU != "POSTERIOR-"+unique || result.Line.SupplierProductID == nil || result.CommercialIdentityDisposition != domain.CommercialIdentityCreated {
 			t.Fatalf("posterior identity result = %+v / %+v", result.Line, result.SupplierProduct)
 		}
 

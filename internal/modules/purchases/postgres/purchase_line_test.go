@@ -22,6 +22,7 @@ func TestBuildPurchaseLineWorkbenchQuery_IsParameterizedAndDeterministic(t *test
 		}
 	}
 	for _, want := range []string{
+		"pl.id AS line_id, pl.line_number, pl.purchase_id",
 		"JOIN public.suppliers s ON s.id = p.supplier_id",
 		"WHEN pl.resolution_override = 'NO_APLICA' THEN 'NO_APLICA'",
 		"WHEN COALESCE(sp.mapping_identity_conflict, FALSE) THEN 'CONFLICTO'",

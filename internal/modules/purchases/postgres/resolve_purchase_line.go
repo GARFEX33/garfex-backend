@@ -54,15 +54,13 @@ func (r *repository) ResolvePurchaseLine(ctx context.Context, command domain.Res
 		return domain.ResolvePurchaseLineResult{}, domain.ErrPurchaseLineStateConflict
 	}
 
-	product, newlyAssociated, err := resolveSupplierProductIdentity(ctx, tx, supplierID, description, actualSupplierProductID, command)
+	product, newlyAssociated, identityCreated, err := resolveSupplierProductIdentity(ctx, tx, supplierID, description, actualSupplierProductID, command)
 	if err != nil {
 		return domain.ResolvePurchaseLineResult{}, err
 	}
 	active := true
-	if product.CurrentMapping.ResourceID != nil {
-		if product.ResourceActive != nil {
-			active = *product.ResourceActive
-		}
+	if product.CurrentMapping.ResourceID != nil && product.ResourceActive != nil {
+		active = *product.ResourceActive
 	}
 	status, _ := domain.EffectiveLineStatus(domain.LinkStatusNone, product.CurrentMapping, active)
 	if actualSupplierProductID != nil && status != domain.LinkPending {
@@ -110,10 +108,13 @@ func (r *repository) ResolvePurchaseLine(ctx context.Context, command domain.Res
 	if line.SupplierProductID == nil || *line.SupplierProductID != product.ID {
 		return domain.ResolvePurchaseLineResult{}, fmt.Errorf("%w: resolved line association", domain.ErrPurchaseIntegrityConflict)
 	}
+	disposition := commercialIdentityDisposition(identityCreated, transition)
 	if err := tx.Commit(ctx); err != nil {
 		return domain.ResolvePurchaseLineResult{}, mapCommitError(err)
 	}
-	return domain.ResolvePurchaseLineResult{Line: line, SupplierProduct: product}, nil
+	return domain.ResolvePurchaseLineResult{
+		Line: line, SupplierProduct: product, CommercialIdentityDisposition: disposition,
+	}, nil
 }
 
 func resolveSupplierProductIdentity(
@@ -123,34 +124,76 @@ func resolveSupplierProductIdentity(
 	description string,
 	actualSupplierProductID *int64,
 	command domain.ResolvePurchaseLineCommand,
-) (domain.SupplierProduct, bool, error) {
+) (domain.SupplierProduct, bool, bool, error) {
 	if actualSupplierProductID != nil {
 		product, err := scanSupplierProduct(tx.QueryRow(ctx, lockSupplierProductSQL, *actualSupplierProductID))
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return domain.SupplierProduct{}, false, domain.ErrPurchaseIntegrityConflict
+				return domain.SupplierProduct{}, false, false, domain.ErrPurchaseIntegrityConflict
 			}
-			return domain.SupplierProduct{}, false, wrapRead("lock purchase line supplier product", err)
+			return domain.SupplierProduct{}, false, false, wrapRead("lock purchase line supplier product", err)
 		}
 		if product.SupplierID != supplierID {
-			return domain.SupplierProduct{}, false, domain.ErrPurchaseIntegrityConflict
+			return domain.SupplierProduct{}, false, false, domain.ErrPurchaseIntegrityConflict
 		}
-		return product, false, nil
+		return product, false, false, nil
 	}
 
-	product, err := upsertSupplierProduct(ctx, tx, supplierID, command.CommercialSupplierSKU, description)
+	product, created, err := resolveSupplierProduct(ctx, tx, supplierID, command.CommercialSupplierSKU, description)
 	if err != nil {
-		return domain.SupplierProduct{}, false, err
+		return domain.SupplierProduct{}, false, false, err
 	}
 	state := product.CurrentMapping.KnowledgeState()
 	if state == domain.MappingStateConfirmed {
 		if product.CurrentMapping.ResourceID == nil || *product.CurrentMapping.ResourceID != command.ResourceID {
-			return domain.SupplierProduct{}, false, domain.ErrMappingTargetConflict
+			return domain.SupplierProduct{}, false, false, domain.ErrMappingTargetConflict
 		}
 	} else if state != domain.MappingStateUnresolved {
-		return domain.SupplierProduct{}, false, domain.ErrMappingTargetConflict
+		return domain.SupplierProduct{}, false, false, domain.ErrMappingTargetConflict
 	}
-	return product, true, nil
+	return product, true, created, nil
+}
+
+func resolveSupplierProduct(ctx context.Context, tx pgx.Tx, supplierID int64, sku, description string) (domain.SupplierProduct, bool, error) {
+	const insertSQL = `INSERT INTO public.supplier_products (supplier_id, supplier_sku, description)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (supplier_id, supplier_sku) DO NOTHING
+		RETURNING id, supplier_id, supplier_sku, description, resource_id, mapping_revision,
+			mapping_identity_conflict, (SELECT r.active FROM public.recursos r WHERE r.id = supplier_products.resource_id),
+			notes, created_at, updated_at`
+	product, err := scanSupplierProduct(tx.QueryRow(ctx, insertSQL, supplierID, sku, description))
+	if err == nil {
+		return product, true, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return domain.SupplierProduct{}, false, mapWriteError("insert resolved supplier product", err)
+	}
+
+	const reuseSQL = `UPDATE public.supplier_products sp
+		SET description = $3
+		WHERE sp.supplier_id = $1 AND sp.supplier_sku = $2
+		RETURNING sp.id, sp.supplier_id, sp.supplier_sku, sp.description,
+			sp.resource_id, sp.mapping_revision, sp.mapping_identity_conflict,
+			(SELECT r.active FROM public.recursos r WHERE r.id = sp.resource_id),
+			sp.notes, sp.created_at, sp.updated_at`
+	product, err = scanSupplierProduct(tx.QueryRow(ctx, reuseSQL, supplierID, sku, description))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.SupplierProduct{}, false, domain.ErrPurchaseIntegrityConflict
+		}
+		return domain.SupplierProduct{}, false, mapWriteError("reuse resolved supplier product", err)
+	}
+	return product, false, nil
+}
+
+func commercialIdentityDisposition(identityCreated bool, transition domain.MappingTransition) domain.CommercialIdentityDisposition {
+	if identityCreated {
+		return domain.CommercialIdentityCreated
+	}
+	if transition.Changed {
+		return domain.CommercialIdentityReused
+	}
+	return domain.CommercialIdentityAlreadyMapped
 }
 
 func sameOptionalID(left, right *int64) bool {

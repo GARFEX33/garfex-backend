@@ -36,7 +36,7 @@ func (r *repository) ListPurchaseLines(ctx context.Context, purchaseID int64) ([
 
 const purchaseLineWorkbenchBaseSQL = `WITH line_projection AS (
 	SELECT
-		pl.id AS line_id, pl.purchase_id, p.issued_at, p.series, p.folio, p.cfdi_uuid,
+		pl.id AS line_id, pl.line_number, pl.purchase_id, p.issued_at, p.series, p.folio, p.cfdi_uuid,
 		p.supplier_id, COALESCE(NULLIF(BTRIM(s.trade_name), ''), NULLIF(BTRIM(s.legal_name), ''),
 			NULLIF(BTRIM(s.tax_identifier), ''), s.id::text) AS supplier_display_name,
 		pl.description, pl.supplier_sku, sp.supplier_sku AS commercial_supplier_sku,
@@ -136,7 +136,7 @@ func buildPurchaseLineWorkbenchQuery(criteria domain.PurchaseLineWorkbenchCriter
 		where = strings.Join(conditions, " AND ")
 	}
 	return purchaseLineWorkbenchBaseSQL + `
-SELECT line_id, purchase_id, issued_at, series, folio, cfdi_uuid, supplier_id, supplier_display_name,
+SELECT line_id, line_number, purchase_id, issued_at, series, folio, cfdi_uuid, supplier_id, supplier_display_name,
 	description, supplier_sku, commercial_supplier_sku, sat_product_code, quantity, unit_code, unit,
 	unit_price, amount, currency, supplier_product_id, resource_id, resource_identity, resource_display_name,
 	mapping_revision, resolution_override, resolution_revision, effective_status, effective_cause
@@ -215,7 +215,7 @@ func scanPurchaseLineWorkbenchRow(row scanner) (domain.PurchaseLineWorkbenchRow,
 	var mappingRevision *uint64
 	var override, effectiveStatus, effectiveCause string
 	err := row.Scan(
-		&result.LineID, &result.PurchaseID, &result.IssuedAt, &result.Series, &result.Folio, &result.CFDIUUID,
+		&result.LineID, &result.LineNumber, &result.PurchaseID, &result.IssuedAt, &result.Series, &result.Folio, &result.CFDIUUID,
 		&result.SupplierID, &result.SupplierDisplayName, &result.Description, &result.SupplierSKU,
 		&commercialSupplierSKU, &result.SATProductCode, &quantity, &result.UnitCode, &result.Unit,
 		&unitPrice, &amount, &result.Currency, &result.SupplierProductID, &result.ResourceID,

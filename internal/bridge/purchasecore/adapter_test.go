@@ -226,14 +226,14 @@ func TestAdapter_ListPurchaseLinesWorkbench_MapsAndOverfetches(t *testing.T) {
 		if criteria.Limit != 2 || criteria.Offset != 4 || criteria.EffectiveStatus != domain.LinkSuspended || criteria.SupplierID == nil || *criteria.SupplierID != 2 {
 			t.Fatalf("criteria = %+v, want over-fetch and filters preserved", criteria)
 		}
-		return []domain.PurchaseLineWorkbenchRow{{LineID: 10, PurchaseID: 11, SupplierID: 2, SupplierDisplayName: "Supplier", Description: "Cable", SupplierSKU: "XML-7", CommercialSupplierSKU: &commercialSKU, Quantity: decimal.NewFromInt(2), UnitPrice: decimal.NewFromInt(12), Amount: decimal.NewFromInt(24), Currency: "MXN", SupplierProductID: &supplierProductID, ResourceID: &resourceID, ResourceIdentity: &identity, ResourceDisplayName: &name, MappingRevision: &revision, EffectiveStatus: domain.LinkSuspended, EffectiveCause: domain.MappingCauseResourceInactive}, {LineID: 9}}, nil
+		return []domain.PurchaseLineWorkbenchRow{{LineID: 10, LineNumber: 3, PurchaseID: 11, SupplierID: 2, SupplierDisplayName: "Supplier", Description: "Cable", SupplierSKU: "XML-7", CommercialSupplierSKU: &commercialSKU, Quantity: decimal.NewFromInt(2), UnitPrice: decimal.NewFromInt(12), Amount: decimal.NewFromInt(24), Currency: "MXN", SupplierProductID: &supplierProductID, ResourceID: &resourceID, ResourceIdentity: &identity, ResourceDisplayName: &name, MappingRevision: &revision, EffectiveStatus: domain.LinkSuspended, EffectiveCause: domain.MappingCauseResourceInactive}, {LineID: 9}}, nil
 	}}
 	adapter := NewAdapter(stub)
 	page, err := adapter.ListPurchaseLinesWorkbench(context.Background(), public.PurchaseLineQuery{Limit: 1, Offset: 4, SupplierID: ptrInt64(2), EffectiveStatus: public.LinkSuspended})
 	if err != nil {
 		t.Fatalf("ListPurchaseLinesWorkbench error = %v", err)
 	}
-	if len(page.Rows) != 1 || page.Rows[0].LineID != 10 || !page.HasNext || !page.HasPrevious {
+	if len(page.Rows) != 1 || page.Rows[0].LineID != 10 || page.Rows[0].LineNumber != 3 || !page.HasNext || !page.HasPrevious {
 		t.Fatalf("page = %+v, want one mapped row with both pagination flags", page)
 	}
 	if page.Rows[0].CommercialSupplierSKU == nil || *page.Rows[0].CommercialSupplierSKU != commercialSKU || page.Rows[0].Quantity != "2" || page.Rows[0].MappingRevision == nil || *page.Rows[0].MappingRevision != public.MappingRevision(3) {
@@ -326,8 +326,9 @@ func TestAdapter_ResolvePurchaseLine_MapsSnapshotAndResult(t *testing.T) {
 			t.Fatalf("command = %+v", command)
 		}
 		return domain.ResolvePurchaseLineResult{
-			Line:            domain.PurchaseLine{ID: command.LineID, SupplierProductID: &productID, ResolutionRevision: 4, DerivedStatus: domain.LinkLinked},
-			SupplierProduct: domain.SupplierProduct{ID: productID, MappingRevision: 4, CurrentMapping: domain.NewConfirmedSupplierProductMapping(command.ResourceID)},
+			Line:                          domain.PurchaseLine{ID: command.LineID, SupplierProductID: &productID, ResolutionRevision: 4, DerivedStatus: domain.LinkLinked},
+			SupplierProduct:               domain.SupplierProduct{ID: productID, MappingRevision: 4, CurrentMapping: domain.NewConfirmedSupplierProductMapping(command.ResourceID)},
+			CommercialIdentityDisposition: domain.CommercialIdentityReused,
 		}, nil
 	}}
 	adapter := NewAdapter(stub)
@@ -335,7 +336,7 @@ func TestAdapter_ResolvePurchaseLine_MapsSnapshotAndResult(t *testing.T) {
 		LineID: 9, ResourceID: 42, ExpectedSupplierProductID: &productID,
 		ExpectedMappingRevision: &mappingRevision, ExpectedResolutionRevision: 4, Actor: "operator",
 	})
-	if err != nil || result.Line.EffectiveStatus != public.LinkLinked || result.SupplierProduct.MappingRevision != 4 {
+	if err != nil || result.Line.EffectiveStatus != public.LinkLinked || result.SupplierProduct.MappingRevision != 4 || result.CommercialIdentityDisposition != public.CommercialIdentityReused {
 		t.Fatalf("ResolvePurchaseLine = %+v, %v", result, err)
 	}
 }

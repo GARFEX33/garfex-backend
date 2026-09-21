@@ -26,7 +26,7 @@ Purchase Core now owns the global purchase-line read model, safe manual override
 
 `purchasecore.PurchaseLinePage` returns `Rows`, `HasPrevious`, and `HasNext`, ordered by `IssuedAt DESC, LineID DESC`.
 
-Each row carries the required immutable XML facts (description, supplier SKU, SAT product code, quantity/unit, unit price, and amount), document identity, supplier display, nullable commercial SupplierProduct identity, nullable mapping/resource identity, `MappingRevision`, `ResolutionRevision`, stored override, effective status, and effective cause. `SupplierDisplayName` is computed as trade name → legal name → tax identifier → decimal supplier ID. `ResourceDisplayName` is computed set-wise as existing `recursos.display_name` with `ResourceIdentity` fallback; it is not Resource Core's enriched catalog `Describe` output.
+Each row carries the required immutable XML facts (line number, description, supplier SKU, SAT product code, quantity/unit, unit price, and amount), document identity, supplier display, nullable commercial SupplierProduct identity, nullable mapping/resource identity, `MappingRevision`, `ResolutionRevision`, stored override, effective status, and effective cause. `SupplierDisplayName` is computed as trade name → legal name → tax identifier → decimal supplier ID. `ResourceDisplayName` is computed set-wise as existing `recursos.display_name` with `ResourceIdentity` fallback; it is not Resource Core's enriched catalog `Describe` output.
 
 ## Resolve one line
 
@@ -41,7 +41,7 @@ The command accepts only a locked line whose override is `NONE`, whose effective
 
 `PurchaseLine.SupplierSKU` remains immutable XML evidence. The only Resource authority is `SupplierProduct.CurrentMapping`; a line never stores ResourceID.
 
-The result contains the authoritative `PurchaseLine` and `SupplierProduct` snapshots.
+The result contains the authoritative `PurchaseLine` and `SupplierProduct` snapshots plus `CommercialIdentityDisposition`: `CREATED` when the SupplierProduct was inserted in this transaction, `REUSED` when a preexisting identity received a mapping transition, or `ALREADY_MAPPED` when a preexisting identity already targeted the same active Resource and mapping confirmation was a no-op.
 
 ## Manual override
 

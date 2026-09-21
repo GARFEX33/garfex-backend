@@ -40,6 +40,7 @@ type PurchaseLineWorkbenchCriteria struct {
 // nullable because a line may not have a current SupplierProduct mapping.
 type PurchaseLineWorkbenchRow struct {
 	LineID                int64
+	LineNumber            int
 	PurchaseID            int64
 	IssuedAt              time.Time
 	Series                string
