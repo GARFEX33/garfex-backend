@@ -1,5 +1,42 @@
 package domain
 
+import (
+	"fmt"
+	"strings"
+)
+
+// ResolutionRevision is the optimistic-concurrency revision of one line's
+// explicit resolution decision history.
+type ResolutionRevision uint64
+
+// ResolutionOverrideAuditEntry is one append-only manual override decision.
+type ResolutionOverrideAuditEntry struct {
+	PurchaseLineID   int64
+	PreviousOverride LinkStatus
+	NewOverride      LinkStatus
+	PreviousRevision ResolutionRevision
+	NewRevision      ResolutionRevision
+	Decision         MappingDecisionMetadata
+}
+
+// ResolutionOverrideTransition reports whether a valid decision changed the
+// stored override and therefore requires persistence plus audit.
+type ResolutionOverrideTransition struct {
+	Changed bool
+	Audit   *ResolutionOverrideAuditEntry
+}
+
+// SetResolutionOverrideCommand applies one explicit stored override. Derived
+// states are intentionally not valid command values.
+type SetResolutionOverrideCommand struct {
+	LineID           int64
+	Override         LinkStatus
+	ExpectedRevision ResolutionRevision
+	Actor            string
+	Reason           string
+	Decision         MappingDecisionMetadata
+}
+
 // EffectiveLineStatus derives the line status without mutating either the
 // line or mapping. Explicit line overrides have precedence over aggregate
 // knowledge, followed by identity conflict, resource inactivity, unresolved
@@ -30,18 +67,26 @@ func (line PurchaseLine) EffectiveStatus(mapping SupplierProductMapping, resourc
 	return EffectiveLineStatus(line.ResolutionOverride, mapping, resourceActive)
 }
 
-// SetResolutionOverride stores only a permitted line-specific override;
-// derived statuses must come from EffectiveStatus.
-func (line PurchaseLine) SetResolutionOverride(override LinkStatus) (PurchaseLine, error) {
+// ChangeResolutionOverride validates one manual decision and produces the
+// append-only audit fact required when the stored override changes.
+func (line *PurchaseLine) ChangeResolutionOverride(override LinkStatus, expected ResolutionRevision, decision MappingDecisionMetadata) (ResolutionOverrideTransition, error) {
 	if !override.ValidOverride() {
-		return PurchaseLine{}, NewValidationError("resolution_override", "must be NONE, NO_APLICA, or CONFLICTO")
+		return ResolutionOverrideTransition{}, NewValidationError("resolution_override", "must be NONE, NO_APLICA, or CONFLICTO")
+	}
+	if strings.TrimSpace(decision.Actor) == "" || strings.TrimSpace(decision.Reason) == "" || decision.Origin != MappingOriginManual || decision.At.IsZero() {
+		return ResolutionOverrideTransition{}, ErrInvalidDecisionMetadata
+	}
+	if line.ResolutionRevision != expected {
+		return ResolutionOverrideTransition{}, fmt.Errorf("%w: expected %d, actual %d", ErrStaleResolutionRevision, expected, line.ResolutionRevision)
+	}
+	if line.ResolutionOverride == override {
+		return ResolutionOverrideTransition{}, nil
+	}
+	entry := ResolutionOverrideAuditEntry{
+		PurchaseLineID: line.ID, PreviousOverride: line.ResolutionOverride, NewOverride: override,
+		PreviousRevision: line.ResolutionRevision, NewRevision: line.ResolutionRevision + 1, Decision: decision,
 	}
 	line.ResolutionOverride = override
-	return line, nil
-}
-
-// ClearResolutionOverride removes the line-specific override.
-func (line PurchaseLine) ClearResolutionOverride() PurchaseLine {
-	line.ResolutionOverride = LinkStatusNone
-	return line
+	line.ResolutionRevision++
+	return ResolutionOverrideTransition{Changed: true, Audit: &entry}, nil
 }

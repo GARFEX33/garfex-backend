@@ -155,30 +155,38 @@ func (r *repository) runMappingTransition(ctx context.Context, supplierProductID
 			product.ResourceActive = nil
 		}
 	}
-	if transition.Changed {
-		tag, err := tx.Exec(ctx, updateSupplierProductMappingSQL, product.ID, nullableResourceID(product.CurrentMapping.ResourceID), product.MappingRevision, product.CurrentMapping.IdentityConflict, expected)
-		if err != nil {
-			return domain.SupplierProduct{}, mapWriteError("update supplier product mapping", err)
-		}
-		if tag.RowsAffected() != 1 {
-			return domain.SupplierProduct{}, domain.ErrStaleMappingRevision
-		}
-		entry := transition.Audit
-		if entry == nil {
-			return domain.SupplierProduct{}, errors.New("mapping transition changed without audit entry")
-		}
-		if _, err := tx.Exec(ctx, insertMappingAuditSQL,
-			entry.SupplierProductID, nullableResourceID(entry.PreviousMapping.ResourceID), nullableResourceID(entry.NewMapping.ResourceID),
-			entry.PreviousMapping.IdentityConflict, entry.NewMapping.IdentityConflict,
-			entry.PreviousRevision, entry.NewRevision, string(entry.Operation), entry.Decision.Actor,
-			string(entry.Decision.Origin), entry.Decision.Reason, entry.Decision.At); err != nil {
-			return domain.SupplierProduct{}, mapWriteError("insert supplier product mapping audit", err)
-		}
+	if err := persistMappingTransition(ctx, tx, product, transition, expected); err != nil {
+		return domain.SupplierProduct{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return domain.SupplierProduct{}, mapCommitError(err)
 	}
 	return product, nil
+}
+
+func persistMappingTransition(ctx context.Context, tx pgx.Tx, product domain.SupplierProduct, transition domain.MappingTransition, expected domain.MappingRevision) error {
+	if !transition.Changed {
+		return nil
+	}
+	tag, err := tx.Exec(ctx, updateSupplierProductMappingSQL, product.ID, nullableResourceID(product.CurrentMapping.ResourceID), product.MappingRevision, product.CurrentMapping.IdentityConflict, expected)
+	if err != nil {
+		return mapWriteError("update supplier product mapping", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return domain.ErrStaleMappingRevision
+	}
+	entry := transition.Audit
+	if entry == nil {
+		return errors.New("mapping transition changed without audit entry")
+	}
+	if _, err := tx.Exec(ctx, insertMappingAuditSQL,
+		entry.SupplierProductID, nullableResourceID(entry.PreviousMapping.ResourceID), nullableResourceID(entry.NewMapping.ResourceID),
+		entry.PreviousMapping.IdentityConflict, entry.NewMapping.IdentityConflict,
+		entry.PreviousRevision, entry.NewRevision, string(entry.Operation), entry.Decision.Actor,
+		string(entry.Decision.Origin), entry.Decision.Reason, entry.Decision.At); err != nil {
+		return mapWriteError("insert supplier product mapping audit", err)
+	}
+	return nil
 }
 
 func lockResource(ctx context.Context, tx pgx.Tx, resourceID int64) (int64, bool, error) {

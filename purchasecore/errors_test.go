@@ -16,8 +16,14 @@ func TestNewError_CarriesCodeAndMessage(t *testing.T) {
 	}
 }
 
-func TestCode_AllFiveCategoriesRoundTrip(t *testing.T) {
-	codes := []ErrorCode{NotFound, Validation, Conflict, InvalidArgument, Internal}
+func TestCode_PublicCodesRoundTrip(t *testing.T) {
+	codes := []ErrorCode{
+		NotFound, Validation, Conflict, InvalidArgument, Internal,
+		PurchaseLineNotFound, ResourceNotFound, ResourceInactive,
+		CommercialSupplierSKURequired, CommercialSupplierSKUForbidden,
+		PurchaseLineStateConflict, StaleResolutionRevision, StaleMappingRevision,
+		SupplierProductTargetConflict, InvalidMappingTransition, IntegrityConflict,
+	}
 	for _, code := range codes {
 		err := NewError(code, "message")
 		if got := Code(err); got != code {

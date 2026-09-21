@@ -3,6 +3,8 @@ package domain
 import (
 	"context"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // ImportResult is the outcome of importing one purchase document.
@@ -16,6 +18,56 @@ type ImportResult struct {
 type ListCriteria struct {
 	Limit  int
 	Offset int
+}
+
+// PurchaseLineWorkbenchCriteria filters the global PurchaseLine workbench.
+// SupplierID is optional; status and date windows are applied to the derived
+// read projection, never to persisted presentation state.
+type PurchaseLineWorkbenchCriteria struct {
+	Limit           int
+	Offset          int
+	SupplierID      *int64
+	EffectiveStatus LinkStatus
+	DateFrom        *time.Time
+	DateTo          *time.Time
+	InvoiceText     string
+	SupplierSKU     string
+	Description     string
+}
+
+// PurchaseLineWorkbenchRow is the flattened read projection used by the
+// global PurchaseLine workbench. Resource and commercial supplier fields are
+// nullable because a line may not have a current SupplierProduct mapping.
+type PurchaseLineWorkbenchRow struct {
+	LineID                int64
+	PurchaseID            int64
+	IssuedAt              time.Time
+	Series                string
+	Folio                 string
+	CFDIUUID              string
+	SupplierID            int64
+	SupplierDisplayName   string
+	Description           string
+	SupplierSKU           string
+	CommercialSupplierSKU *string
+	SATProductCode        string
+	Quantity              decimal.Decimal
+	UnitCode              string
+	Unit                  string
+	UnitPrice             decimal.Decimal
+	Amount                decimal.Decimal
+	Currency              string
+	SupplierProductID     *int64
+	ResourceID            *int64
+	ResourceIdentity      *string
+	// ResourceDisplayName is a set-based display_name projection with the
+	// Resource identity as fallback, not the enriched catalog Describe value.
+	ResourceDisplayName *string
+	MappingRevision     *MappingRevision
+	ResolutionRevision  ResolutionRevision
+	ResolutionOverride  LinkStatus
+	EffectiveStatus     LinkStatus
+	EffectiveCause      MappingCause
 }
 
 // Repository is the persistence port for the Purchase and Price History
@@ -37,6 +89,7 @@ type Repository interface {
 	GetPurchase(context.Context, int64) (Purchase, error)
 	GetPurchaseByUUID(context.Context, string) (Purchase, error)
 	ListPurchaseLines(context.Context, int64) ([]PurchaseLine, error)
+	ListPurchaseLinesWorkbench(context.Context, PurchaseLineWorkbenchCriteria) ([]PurchaseLineWorkbenchRow, error)
 	// ListPurchasesBySupplier supports the "what has been bought from this
 	// supplier" history view, most recent first.
 	ListPurchasesBySupplier(context.Context, int64, ListCriteria) ([]Purchase, error)
@@ -45,11 +98,14 @@ type Repository interface {
 	FindSupplierProduct(ctx context.Context, supplierID int64, sku string) (SupplierProduct, error)
 	ListSupplierProducts(ctx context.Context, supplierID int64, criteria ListCriteria) ([]SupplierProduct, error)
 
-	// MarkNotApplicable and MarkConflict store explicit line overrides; the
-	// derived effective status is never written directly.
-	MarkNotApplicable(context.Context, int64) (PurchaseLine, error)
-	MarkConflict(context.Context, int64) (PurchaseLine, error)
-	ClearOverride(context.Context, int64) (PurchaseLine, error)
+	// SetResolutionOverride is the sole manual command for storing NONE,
+	// NO_APLICA, or CONFLICTO. Derived effective states are never accepted.
+	SetResolutionOverride(context.Context, SetResolutionOverrideCommand) (PurchaseLine, error)
+
+	// ResolvePurchaseLine atomically validates the line snapshot, creates or
+	// reuses its SupplierProduct identity when needed, associates the line, and
+	// confirms the SupplierProduct mapping through the aggregate transition.
+	ResolvePurchaseLine(context.Context, ResolvePurchaseLineCommand) (ResolvePurchaseLineResult, error)
 
 	// ListPurchaseLinesByResource supports the "who has sold this resource,
 	// at what price, when" history view, most recent purchase first. It

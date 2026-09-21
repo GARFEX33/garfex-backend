@@ -2,9 +2,49 @@ package app
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
 )
+
+func (s *Service) ResolvePurchaseLine(ctx context.Context, command domain.ResolvePurchaseLineCommand) (domain.ResolvePurchaseLineResult, error) {
+	if err := validID("purchase_line_id", command.LineID); err != nil {
+		return domain.ResolvePurchaseLineResult{}, err
+	}
+	if err := validID("resource_id", command.ResourceID); err != nil {
+		return domain.ResolvePurchaseLineResult{}, err
+	}
+	commercialSKU := strings.TrimSpace(command.CommercialSupplierSKU)
+	if command.ExpectedSupplierProductID == nil {
+		if command.ExpectedMappingRevision != nil {
+			return domain.ResolvePurchaseLineResult{}, domain.ErrPurchaseLineStateConflict
+		}
+		if commercialSKU == "" {
+			return domain.ResolvePurchaseLineResult{}, domain.ErrCommercialSupplierSKURequired
+		}
+	} else {
+		if err := validID("expected_supplier_product_id", *command.ExpectedSupplierProductID); err != nil {
+			return domain.ResolvePurchaseLineResult{}, err
+		}
+		if command.ExpectedMappingRevision == nil {
+			return domain.ResolvePurchaseLineResult{}, domain.ErrPurchaseLineStateConflict
+		}
+		if commercialSKU != "" {
+			return domain.ResolvePurchaseLineResult{}, domain.ErrCommercialSupplierSKUForbidden
+		}
+	}
+	if strings.TrimSpace(command.Actor) == "" {
+		return domain.ResolvePurchaseLineResult{}, domain.NewValidationError("actor", "is required")
+	}
+	command.CommercialSupplierSKU = commercialSKU
+	command.Decision = domain.MappingDecisionMetadata{
+		Actor: command.Actor, Origin: domain.MappingOriginManual,
+		Reason: strings.TrimSpace(command.Reason), At: time.Now().UTC(),
+	}
+	result, err := s.repo.ResolvePurchaseLine(ctx, command)
+	return result, wrap("resolve purchase line", err)
+}
 
 func (s *Service) ConfirmMapping(ctx context.Context, command domain.ConfirmMappingCommand) (domain.SupplierProduct, error) {
 	if err := validID("supplier_product_id", command.SupplierProductID); err != nil {
@@ -55,28 +95,25 @@ func (s *Service) ResolveIdentityConflict(ctx context.Context, command domain.Re
 	return product, wrap("resolve supplier product identity conflict", err)
 }
 
-func (s *Service) MarkNotApplicable(ctx context.Context, lineID int64) (domain.PurchaseLine, error) {
-	if err := validID("purchase_line_id", lineID); err != nil {
+func (s *Service) SetResolutionOverride(ctx context.Context, command domain.SetResolutionOverrideCommand) (domain.PurchaseLine, error) {
+	if err := validID("purchase_line_id", command.LineID); err != nil {
 		return domain.PurchaseLine{}, err
 	}
-	line, err := s.repo.MarkNotApplicable(ctx, lineID)
-	return line, wrap("mark purchase line not applicable", err)
-}
-
-func (s *Service) MarkConflict(ctx context.Context, lineID int64) (domain.PurchaseLine, error) {
-	if err := validID("purchase_line_id", lineID); err != nil {
-		return domain.PurchaseLine{}, err
+	if !command.Override.ValidOverride() {
+		return domain.PurchaseLine{}, domain.NewValidationError("resolution_override", "must be NONE, NO_APLICA, or CONFLICTO")
 	}
-	line, err := s.repo.MarkConflict(ctx, lineID)
-	return line, wrap("mark purchase line conflict", err)
-}
-
-func (s *Service) ClearOverride(ctx context.Context, lineID int64) (domain.PurchaseLine, error) {
-	if err := validID("purchase_line_id", lineID); err != nil {
-		return domain.PurchaseLine{}, err
+	if strings.TrimSpace(command.Actor) == "" {
+		return domain.PurchaseLine{}, domain.NewValidationError("actor", "is required")
 	}
-	line, err := s.repo.ClearOverride(ctx, lineID)
-	return line, wrap("clear purchase line override", err)
+	if strings.TrimSpace(command.Reason) == "" {
+		return domain.PurchaseLine{}, domain.NewValidationError("reason", "is required")
+	}
+	command.Decision = domain.MappingDecisionMetadata{
+		Actor: strings.TrimSpace(command.Actor), Origin: domain.MappingOriginManual,
+		Reason: strings.TrimSpace(command.Reason), At: time.Now().UTC(),
+	}
+	line, err := s.repo.SetResolutionOverride(ctx, command)
+	return line, wrap("set purchase line resolution override", err)
 }
 
 func (s *Service) ListMappingAudit(ctx context.Context, supplierProductID int64, criteria domain.ListCriteria) ([]domain.MappingAuditEntry, error) {

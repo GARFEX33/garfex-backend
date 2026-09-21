@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"errors"
+	"testing"
+	"time"
+)
 
 func TestEffectiveLineStatusPrecedence(t *testing.T) {
 	mapping := NewConfirmedSupplierProductMapping(42)
@@ -32,20 +36,36 @@ func TestEffectiveLineStatusPrecedence(t *testing.T) {
 }
 
 func TestPurchaseLineResolutionOverride(t *testing.T) {
-	line := PurchaseLine{}
-	line, err := line.SetResolutionOverride(LinkNotApplicable)
+	decision := MappingDecisionMetadata{Actor: "operator", Origin: MappingOriginManual, Reason: "reviewed", At: time.Now()}
+	line := PurchaseLine{ID: 7, ResolutionOverride: LinkStatusNone}
+	transition, err := line.ChangeResolutionOverride(LinkNotApplicable, 0, decision)
 	if err != nil {
-		t.Fatalf("SetResolutionOverride() error = %v", err)
+		t.Fatalf("ChangeResolutionOverride() error = %v", err)
 	}
-	if line.ResolutionOverride != LinkNotApplicable {
-		t.Fatalf("line = %+v, want not-applicable override", line)
+	if !transition.Changed || transition.Audit == nil || line.ResolutionOverride != LinkNotApplicable || line.ResolutionRevision != 1 {
+		t.Fatalf("changed line/transition = %+v / %+v", line, transition)
 	}
-	if _, err := line.SetResolutionOverride(LinkPending); err == nil {
+	if transition.Audit.PreviousOverride != LinkStatusNone || transition.Audit.NewOverride != LinkNotApplicable {
+		t.Fatalf("audit = %+v", transition.Audit)
+	}
+	noOp, err := line.ChangeResolutionOverride(LinkNotApplicable, 1, decision)
+	if err != nil || noOp.Changed {
+		t.Fatalf("idempotent decision = %+v, %v", noOp, err)
+	}
+	if _, err := line.ChangeResolutionOverride(LinkConflict, 0, decision); !errors.Is(err, ErrStaleResolutionRevision) {
+		t.Fatalf("stale error = %v", err)
+	}
+	if _, err := line.ChangeResolutionOverride(LinkPending, 1, decision); err == nil {
 		t.Fatal("expected derived status to be rejected as an override")
 	}
-	line = line.ClearResolutionOverride()
-	if line.ResolutionOverride != LinkStatusNone {
-		t.Fatalf("cleared line = %+v, want no override", line)
+	if _, err := line.ChangeResolutionOverride(LinkStatusNone, 1, MappingDecisionMetadata{}); !errors.Is(err, ErrInvalidDecisionMetadata) {
+		t.Fatalf("invalid decision error = %v", err)
+	}
+	if _, err := line.ChangeResolutionOverride(LinkStatusNone, 1, decision); err != nil {
+		t.Fatalf("clear override error = %v", err)
+	}
+	if line.ResolutionOverride != LinkStatusNone || line.ResolutionRevision != 2 {
+		t.Fatalf("cleared line = %+v", line)
 	}
 }
 

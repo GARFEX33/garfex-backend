@@ -1,5 +1,7 @@
 package purchasecore
 
+import "time"
+
 func copyInt64(id *int64) *int64 {
 	if id == nil {
 		return nil
@@ -12,6 +14,13 @@ func copyString(s *string) *string {
 		return nil
 	}
 	v := *s
+	return &v
+}
+func copyTime(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	v := *value
 	return &v
 }
 func copyBool(value *bool) *bool {
@@ -41,6 +50,26 @@ func ClonePurchase(p Purchase) Purchase {
 func ClonePurchaseLine(l PurchaseLine) PurchaseLine {
 	l.SupplierProductID = copyInt64(l.SupplierProductID)
 	return l
+}
+
+func ClonePurchaseLineQuery(q PurchaseLineQuery) PurchaseLineQuery {
+	q.SupplierID = copyInt64(q.SupplierID)
+	q.DateFrom = copyTime(q.DateFrom)
+	q.DateTo = copyTime(q.DateTo)
+	return q
+}
+
+func ClonePurchaseLineRow(row PurchaseLineRow) PurchaseLineRow {
+	row.CommercialSupplierSKU = copyString(row.CommercialSupplierSKU)
+	row.SupplierProductID = copyInt64(row.SupplierProductID)
+	row.ResourceID = copyInt64(row.ResourceID)
+	row.ResourceIdentity = copyString(row.ResourceIdentity)
+	row.ResourceDisplayName = copyString(row.ResourceDisplayName)
+	if row.MappingRevision != nil {
+		revision := *row.MappingRevision
+		row.MappingRevision = &revision
+	}
+	return row
 }
 func CloneSupplierProduct(sp SupplierProduct) SupplierProduct {
 	sp.CurrentMapping.ResourceID = copyInt64(sp.CurrentMapping.ResourceID)
@@ -86,6 +115,16 @@ func clonePurchaseLineSlice(values []PurchaseLine) []PurchaseLine {
 	out := make([]PurchaseLine, len(values))
 	for i := range values {
 		out[i] = ClonePurchaseLine(values[i])
+	}
+	return out
+}
+func clonePurchaseLineRowSlice(values []PurchaseLineRow) []PurchaseLineRow {
+	if values == nil {
+		return nil
+	}
+	out := make([]PurchaseLineRow, len(values))
+	for i := range values {
+		out[i] = ClonePurchaseLineRow(values[i])
 	}
 	return out
 }

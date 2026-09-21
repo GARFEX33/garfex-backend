@@ -12,7 +12,7 @@ const listPurchaseLinesByResourceSQL = `
 	SELECT
 		pl.id, pl.purchase_id, pl.line_number, pl.description, pl.supplier_sku, pl.sat_product_code,
 		pl.quantity, pl.unit_code, pl.unit, pl.unit_price, pl.amount, pl.discount, pl.tax_transferred, pl.tax_withheld, pl.tax_object,
-		pl.supplier_product_id, pl.resolution_override, sp.resource_id, sp.mapping_identity_conflict, r.active,
+		pl.supplier_product_id, pl.resolution_override, pl.resolution_revision, sp.resource_id, sp.mapping_identity_conflict, r.active,
 		sp.id, sp.supplier_id, sp.supplier_sku, sp.description, sp.resource_id, sp.mapping_revision, sp.mapping_identity_conflict, r.active,
 		sp.notes, sp.created_at, sp.updated_at,
 		p.id, p.cfdi_uuid, p.supplier_id, p.branch_id, p.issued_at, p.currency
@@ -60,7 +60,7 @@ func scanPurchaseLineHistory(row scanner) (domain.PurchaseLineHistory, error) {
 	err := row.Scan(
 		&entry.Line.ID, &entry.Line.PurchaseID, &entry.Line.LineNumber, &entry.Line.Description, &entry.Line.SupplierSKU, &entry.Line.SATProductCode,
 		&quantity, &entry.Line.UnitCode, &entry.Line.Unit, &unitPrice, &amount, &discount, &taxTransferred, &taxWithheld, &entry.Line.TaxObject,
-		&entry.Line.SupplierProductID, &override, &lineResourceID, &lineIdentityConflict, &lineResourceActive,
+		&entry.Line.SupplierProductID, &override, &entry.Line.ResolutionRevision, &lineResourceID, &lineIdentityConflict, &lineResourceActive,
 		&entry.SupplierProduct.ID, &entry.SupplierProduct.SupplierID, &entry.SupplierProduct.SupplierSKU, &entry.SupplierProduct.Description,
 		&supplierResourceID, &entry.SupplierProduct.MappingRevision, &supplierIdentityConflict, &supplierResourceActive,
 		&entry.SupplierProduct.Notes, &entry.SupplierProduct.CreatedAt, &entry.SupplierProduct.UpdatedAt,

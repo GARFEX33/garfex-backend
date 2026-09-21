@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
@@ -143,6 +144,84 @@ func (r *memoryRepository) ListPurchaseLines(_ context.Context, purchaseID int64
 	return lines, nil
 }
 
+func (r *memoryRepository) ListPurchaseLinesWorkbench(_ context.Context, criteria domain.PurchaseLineWorkbenchCriteria) ([]domain.PurchaseLineWorkbenchRow, error) {
+	rows := make([]domain.PurchaseLineWorkbenchRow, 0)
+	for _, purchase := range r.purchasesByID {
+		if criteria.SupplierID != nil && purchase.Supplier.SupplierID != *criteria.SupplierID {
+			continue
+		}
+		if criteria.DateFrom != nil && purchase.IssuedAt.Before(*criteria.DateFrom) {
+			continue
+		}
+		if criteria.DateTo != nil && purchase.IssuedAt.After(*criteria.DateTo) {
+			continue
+		}
+		for _, rawLine := range r.lines[purchase.ID] {
+			line := r.refreshLine(rawLine)
+			if criteria.EffectiveStatus != "" && line.DerivedStatus != criteria.EffectiveStatus {
+				continue
+			}
+			if !containsFold(line.SupplierSKU, criteria.SupplierSKU) || !containsFold(line.Description, criteria.Description) {
+				continue
+			}
+			if criteria.InvoiceText != "" && !containsFold(purchase.Series, criteria.InvoiceText) && !containsFold(purchase.Folio, criteria.InvoiceText) && !containsFold(purchase.CFDIUUID, criteria.InvoiceText) {
+				continue
+			}
+			row := domain.PurchaseLineWorkbenchRow{
+				LineID: line.ID, PurchaseID: purchase.ID, IssuedAt: purchase.IssuedAt, Series: purchase.Series, Folio: purchase.Folio,
+				CFDIUUID: purchase.CFDIUUID, SupplierID: purchase.Supplier.SupplierID, SupplierDisplayName: strconv.FormatInt(purchase.Supplier.SupplierID, 10),
+				Description: line.Description, SupplierSKU: line.SupplierSKU, SATProductCode: line.SATProductCode, Quantity: line.Quantity,
+				UnitCode: line.UnitCode, Unit: line.Unit, UnitPrice: line.UnitPrice, Amount: line.Amount, Currency: purchase.Currency,
+				SupplierProductID: line.SupplierProductID, ResolutionRevision: line.ResolutionRevision, ResolutionOverride: line.ResolutionOverride, EffectiveStatus: line.DerivedStatus, EffectiveCause: line.DerivedCause,
+			}
+			if line.SupplierProductID != nil {
+				product := r.supplierProducts[*line.SupplierProductID]
+				row.CommercialSupplierSKU = stringPointer(product.SupplierSKU)
+				row.ResourceID = copyInt64ForTest(product.CurrentMapping.ResourceID)
+				row.MappingRevision = mappingRevisionPointerForTest(product.MappingRevision)
+			}
+			rows = append(rows, row)
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].IssuedAt.Equal(rows[j].IssuedAt) {
+			return rows[i].LineID > rows[j].LineID
+		}
+		return rows[i].IssuedAt.After(rows[j].IssuedAt)
+	})
+	start := criteria.Offset
+	if start < 0 {
+		start = 0
+	}
+	if start > len(rows) {
+		start = len(rows)
+	}
+	end := start + criteria.Limit
+	if criteria.Limit <= 0 || end > len(rows) {
+		end = len(rows)
+	}
+	return rows[start:end], nil
+}
+
+func containsFold(value, query string) bool {
+	return query == "" || strings.Contains(strings.ToLower(value), strings.ToLower(query))
+}
+
+func stringPointer(value string) *string { return &value }
+
+func copyInt64ForTest(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func mappingRevisionPointerForTest(value domain.MappingRevision) *domain.MappingRevision {
+	copy := value
+	return &copy
+}
+
 func (r *memoryRepository) ListPurchasesBySupplier(_ context.Context, supplierID int64, _ domain.ListCriteria) ([]domain.Purchase, error) {
 	values := make([]domain.Purchase, 0)
 	for _, purchase := range r.purchasesByID {
@@ -273,33 +352,16 @@ func (r *memoryRepository) ResolveIdentityConflict(_ context.Context, command do
 	return r.applyMapping(command.SupplierProductID, transition)
 }
 
-func (r *memoryRepository) updateLineOverride(lineID int64, override domain.LinkStatus) (domain.PurchaseLine, error) {
+func (r *memoryRepository) SetResolutionOverride(_ context.Context, command domain.SetResolutionOverrideCommand) (domain.PurchaseLine, error) {
 	for purchaseID, lines := range r.lines {
 		for i, line := range lines {
-			if line.ID != lineID {
+			if line.ID != command.LineID {
 				continue
 			}
-			var err error
-			if override == domain.LinkStatusNone {
-				line = line.ClearResolutionOverride()
-			} else {
-				line, err = line.SetResolutionOverride(override)
-				if err != nil {
-					return domain.PurchaseLine{}, err
-				}
+			if _, err := line.ChangeResolutionOverride(command.Override, command.ExpectedRevision, command.Decision); err != nil {
+				return domain.PurchaseLine{}, err
 			}
-			if line.SupplierProductID != nil {
-				product := r.supplierProducts[*line.SupplierProductID]
-				active := true
-				if product.CurrentMapping.ResourceID != nil {
-					if value, ok := r.resources[*product.CurrentMapping.ResourceID]; ok {
-						active = value
-					}
-				}
-				line.DerivedStatus, line.DerivedCause = line.EffectiveStatus(product.CurrentMapping, active)
-			} else {
-				line.DerivedStatus, line.DerivedCause = line.EffectiveStatus(domain.NewUnresolvedSupplierProductMapping(), true)
-			}
+			line = r.refreshLine(line)
 			lines[i] = line
 			r.lines[purchaseID] = lines
 			return line, nil
@@ -307,14 +369,54 @@ func (r *memoryRepository) updateLineOverride(lineID int64, override domain.Link
 	}
 	return domain.PurchaseLine{}, domain.ErrPurchaseLineNotFound
 }
-func (r *memoryRepository) MarkNotApplicable(_ context.Context, lineID int64) (domain.PurchaseLine, error) {
-	return r.updateLineOverride(lineID, domain.LinkNotApplicable)
+
+func (r *memoryRepository) ResolvePurchaseLine(_ context.Context, command domain.ResolvePurchaseLineCommand) (domain.ResolvePurchaseLineResult, error) {
+	for purchaseID, lines := range r.lines {
+		for i, line := range lines {
+			if line.ID != command.LineID {
+				continue
+			}
+			if line.ResolutionRevision != command.ExpectedResolutionRevision || line.ResolutionOverride != domain.LinkStatusNone {
+				return domain.ResolvePurchaseLineResult{}, domain.ErrPurchaseLineStateConflict
+			}
+			if !sameTestID(line.SupplierProductID, command.ExpectedSupplierProductID) {
+				return domain.ResolvePurchaseLineResult{}, domain.ErrPurchaseLineStateConflict
+			}
+			var product domain.SupplierProduct
+			if line.SupplierProductID == nil {
+				id := r.getOrCreateSupplierProduct(r.purchasesByID[purchaseID].Supplier.SupplierID, command.CommercialSupplierSKU, line.Description)
+				line.SupplierProductID = &id
+				product = r.supplierProducts[id]
+			} else {
+				product = r.supplierProducts[*line.SupplierProductID]
+			}
+			expected := product.MappingRevision
+			if command.ExpectedMappingRevision != nil {
+				expected = *command.ExpectedMappingRevision
+			}
+			transition, err := product.ConfirmMapping(command.ResourceID, expected, command.Decision)
+			if err != nil {
+				return domain.ResolvePurchaseLineResult{}, err
+			}
+			r.resources[command.ResourceID] = true
+			r.supplierProducts[product.ID] = product
+			if transition.Changed {
+				r.audit[product.ID] = append(r.audit[product.ID], *transition.Audit)
+			}
+			line = r.refreshLine(line)
+			lines[i] = line
+			r.lines[purchaseID] = lines
+			return domain.ResolvePurchaseLineResult{Line: line, SupplierProduct: product}, nil
+		}
+	}
+	return domain.ResolvePurchaseLineResult{}, domain.ErrPurchaseLineNotFound
 }
-func (r *memoryRepository) MarkConflict(_ context.Context, lineID int64) (domain.PurchaseLine, error) {
-	return r.updateLineOverride(lineID, domain.LinkConflict)
-}
-func (r *memoryRepository) ClearOverride(_ context.Context, lineID int64) (domain.PurchaseLine, error) {
-	return r.updateLineOverride(lineID, domain.LinkStatusNone)
+
+func sameTestID(left, right *int64) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 func (r *memoryRepository) ListMappingAudit(_ context.Context, id int64, criteria domain.ListCriteria) ([]domain.MappingAuditEntry, error) {

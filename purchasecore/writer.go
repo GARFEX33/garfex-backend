@@ -13,9 +13,8 @@ type WriteCapabilities interface {
 	ExceptionalUnlink(context.Context, ExceptionalUnlinkRequest) (SupplierProduct, error)
 	ReportIdentityConflict(context.Context, ReportIdentityConflictRequest) (SupplierProduct, error)
 	ResolveIdentityConflict(context.Context, ResolveIdentityConflictRequest) (SupplierProduct, error)
-	MarkNotApplicable(context.Context, int64) (PurchaseLine, error)
-	MarkConflict(context.Context, int64) (PurchaseLine, error)
-	ClearOverride(context.Context, int64) (PurchaseLine, error)
+	ResolvePurchaseLine(context.Context, ResolvePurchaseLineRequest) (ResolvePurchaseLineResult, error)
+	SetResolutionOverride(context.Context, SetResolutionOverrideRequest) (PurchaseLine, error)
 }
 
 type Writer struct{ cap WriteCapabilities }
@@ -113,33 +112,48 @@ func (w *Writer) ResolveIdentityConflict(ctx context.Context, req ResolveIdentit
 	return CloneSupplierProduct(sp), nil
 }
 
-func (w *Writer) MarkNotApplicable(ctx context.Context, lineID int64) (PurchaseLine, error) {
-	if lineID <= 0 {
-		return PurchaseLine{}, NewError(InvalidArgument, "purchase line id must be positive")
+func (w *Writer) ResolvePurchaseLine(ctx context.Context, req ResolvePurchaseLineRequest) (ResolvePurchaseLineResult, error) {
+	if req.LineID <= 0 || req.ResourceID <= 0 {
+		return ResolvePurchaseLineResult{}, NewError(InvalidArgument, "line and resource identifiers must be positive")
 	}
-	line, err := w.cap.MarkNotApplicable(ctx, lineID)
+	if strings.TrimSpace(req.Actor) == "" {
+		return ResolvePurchaseLineResult{}, NewError(InvalidArgument, "actor is required")
+	}
+	if req.ExpectedSupplierProductID == nil {
+		if req.ExpectedMappingRevision != nil {
+			return ResolvePurchaseLineResult{}, NewError(InvalidArgument, "mapping revision must be null without a supplier product")
+		}
+		if strings.TrimSpace(req.CommercialSupplierSKU) == "" {
+			return ResolvePurchaseLineResult{}, NewError(CommercialSupplierSKURequired, "commercial supplier sku is required")
+		}
+	} else {
+		if *req.ExpectedSupplierProductID <= 0 || req.ExpectedMappingRevision == nil {
+			return ResolvePurchaseLineResult{}, NewError(InvalidArgument, "complete supplier product snapshot is required")
+		}
+		if strings.TrimSpace(req.CommercialSupplierSKU) != "" {
+			return ResolvePurchaseLineResult{}, NewError(CommercialSupplierSKUForbidden, "commercial supplier sku is forbidden")
+		}
+	}
+	result, err := w.cap.ResolvePurchaseLine(ctx, req)
 	if err != nil {
-		return PurchaseLine{}, err
+		return ResolvePurchaseLineResult{}, err
 	}
-	return ClonePurchaseLine(line), nil
+	result.Line = ClonePurchaseLine(result.Line)
+	result.SupplierProduct = CloneSupplierProduct(result.SupplierProduct)
+	return result, nil
 }
 
-func (w *Writer) MarkConflict(ctx context.Context, lineID int64) (PurchaseLine, error) {
-	if lineID <= 0 {
+func (w *Writer) SetResolutionOverride(ctx context.Context, req SetResolutionOverrideRequest) (PurchaseLine, error) {
+	if req.LineID <= 0 {
 		return PurchaseLine{}, NewError(InvalidArgument, "purchase line id must be positive")
 	}
-	line, err := w.cap.MarkConflict(ctx, lineID)
-	if err != nil {
-		return PurchaseLine{}, err
+	if req.Override != LinkStatusNone && req.Override != LinkNotApplicable && req.Override != LinkConflict {
+		return PurchaseLine{}, NewError(InvalidArgument, "resolution override must be NONE, NO_APLICA, or CONFLICTO")
 	}
-	return ClonePurchaseLine(line), nil
-}
-
-func (w *Writer) ClearOverride(ctx context.Context, lineID int64) (PurchaseLine, error) {
-	if lineID <= 0 {
-		return PurchaseLine{}, NewError(InvalidArgument, "purchase line id must be positive")
+	if strings.TrimSpace(req.Actor) == "" || strings.TrimSpace(req.Reason) == "" {
+		return PurchaseLine{}, NewError(InvalidArgument, "actor and reason are required")
 	}
-	line, err := w.cap.ClearOverride(ctx, lineID)
+	line, err := w.cap.SetResolutionOverride(ctx, req)
 	if err != nil {
 		return PurchaseLine{}, err
 	}

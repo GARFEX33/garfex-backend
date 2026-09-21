@@ -34,6 +34,7 @@ type service interface {
 	GetPurchase(ctx context.Context, id int64) (domain.Purchase, error)
 	GetPurchaseByUUID(ctx context.Context, uuid string) (domain.Purchase, error)
 	ListPurchaseLines(ctx context.Context, purchaseID int64) ([]domain.PurchaseLine, error)
+	ListPurchaseLinesWorkbench(ctx context.Context, criteria domain.PurchaseLineWorkbenchCriteria) ([]domain.PurchaseLineWorkbenchRow, error)
 	ListPurchasesBySupplier(ctx context.Context, supplierID int64, criteria domain.ListCriteria) ([]domain.Purchase, error)
 	GetSupplierProduct(ctx context.Context, id int64) (domain.SupplierProduct, error)
 	FindSupplierProduct(ctx context.Context, supplierID int64, sku string) (domain.SupplierProduct, error)
@@ -45,9 +46,8 @@ type service interface {
 	ExceptionalUnlink(ctx context.Context, command domain.ExceptionalUnlinkCommand) (domain.SupplierProduct, error)
 	ReportIdentityConflict(ctx context.Context, command domain.ReportIdentityConflictCommand) (domain.SupplierProduct, error)
 	ResolveIdentityConflict(ctx context.Context, command domain.ResolveIdentityConflictCommand) (domain.SupplierProduct, error)
-	MarkNotApplicable(ctx context.Context, lineID int64) (domain.PurchaseLine, error)
-	MarkConflict(ctx context.Context, lineID int64) (domain.PurchaseLine, error)
-	ClearOverride(ctx context.Context, lineID int64) (domain.PurchaseLine, error)
+	ResolvePurchaseLine(ctx context.Context, command domain.ResolvePurchaseLineCommand) (domain.ResolvePurchaseLineResult, error)
+	SetResolutionOverride(ctx context.Context, command domain.SetResolutionOverrideCommand) (domain.PurchaseLine, error)
 }
 
 // Adapter implements public.ReadCapabilities and public.WriteCapabilities
@@ -105,6 +105,30 @@ func (a *Adapter) ListPurchaseLines(ctx context.Context, purchaseID int64) ([]pu
 		return nil, mapError(err)
 	}
 	return mapPurchaseLineSlice(lines), nil
+}
+
+// ListPurchaseLinesWorkbench returns the global PurchaseLine workbench page.
+// The bridge over-fetches by one row because the internal repository uses a
+// plain LIMIT, then derives HasNext at the public boundary.
+func (a *Adapter) ListPurchaseLinesWorkbench(ctx context.Context, q public.PurchaseLineQuery) (public.PurchaseLinePage, error) {
+	limit := effectivePurchaseLineLimit(q.Limit)
+	rows, err := a.service.ListPurchaseLinesWorkbench(ctx, domain.PurchaseLineWorkbenchCriteria{
+		Limit: limit + 1, Offset: q.Offset, SupplierID: copyInt64(q.SupplierID),
+		EffectiveStatus: domain.LinkStatus(q.EffectiveStatus), DateFrom: q.DateFrom, DateTo: q.DateTo,
+		InvoiceText: q.InvoiceText, SupplierSKU: q.SupplierSKU, Description: q.Description,
+	})
+	if err != nil {
+		return public.PurchaseLinePage{}, mapError(err)
+	}
+	end, hasNext := trimToPage(len(rows), limit)
+	mapped := make([]public.PurchaseLineRow, end)
+	for i := range mapped {
+		mapped[i] = mapPurchaseLineRow(rows[i])
+	}
+	return public.PurchaseLinePage{
+		Query: public.PurchaseLineQuery{Limit: limit, Offset: q.Offset, SupplierID: copyInt64(q.SupplierID), EffectiveStatus: q.EffectiveStatus, DateFrom: q.DateFrom, DateTo: q.DateTo, InvoiceText: q.InvoiceText, SupplierSKU: q.SupplierSKU, Description: q.Description},
+		Rows:  mapped, HasPrevious: q.Offset > 0, HasNext: hasNext,
+	}, nil
 }
 
 // ListPurchasesBySupplier returns a page of one supplier's purchase
@@ -233,26 +257,41 @@ func (a *Adapter) ResolveIdentityConflict(ctx context.Context, req public.Resolv
 	return mapSupplierProduct(sp), nil
 }
 
-func (a *Adapter) MarkNotApplicable(ctx context.Context, lineID int64) (public.PurchaseLine, error) {
-	line, err := a.service.MarkNotApplicable(ctx, lineID)
+func (a *Adapter) ResolvePurchaseLine(ctx context.Context, req public.ResolvePurchaseLineRequest) (public.ResolvePurchaseLineResult, error) {
+	var expectedMappingRevision *domain.MappingRevision
+	if req.ExpectedMappingRevision != nil {
+		revision := domain.MappingRevision(*req.ExpectedMappingRevision)
+		expectedMappingRevision = &revision
+	}
+	result, err := a.service.ResolvePurchaseLine(ctx, domain.ResolvePurchaseLineCommand{
+		LineID: req.LineID, ResourceID: req.ResourceID, CommercialSupplierSKU: req.CommercialSupplierSKU,
+		ExpectedSupplierProductID:  copyInt64(req.ExpectedSupplierProductID),
+		ExpectedMappingRevision:    expectedMappingRevision,
+		ExpectedResolutionRevision: domain.ResolutionRevision(req.ExpectedResolutionRevision),
+		Actor:                      req.Actor, Reason: req.Reason,
+	})
+	if err != nil {
+		return public.ResolvePurchaseLineResult{}, mapError(err)
+	}
+	return public.ResolvePurchaseLineResult{Line: mapPurchaseLine(result.Line), SupplierProduct: mapSupplierProduct(result.SupplierProduct)}, nil
+}
+
+func (a *Adapter) SetResolutionOverride(ctx context.Context, req public.SetResolutionOverrideRequest) (public.PurchaseLine, error) {
+	line, err := a.service.SetResolutionOverride(ctx, domain.SetResolutionOverrideCommand{
+		LineID: req.LineID, Override: domain.LinkStatus(req.Override),
+		ExpectedRevision: domain.ResolutionRevision(req.ExpectedRevision), Actor: req.Actor, Reason: req.Reason,
+	})
 	if err != nil {
 		return public.PurchaseLine{}, mapError(err)
 	}
 	return mapPurchaseLine(line), nil
 }
-func (a *Adapter) MarkConflict(ctx context.Context, lineID int64) (public.PurchaseLine, error) {
-	line, err := a.service.MarkConflict(ctx, lineID)
-	if err != nil {
-		return public.PurchaseLine{}, mapError(err)
+
+func effectivePurchaseLineLimit(requested int) int {
+	if requested <= 0 || requested > 50 {
+		return 50
 	}
-	return mapPurchaseLine(line), nil
-}
-func (a *Adapter) ClearOverride(ctx context.Context, lineID int64) (public.PurchaseLine, error) {
-	line, err := a.service.ClearOverride(ctx, lineID)
-	if err != nil {
-		return public.PurchaseLine{}, mapError(err)
-	}
-	return mapPurchaseLine(line), nil
+	return requested
 }
 
 func effectiveLimit(requested int) int {
@@ -324,6 +363,7 @@ func mapPurchaseLine(l domain.PurchaseLine) public.PurchaseLine {
 		TaxWithheld:        l.TaxWithheld.String(),
 		TaxObject:          l.TaxObject,
 		SupplierProductID:  copyInt64(l.SupplierProductID),
+		ResolutionRevision: public.ResolutionRevision(l.ResolutionRevision),
 		ResolutionOverride: public.LinkStatus(l.ResolutionOverride),
 		EffectiveStatus:    public.LinkStatus(l.DerivedStatus),
 		EffectiveCause:     public.MappingCause(l.DerivedCause),
@@ -336,6 +376,26 @@ func mapPurchaseLineSlice(lines []domain.PurchaseLine) []public.PurchaseLine {
 		out[i] = mapPurchaseLine(lines[i])
 	}
 	return out
+}
+
+func mapPurchaseLineRow(row domain.PurchaseLineWorkbenchRow) public.PurchaseLineRow {
+	var mappingRevision *public.MappingRevision
+	if row.MappingRevision != nil {
+		revision := public.MappingRevision(*row.MappingRevision)
+		mappingRevision = &revision
+	}
+	return public.PurchaseLineRow{
+		LineID: row.LineID, PurchaseID: row.PurchaseID, IssuedAt: row.IssuedAt, Series: row.Series, Folio: row.Folio,
+		CFDIUUID: row.CFDIUUID, SupplierID: row.SupplierID, SupplierDisplayName: row.SupplierDisplayName,
+		Description: row.Description, SupplierSKU: row.SupplierSKU, CommercialSupplierSKU: copyString(row.CommercialSupplierSKU),
+		SATProductCode: row.SATProductCode, Quantity: row.Quantity.String(), UnitCode: row.UnitCode, Unit: row.Unit,
+		UnitPrice: row.UnitPrice.String(), Amount: row.Amount.String(), Currency: row.Currency,
+		SupplierProductID: copyInt64(row.SupplierProductID), ResourceID: copyInt64(row.ResourceID),
+		ResourceIdentity: copyString(row.ResourceIdentity), ResourceDisplayName: copyString(row.ResourceDisplayName),
+		MappingRevision: mappingRevision, ResolutionRevision: public.ResolutionRevision(row.ResolutionRevision),
+		ResolutionOverride: public.LinkStatus(row.ResolutionOverride),
+		EffectiveStatus:    public.LinkStatus(row.EffectiveStatus), EffectiveCause: public.MappingCause(row.EffectiveCause),
+	}
 }
 
 func mapSupplierProduct(sp domain.SupplierProduct) public.SupplierProduct {
@@ -397,6 +457,14 @@ func copyBool(value *bool) *bool {
 	return &v
 }
 
+func copyString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	v := *value
+	return &v
+}
+
 func decimalToStringPtr(d *decimal.Decimal) *string {
 	if d == nil {
 		return nil
@@ -414,16 +482,36 @@ func decimalToStringPtr(d *decimal.Decimal) *string {
 // leak PostgreSQL detail through this bridge.
 func mapError(err error) error {
 	switch {
+	case errors.Is(err, domain.ErrPurchaseLineNotFound):
+		return public.NewError(public.PurchaseLineNotFound, "purchase line not found")
+	case errors.Is(err, domain.ErrResourceNotFound):
+		return public.NewError(public.ResourceNotFound, "resource not found")
+	case errors.Is(err, domain.ErrResourceInactive):
+		return public.NewError(public.ResourceInactive, "resource is inactive")
+	case errors.Is(err, domain.ErrCommercialSupplierSKURequired):
+		return public.NewError(public.CommercialSupplierSKURequired, "commercial supplier sku is required")
+	case errors.Is(err, domain.ErrCommercialSupplierSKUForbidden):
+		return public.NewError(public.CommercialSupplierSKUForbidden, "commercial supplier sku is forbidden")
+	case errors.Is(err, domain.ErrPurchaseLineStateConflict):
+		return public.NewError(public.PurchaseLineStateConflict, "purchase line state changed")
+	case errors.Is(err, domain.ErrStaleResolutionRevision):
+		return public.NewError(public.StaleResolutionRevision, "purchase line resolution revision is stale")
+	case errors.Is(err, domain.ErrStaleMappingRevision):
+		return public.NewError(public.StaleMappingRevision, "supplier product mapping revision is stale")
+	case errors.Is(err, domain.ErrMappingTargetConflict):
+		return public.NewError(public.SupplierProductTargetConflict, "supplier product maps to a different target")
+	case errors.Is(err, domain.ErrInvalidMappingTransition):
+		return public.NewError(public.InvalidMappingTransition, "invalid supplier product mapping transition")
+	case errors.Is(err, domain.ErrPurchaseIntegrityConflict):
+		return public.NewError(public.IntegrityConflict, "purchase data integrity conflict")
 	case errors.Is(err, domain.ErrNotFound), errors.Is(err, supplierdomain.ErrNotFound):
 		return public.NewError(public.NotFound, "purchase master record not found")
 	case errors.Is(err, domain.ErrConflict), errors.Is(err, supplierdomain.ErrConflict):
 		return public.NewError(public.Conflict, "purchase master conflict")
-	case errors.Is(err, domain.ErrValidation), errors.Is(err, supplierdomain.ErrValidation), errors.Is(err, domain.ErrInvalidMappingTransition), errors.Is(err, domain.ErrResourceInactive):
+	case errors.Is(err, domain.ErrValidation), errors.Is(err, supplierdomain.ErrValidation):
 		return public.NewError(public.Validation, "purchase master validation failed")
-	case errors.Is(err, domain.ErrStaleMappingRevision), errors.Is(err, domain.ErrCommitAmbiguous):
+	case errors.Is(err, domain.ErrCommitAmbiguous):
 		return public.NewError(public.Conflict, "purchase master mapping conflict")
-	case errors.Is(err, domain.ErrResourceNotFound):
-		return public.NewError(public.NotFound, "purchase master resource not found")
 	default:
 		return public.NewError(public.Internal, "purchase master operation failed")
 	}

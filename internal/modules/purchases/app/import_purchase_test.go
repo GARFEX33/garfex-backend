@@ -189,14 +189,20 @@ func TestSemanticMappingAndOverrideCommandsAreRetroactive(t *testing.T) {
 	if lines[0].DerivedStatus != domain.LinkLinked {
 		t.Fatalf("effective status = %q, want linked", lines[0].DerivedStatus)
 	}
-	if _, err := service.MarkNotApplicable(t.Context(), lines[0].ID); err != nil {
+	if _, err := service.SetResolutionOverride(t.Context(), domain.SetResolutionOverrideCommand{
+		LineID: lines[0].ID, Override: domain.LinkNotApplicable, ExpectedRevision: lines[0].ResolutionRevision,
+		Actor: "tester", Reason: "not applicable",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	lines, _ = service.ListPurchaseLines(t.Context(), first.Purchase.ID)
 	if lines[0].DerivedStatus != domain.LinkNotApplicable {
 		t.Fatalf("override status = %q", lines[0].DerivedStatus)
 	}
-	if _, err := service.ClearOverride(t.Context(), lines[0].ID); err != nil {
+	if _, err := service.SetResolutionOverride(t.Context(), domain.SetResolutionOverrideCommand{
+		LineID: lines[0].ID, Override: domain.LinkStatusNone, ExpectedRevision: 1,
+		Actor: "tester", Reason: "clear after review",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.CorrectMapping(t.Context(), domain.CorrectMappingCommand{SupplierProductID: id, ExpectedCurrentResource: 7, ResourceID: 8, ExpectedRevision: confirmed.MappingRevision, Decision: decision}); err != nil {

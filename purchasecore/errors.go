@@ -2,8 +2,9 @@ package purchasecore
 
 import "errors"
 
-// ErrorCode is one of five stable failure categories returned by this
-// package, matching suppliercore's taxonomy.
+// ErrorCode is a stable machine-readable Purchase Core outcome. Generic
+// categories remain available for existing operations; line-resolution
+// commands use the specific codes below so adapters never inspect messages.
 type ErrorCode string
 
 const (
@@ -12,6 +13,18 @@ const (
 	Conflict        ErrorCode = "CONFLICT"
 	InvalidArgument ErrorCode = "INVALID_ARGUMENT"
 	Internal        ErrorCode = "INTERNAL"
+
+	PurchaseLineNotFound           ErrorCode = "PURCHASE_LINE_NOT_FOUND"
+	ResourceNotFound               ErrorCode = "RESOURCE_NOT_FOUND"
+	ResourceInactive               ErrorCode = "RESOURCE_INACTIVE"
+	CommercialSupplierSKURequired  ErrorCode = "COMMERCIAL_SUPPLIER_SKU_REQUIRED"
+	CommercialSupplierSKUForbidden ErrorCode = "COMMERCIAL_SUPPLIER_SKU_FORBIDDEN"
+	PurchaseLineStateConflict      ErrorCode = "PURCHASE_LINE_STATE_CONFLICT"
+	StaleResolutionRevision        ErrorCode = "STALE_RESOLUTION_REVISION"
+	StaleMappingRevision           ErrorCode = "STALE_MAPPING_REVISION"
+	SupplierProductTargetConflict  ErrorCode = "SUPPLIER_PRODUCT_TARGET_CONFLICT"
+	InvalidMappingTransition       ErrorCode = "INVALID_MAPPING_TRANSITION"
+	IntegrityConflict              ErrorCode = "INTEGRITY_CONFLICT"
 )
 
 // Error is the only error type this package returns.
