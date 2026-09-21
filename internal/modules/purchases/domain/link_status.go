@@ -1,6 +1,6 @@
 package domain
 
-// LinkStatus is the effective or compatibility-projected status of one
+// LinkStatus is the effective or persisted override status of one
 // PurchaseLine. Only LinkStatusNone, LinkNotApplicable, and LinkConflict are
 // valid persisted line-resolution overrides. Pending, linked, and suspended
 // are derived from current mapping knowledge and Resource.Active.
@@ -8,7 +8,7 @@ type LinkStatus string
 
 const (
 	// LinkStatusNone means the line has no resolution override.
-	LinkStatusNone LinkStatus = ""
+	LinkStatusNone LinkStatus = "NONE"
 	// LinkPending means mapping knowledge is unresolved.
 	LinkPending LinkStatus = "PENDIENTE"
 	// LinkLinked means a confirmed mapping points to an active resource.

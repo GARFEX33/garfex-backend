@@ -6,47 +6,83 @@ import (
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
 )
 
-// LinkSupplierProductToResource relates an existing supplier product to a
-// Resource Master entry, either because a matching resource already exists
-// or because one was just created through the normal resource flow. It
-// never modifies any PurchaseLine's original data: every PENDIENTE line
-// already referencing the supplier product becomes VINCULADO, and every
-// future purchase line resolving to the same supplier product reuses this
-// relation automatically.
-func (s *Service) LinkSupplierProductToResource(ctx context.Context, supplierProductID, resourceID int64) (domain.SupplierProduct, error) {
-	if err := validID("supplier_product_id", supplierProductID); err != nil {
+func (s *Service) ConfirmMapping(ctx context.Context, command domain.ConfirmMappingCommand) (domain.SupplierProduct, error) {
+	if err := validID("supplier_product_id", command.SupplierProductID); err != nil {
 		return domain.SupplierProduct{}, err
 	}
-	if err := validID("resource_id", resourceID); err != nil {
+	if err := validID("resource_id", command.ResourceID); err != nil {
 		return domain.SupplierProduct{}, err
 	}
-	product, err := s.repo.LinkSupplierProductToResource(ctx, supplierProductID, resourceID)
-	return product, wrap("link supplier product to resource", err)
+	product, err := s.repo.ConfirmMapping(ctx, command)
+	return product, wrap("confirm supplier product mapping", err)
 }
 
-// UnlinkSupplierProduct removes a supplier product's Resource Master
-// relation, correcting a previous assignment without touching any purchase
-// line's original data. Every VINCULADO line referencing it reverts to
-// PENDIENTE.
-func (s *Service) UnlinkSupplierProduct(ctx context.Context, supplierProductID int64) (domain.SupplierProduct, error) {
-	if err := validID("supplier_product_id", supplierProductID); err != nil {
+func (s *Service) CorrectMapping(ctx context.Context, command domain.CorrectMappingCommand) (domain.SupplierProduct, error) {
+	if err := validID("supplier_product_id", command.SupplierProductID); err != nil {
 		return domain.SupplierProduct{}, err
 	}
-	product, err := s.repo.UnlinkSupplierProduct(ctx, supplierProductID)
-	return product, wrap("unlink supplier product", err)
+	if err := validID("resource_id", command.ResourceID); err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	product, err := s.repo.CorrectMapping(ctx, command)
+	return product, wrap("correct supplier product mapping", err)
 }
 
-// SetPurchaseLineLinkStatus manually overrides one line's linking state,
-// for the cases automatic resolution must not decide on its own: marking a
-// line NO_APLICA (it will never map to a Resource Master entry), or
-// resolving a CONFLICTO a human has reviewed.
-func (s *Service) SetPurchaseLineLinkStatus(ctx context.Context, lineID int64, status domain.LinkStatus) (domain.PurchaseLine, error) {
+func (s *Service) ExceptionalUnlink(ctx context.Context, command domain.ExceptionalUnlinkCommand) (domain.SupplierProduct, error) {
+	if err := validID("supplier_product_id", command.SupplierProductID); err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	product, err := s.repo.ExceptionalUnlink(ctx, command)
+	return product, wrap("exceptionally unlink supplier product mapping", err)
+}
+
+func (s *Service) ReportIdentityConflict(ctx context.Context, command domain.ReportIdentityConflictCommand) (domain.SupplierProduct, error) {
+	if err := validID("supplier_product_id", command.SupplierProductID); err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	product, err := s.repo.ReportIdentityConflict(ctx, command)
+	return product, wrap("report supplier product identity conflict", err)
+}
+
+func (s *Service) ResolveIdentityConflict(ctx context.Context, command domain.ResolveIdentityConflictCommand) (domain.SupplierProduct, error) {
+	if err := validID("supplier_product_id", command.SupplierProductID); err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	if err := validID("resource_id", command.ResourceID); err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	product, err := s.repo.ResolveIdentityConflict(ctx, command)
+	return product, wrap("resolve supplier product identity conflict", err)
+}
+
+func (s *Service) MarkNotApplicable(ctx context.Context, lineID int64) (domain.PurchaseLine, error) {
 	if err := validID("purchase_line_id", lineID); err != nil {
 		return domain.PurchaseLine{}, err
 	}
-	if !status.Valid() {
-		return domain.PurchaseLine{}, domain.NewValidationError("link_status", "is not a recognized value")
+	line, err := s.repo.MarkNotApplicable(ctx, lineID)
+	return line, wrap("mark purchase line not applicable", err)
+}
+
+func (s *Service) MarkConflict(ctx context.Context, lineID int64) (domain.PurchaseLine, error) {
+	if err := validID("purchase_line_id", lineID); err != nil {
+		return domain.PurchaseLine{}, err
 	}
-	line, err := s.repo.SetPurchaseLineLinkStatus(ctx, lineID, status)
-	return line, wrap("set purchase line link status", err)
+	line, err := s.repo.MarkConflict(ctx, lineID)
+	return line, wrap("mark purchase line conflict", err)
+}
+
+func (s *Service) ClearOverride(ctx context.Context, lineID int64) (domain.PurchaseLine, error) {
+	if err := validID("purchase_line_id", lineID); err != nil {
+		return domain.PurchaseLine{}, err
+	}
+	line, err := s.repo.ClearOverride(ctx, lineID)
+	return line, wrap("clear purchase line override", err)
+}
+
+func (s *Service) ListMappingAudit(ctx context.Context, supplierProductID int64, criteria domain.ListCriteria) ([]domain.MappingAuditEntry, error) {
+	if err := validID("supplier_product_id", supplierProductID); err != nil {
+		return nil, err
+	}
+	entries, err := s.repo.ListMappingAudit(ctx, supplierProductID, criteria)
+	return entries, wrap("list supplier product mapping audit", err)
 }

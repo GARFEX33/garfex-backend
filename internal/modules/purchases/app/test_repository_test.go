@@ -20,6 +20,8 @@ type memoryRepository struct {
 	purchasesByUUID  map[string]int64
 	lines            map[int64][]domain.PurchaseLine
 	supplierProducts map[int64]domain.SupplierProduct
+	resources        map[int64]bool
+	audit            map[int64][]domain.MappingAuditEntry
 }
 
 func newMemoryRepository() *memoryRepository {
@@ -29,6 +31,8 @@ func newMemoryRepository() *memoryRepository {
 		purchasesByUUID:  map[string]int64{},
 		lines:            map[int64][]domain.PurchaseLine{},
 		supplierProducts: map[int64]domain.SupplierProduct{},
+		resources:        map[int64]bool{},
+		audit:            map[int64][]domain.MappingAuditEntry{},
 	}
 }
 
@@ -56,21 +60,30 @@ func (r *memoryRepository) Import(_ context.Context, draft domain.PurchaseDraft)
 	lines := make([]domain.PurchaseLine, 0, len(draft.Lines))
 	for _, lineDraft := range draft.Lines {
 		var supplierProductID *int64
-		status := domain.LinkPending
 		if lineDraft.HasSupplierIdentity() {
 			id := r.getOrCreateSupplierProduct(draft.Supplier.SupplierID, lineDraft.SupplierSKU, lineDraft.Description)
 			supplierProductID = &id
-			if r.supplierProducts[id].CurrentMapping.ResourceID != nil {
-				status = domain.LinkLinked
-			}
 		}
-		lines = append(lines, domain.PurchaseLine{
+		line := domain.PurchaseLine{
 			ID: r.id(), PurchaseID: purchase.ID, LineNumber: lineDraft.LineNumber, Description: lineDraft.Description,
 			SupplierSKU: lineDraft.SupplierSKU, SATProductCode: lineDraft.SATProductCode, Quantity: lineDraft.Quantity,
 			UnitCode: lineDraft.UnitCode, Unit: lineDraft.Unit, UnitPrice: lineDraft.UnitPrice, Amount: lineDraft.Amount,
 			Discount: lineDraft.Discount, TaxTransferred: lineDraft.TaxTransferred, TaxWithheld: lineDraft.TaxWithheld,
-			TaxObject: lineDraft.TaxObject, SupplierProductID: supplierProductID, LinkStatus: status,
-		})
+			TaxObject: lineDraft.TaxObject, SupplierProductID: supplierProductID, ResolutionOverride: domain.LinkStatusNone,
+		}
+		if supplierProductID != nil {
+			product := r.supplierProducts[*supplierProductID]
+			active := true
+			if product.CurrentMapping.ResourceID != nil {
+				if value, ok := r.resources[*product.CurrentMapping.ResourceID]; ok {
+					active = value
+				}
+			}
+			line.DerivedStatus, line.DerivedCause = line.EffectiveStatus(product.CurrentMapping, active)
+		} else {
+			line.DerivedStatus, line.DerivedCause = line.EffectiveStatus(domain.NewUnresolvedSupplierProductMapping(), true)
+		}
+		lines = append(lines, line)
 	}
 	r.lines[purchase.ID] = lines
 	return domain.ImportResult{Purchase: purchase, Lines: lines, AlreadyExisted: false}, nil
@@ -79,11 +92,13 @@ func (r *memoryRepository) Import(_ context.Context, draft domain.PurchaseDraft)
 func (r *memoryRepository) getOrCreateSupplierProduct(supplierID int64, sku, description string) int64 {
 	for _, product := range r.supplierProducts {
 		if product.SupplierID == supplierID && product.SupplierSKU == sku {
+			product.Description = description
+			r.supplierProducts[product.ID] = product
 			return product.ID
 		}
 	}
 	id := r.id()
-	r.supplierProducts[id] = domain.SupplierProduct{ID: id, SupplierID: supplierID, SupplierSKU: sku, Description: description}
+	r.supplierProducts[id] = domain.SupplierProduct{ID: id, SupplierID: supplierID, SupplierSKU: sku, Description: description, CurrentMapping: domain.NewUnresolvedSupplierProductMapping()}
 	return id
 }
 
@@ -103,8 +118,29 @@ func (r *memoryRepository) GetPurchaseByUUID(_ context.Context, uuid string) (do
 	return r.purchasesByID[id], nil
 }
 
+func (r *memoryRepository) refreshLine(line domain.PurchaseLine) domain.PurchaseLine {
+	if line.SupplierProductID == nil {
+		line.DerivedStatus, line.DerivedCause = line.EffectiveStatus(domain.NewUnresolvedSupplierProductMapping(), true)
+		return line
+	}
+	product := r.supplierProducts[*line.SupplierProductID]
+	active := true
+	if product.CurrentMapping.ResourceID != nil {
+		if value, ok := r.resources[*product.CurrentMapping.ResourceID]; ok {
+			active = value
+		}
+	}
+	line.DerivedStatus, line.DerivedCause = line.EffectiveStatus(product.CurrentMapping, active)
+	return line
+}
+
 func (r *memoryRepository) ListPurchaseLines(_ context.Context, purchaseID int64) ([]domain.PurchaseLine, error) {
-	return r.lines[purchaseID], nil
+	lines := r.lines[purchaseID]
+	for i := range lines {
+		lines[i] = r.refreshLine(lines[i])
+	}
+	r.lines[purchaseID] = lines
+	return lines, nil
 }
 
 func (r *memoryRepository) ListPurchasesBySupplier(_ context.Context, supplierID int64, _ domain.ListCriteria) ([]domain.Purchase, error) {
@@ -146,63 +182,166 @@ func (r *memoryRepository) ListSupplierProducts(_ context.Context, supplierID in
 	return values, nil
 }
 
-func (r *memoryRepository) LinkSupplierProductToResource(_ context.Context, supplierProductID, resourceID int64) (domain.SupplierProduct, error) {
-	product, ok := r.supplierProducts[supplierProductID]
+func (r *memoryRepository) mappingProduct(id int64) (domain.SupplierProduct, error) {
+	product, ok := r.supplierProducts[id]
 	if !ok {
 		return domain.SupplierProduct{}, domain.ErrSupplierProductNotFound
-	}
-	if resourceID <= 0 {
-		return domain.SupplierProduct{}, domain.NewValidationError("resource_id", "must be positive")
-	}
-	resourceIDCopy := resourceID
-	product.CurrentMapping = domain.SupplierProductMapping{ResourceID: &resourceIDCopy}
-	r.supplierProducts[supplierProductID] = product
-	for purchaseID, lines := range r.lines {
-		for i, line := range lines {
-			if line.SupplierProductID != nil && *line.SupplierProductID == supplierProductID && line.LinkStatus == domain.LinkPending {
-				lines[i].LinkStatus = domain.LinkLinked
-			}
-		}
-		r.lines[purchaseID] = lines
 	}
 	return product, nil
 }
 
-func (r *memoryRepository) UnlinkSupplierProduct(_ context.Context, supplierProductID int64) (domain.SupplierProduct, error) {
-	product, ok := r.supplierProducts[supplierProductID]
-	if !ok {
-		return domain.SupplierProduct{}, domain.ErrSupplierProductNotFound
+func (r *memoryRepository) applyMapping(id int64, transition domain.MappingTransition) (domain.SupplierProduct, error) {
+	product, err := r.mappingProduct(id)
+	if err != nil {
+		return domain.SupplierProduct{}, err
 	}
-	product.CurrentMapping = domain.NewUnresolvedSupplierProductMapping()
-	r.supplierProducts[supplierProductID] = product
-	for purchaseID, lines := range r.lines {
-		for i, line := range lines {
-			if line.SupplierProductID != nil && *line.SupplierProductID == supplierProductID && line.LinkStatus == domain.LinkLinked {
-				lines[i].LinkStatus = domain.LinkPending
-			}
-		}
-		r.lines[purchaseID] = lines
+	if transition.Changed {
+		r.supplierProducts[id] = product
+		r.audit[id] = append(r.audit[id], *transition.Audit)
 	}
 	return product, nil
 }
 
-func (r *memoryRepository) SetPurchaseLineLinkStatus(_ context.Context, lineID int64, status domain.LinkStatus) (domain.PurchaseLine, error) {
+func (r *memoryRepository) ConfirmMapping(_ context.Context, command domain.ConfirmMappingCommand) (domain.SupplierProduct, error) {
+	product, err := r.mappingProduct(command.SupplierProductID)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	if command.ResourceID <= 0 {
+		return domain.SupplierProduct{}, domain.ErrResourceNotFound
+	}
+	r.resources[command.ResourceID] = true
+	transition, err := product.ConfirmMapping(command.ResourceID, command.ExpectedRevision, command.Decision)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	r.supplierProducts[command.SupplierProductID] = product
+	return r.applyMapping(command.SupplierProductID, transition)
+}
+
+func (r *memoryRepository) CorrectMapping(_ context.Context, command domain.CorrectMappingCommand) (domain.SupplierProduct, error) {
+	product, err := r.mappingProduct(command.SupplierProductID)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	r.resources[command.ResourceID] = true
+	transition, err := product.CorrectMapping(command.ExpectedCurrentResource, command.ResourceID, command.ExpectedRevision, command.Decision)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	r.supplierProducts[command.SupplierProductID] = product
+	return r.applyMapping(command.SupplierProductID, transition)
+}
+
+func (r *memoryRepository) ExceptionalUnlink(_ context.Context, command domain.ExceptionalUnlinkCommand) (domain.SupplierProduct, error) {
+	product, err := r.mappingProduct(command.SupplierProductID)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	transition, err := product.ExceptionalUnlink(command.ExpectedCurrentResource, command.ExpectedRevision, command.Decision)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	r.supplierProducts[command.SupplierProductID] = product
+	return r.applyMapping(command.SupplierProductID, transition)
+}
+
+func (r *memoryRepository) ReportIdentityConflict(_ context.Context, command domain.ReportIdentityConflictCommand) (domain.SupplierProduct, error) {
+	product, err := r.mappingProduct(command.SupplierProductID)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	transition, err := product.ReportIdentityConflict(command.ExpectedCurrentResource, command.ExpectedRevision, command.Decision)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	r.supplierProducts[command.SupplierProductID] = product
+	return r.applyMapping(command.SupplierProductID, transition)
+}
+
+func (r *memoryRepository) ResolveIdentityConflict(_ context.Context, command domain.ResolveIdentityConflictCommand) (domain.SupplierProduct, error) {
+	product, err := r.mappingProduct(command.SupplierProductID)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	r.resources[command.ResourceID] = true
+	transition, err := product.ResolveIdentityConflict(command.ExpectedCurrentResource, command.ResourceID, command.ExpectedRevision, command.Decision)
+	if err != nil {
+		return domain.SupplierProduct{}, err
+	}
+	r.supplierProducts[command.SupplierProductID] = product
+	return r.applyMapping(command.SupplierProductID, transition)
+}
+
+func (r *memoryRepository) updateLineOverride(lineID int64, override domain.LinkStatus) (domain.PurchaseLine, error) {
 	for purchaseID, lines := range r.lines {
 		for i, line := range lines {
-			if line.ID == lineID {
-				lines[i].LinkStatus = status
-				r.lines[purchaseID] = lines
-				return lines[i], nil
+			if line.ID != lineID {
+				continue
 			}
+			var err error
+			if override == domain.LinkStatusNone {
+				line = line.ClearResolutionOverride()
+			} else {
+				line, err = line.SetResolutionOverride(override)
+				if err != nil {
+					return domain.PurchaseLine{}, err
+				}
+			}
+			if line.SupplierProductID != nil {
+				product := r.supplierProducts[*line.SupplierProductID]
+				active := true
+				if product.CurrentMapping.ResourceID != nil {
+					if value, ok := r.resources[*product.CurrentMapping.ResourceID]; ok {
+						active = value
+					}
+				}
+				line.DerivedStatus, line.DerivedCause = line.EffectiveStatus(product.CurrentMapping, active)
+			} else {
+				line.DerivedStatus, line.DerivedCause = line.EffectiveStatus(domain.NewUnresolvedSupplierProductMapping(), true)
+			}
+			lines[i] = line
+			r.lines[purchaseID] = lines
+			return line, nil
 		}
 	}
 	return domain.PurchaseLine{}, domain.ErrPurchaseLineNotFound
+}
+func (r *memoryRepository) MarkNotApplicable(_ context.Context, lineID int64) (domain.PurchaseLine, error) {
+	return r.updateLineOverride(lineID, domain.LinkNotApplicable)
+}
+func (r *memoryRepository) MarkConflict(_ context.Context, lineID int64) (domain.PurchaseLine, error) {
+	return r.updateLineOverride(lineID, domain.LinkConflict)
+}
+func (r *memoryRepository) ClearOverride(_ context.Context, lineID int64) (domain.PurchaseLine, error) {
+	return r.updateLineOverride(lineID, domain.LinkStatusNone)
+}
+
+func (r *memoryRepository) ListMappingAudit(_ context.Context, id int64, criteria domain.ListCriteria) ([]domain.MappingAuditEntry, error) {
+	entries := r.audit[id]
+	start := criteria.Offset
+	if start < 0 {
+		start = 0
+	}
+	if start > len(entries) {
+		start = len(entries)
+	}
+	pageLimit := criteria.Limit
+	if pageLimit <= 0 {
+		pageLimit = 100
+	}
+	end := start + pageLimit
+	if end > len(entries) {
+		end = len(entries)
+	}
+	return entries[start:end], nil
 }
 
 func (r *memoryRepository) ListPurchaseLinesByResource(_ context.Context, resourceID int64, _ domain.ListCriteria) ([]domain.PurchaseLineHistory, error) {
 	history := make([]domain.PurchaseLineHistory, 0)
 	for _, purchase := range r.purchasesByID {
-		for _, line := range r.lines[purchase.ID] {
+		for _, rawLine := range r.lines[purchase.ID] {
+			line := r.refreshLine(rawLine)
 			if line.SupplierProductID == nil {
 				continue
 			}

@@ -3,6 +3,7 @@ package purchasecore_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/GARFEX33/garfex-costos-unitarios/purchasecore"
 )
@@ -36,6 +37,9 @@ func (fakeReadCapabilities) ListSupplierProducts(ctx context.Context, supplierID
 func (fakeReadCapabilities) ListPurchaseLinesByResource(ctx context.Context, resourceID int64, q purchasecore.ListCriteria) (purchasecore.PurchaseLineHistoryPage, error) {
 	return purchasecore.PurchaseLineHistoryPage{History: []purchasecore.PurchaseLineHistory{{PurchaseID: 1}}}, nil
 }
+func (fakeReadCapabilities) ListMappingAudit(ctx context.Context, supplierProductID int64, q purchasecore.ListCriteria) (purchasecore.MappingAuditPage, error) {
+	return purchasecore.MappingAuditPage{Entries: []purchasecore.MappingAuditEntry{{SupplierProductID: supplierProductID}}}, nil
+}
 
 func TestExternalConsumer_ReadsEveryEntity(t *testing.T) {
 	reader, err := purchasecore.NewReadOnly(fakeReadCapabilities{})
@@ -67,6 +71,9 @@ func TestExternalConsumer_ReadsEveryEntity(t *testing.T) {
 	}
 	if _, err := reader.ListPurchaseLinesByResource(ctx, 1, purchasecore.ListCriteria{}); err != nil {
 		t.Fatalf("ListPurchaseLinesByResource error = %v", err)
+	}
+	if _, err := reader.ListMappingAudit(ctx, 1, purchasecore.ListCriteria{}); err != nil {
+		t.Fatalf("ListMappingAudit error = %v", err)
 	}
 }
 
@@ -106,22 +113,35 @@ func TestReadOnly_RejectsNilCapabilities(t *testing.T) {
 	}
 }
 
-// fakeWriteCapabilities is a minimal external WriteCapabilities
-// implementation, proving purchasecore.Writer can be constructed and used
-// from a package that imports no internal/... path.
+// fakeWriteCapabilities is a minimal external WriteCapabilities implementation.
 type fakeWriteCapabilities struct{}
 
 func (fakeWriteCapabilities) ImportPurchase(ctx context.Context, req purchasecore.ImportRequest) (purchasecore.ImportResult, error) {
 	return purchasecore.ImportResult{Purchase: purchasecore.Purchase{ID: 1, XML: purchasecore.XMLDocument{Content: req.XML}}}, nil
 }
-func (fakeWriteCapabilities) LinkSupplierProductToResource(ctx context.Context, req purchasecore.LinkSupplierProductRequest) (purchasecore.SupplierProduct, error) {
-	return purchasecore.SupplierProduct{ID: req.SupplierProductID, ResourceID: &req.ResourceID}, nil
+func (fakeWriteCapabilities) ConfirmMapping(ctx context.Context, req purchasecore.ConfirmMappingRequest) (purchasecore.SupplierProduct, error) {
+	return purchasecore.SupplierProduct{ID: req.SupplierProductID, CurrentMapping: purchasecore.SupplierProductMapping{ResourceID: &req.ResourceID}}, nil
 }
-func (fakeWriteCapabilities) UnlinkSupplierProduct(ctx context.Context, req purchasecore.UnlinkSupplierProductRequest) (purchasecore.SupplierProduct, error) {
+func (fakeWriteCapabilities) CorrectMapping(ctx context.Context, req purchasecore.CorrectMappingRequest) (purchasecore.SupplierProduct, error) {
+	return purchasecore.SupplierProduct{ID: req.SupplierProductID, CurrentMapping: purchasecore.SupplierProductMapping{ResourceID: &req.ResourceID}}, nil
+}
+func (fakeWriteCapabilities) ExceptionalUnlink(ctx context.Context, req purchasecore.ExceptionalUnlinkRequest) (purchasecore.SupplierProduct, error) {
 	return purchasecore.SupplierProduct{ID: req.SupplierProductID}, nil
 }
-func (fakeWriteCapabilities) SetPurchaseLineLinkStatus(ctx context.Context, req purchasecore.SetPurchaseLineLinkStatusRequest) (purchasecore.PurchaseLine, error) {
-	return purchasecore.PurchaseLine{ID: req.PurchaseLineID, LinkStatus: req.Status}, nil
+func (fakeWriteCapabilities) ReportIdentityConflict(ctx context.Context, req purchasecore.ReportIdentityConflictRequest) (purchasecore.SupplierProduct, error) {
+	return purchasecore.SupplierProduct{ID: req.SupplierProductID}, nil
+}
+func (fakeWriteCapabilities) ResolveIdentityConflict(ctx context.Context, req purchasecore.ResolveIdentityConflictRequest) (purchasecore.SupplierProduct, error) {
+	return purchasecore.SupplierProduct{ID: req.SupplierProductID, CurrentMapping: purchasecore.SupplierProductMapping{ResourceID: &req.ResourceID}}, nil
+}
+func (fakeWriteCapabilities) MarkNotApplicable(ctx context.Context, lineID int64) (purchasecore.PurchaseLine, error) {
+	return purchasecore.PurchaseLine{ID: lineID, ResolutionOverride: purchasecore.LinkNotApplicable, EffectiveStatus: purchasecore.LinkNotApplicable}, nil
+}
+func (fakeWriteCapabilities) MarkConflict(ctx context.Context, lineID int64) (purchasecore.PurchaseLine, error) {
+	return purchasecore.PurchaseLine{ID: lineID, ResolutionOverride: purchasecore.LinkConflict, EffectiveStatus: purchasecore.LinkConflict}, nil
+}
+func (fakeWriteCapabilities) ClearOverride(ctx context.Context, lineID int64) (purchasecore.PurchaseLine, error) {
+	return purchasecore.PurchaseLine{ID: lineID}, nil
 }
 
 func TestExternalConsumer_ImportsAndLinks(t *testing.T) {
@@ -135,15 +155,16 @@ func TestExternalConsumer_ImportsAndLinks(t *testing.T) {
 	if err != nil || result.Purchase.ID != 1 {
 		t.Fatalf("ImportPurchase = %#v, %v", result, err)
 	}
-	if _, err := writer.LinkSupplierProductToResource(ctx, purchasecore.LinkSupplierProductRequest{Actor: "PI", SupplierProductID: 1, ResourceID: 2}); err != nil {
-		t.Fatalf("LinkSupplierProductToResource error = %v", err)
+	decision := purchasecore.MappingDecisionMetadata{Actor: "PI", Origin: purchasecore.MappingOriginManual, At: time.Now()}
+	if _, err := writer.ConfirmMapping(ctx, purchasecore.ConfirmMappingRequest{SupplierProductID: 1, ResourceID: 2, Decision: decision}); err != nil {
+		t.Fatalf("ConfirmMapping error = %v", err)
 	}
-	if _, err := writer.UnlinkSupplierProduct(ctx, purchasecore.UnlinkSupplierProductRequest{Actor: "PI", SupplierProductID: 1}); err != nil {
-		t.Fatalf("UnlinkSupplierProduct error = %v", err)
+	if _, err := writer.ExceptionalUnlink(ctx, purchasecore.ExceptionalUnlinkRequest{SupplierProductID: 1, ExpectedCurrentResourceID: 2, Decision: decision}); err != nil {
+		t.Fatalf("ExceptionalUnlink error = %v", err)
 	}
-	got, err := writer.SetPurchaseLineLinkStatus(ctx, purchasecore.SetPurchaseLineLinkStatusRequest{Actor: "PI", PurchaseLineID: 1, Status: purchasecore.LinkNotApplicable})
-	if err != nil || got.LinkStatus != purchasecore.LinkNotApplicable {
-		t.Fatalf("SetPurchaseLineLinkStatus = %#v, %v", got, err)
+	got, err := writer.MarkNotApplicable(ctx, 1)
+	if err != nil || got.EffectiveStatus != purchasecore.LinkNotApplicable {
+		t.Fatalf("MarkNotApplicable = %#v, %v", got, err)
 	}
 }
 
@@ -166,12 +187,8 @@ func TestWriter_RejectsInvalidShape(t *testing.T) {
 			_, err := writer.ImportPurchase(ctx, purchasecore.ImportRequest{Actor: "PI"})
 			return err
 		}},
-		{"LinkSupplierProductToResource non-positive resource id", func() error {
-			_, err := writer.LinkSupplierProductToResource(ctx, purchasecore.LinkSupplierProductRequest{Actor: "PI", SupplierProductID: 1})
-			return err
-		}},
-		{"SetPurchaseLineLinkStatus invalid status", func() error {
-			_, err := writer.SetPurchaseLineLinkStatus(ctx, purchasecore.SetPurchaseLineLinkStatusRequest{Actor: "PI", PurchaseLineID: 1, Status: "BOGUS"})
+		{"ConfirmMapping non-positive resource id", func() error {
+			_, err := writer.ConfirmMapping(ctx, purchasecore.ConfirmMappingRequest{SupplierProductID: 1})
 			return err
 		}},
 	}

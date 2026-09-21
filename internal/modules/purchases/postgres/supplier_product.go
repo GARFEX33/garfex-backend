@@ -6,18 +6,22 @@ import (
 
 	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const supplierProductColumns = `id, supplier_id, supplier_sku, description, resource_id, notes, created_at, updated_at`
+const supplierProductColumns = `sp.id, sp.supplier_id, sp.supplier_sku, sp.description,
+	sp.resource_id, sp.mapping_revision, sp.mapping_identity_conflict, r.active,
+	sp.notes, sp.created_at, sp.updated_at`
 
-const getSupplierProductSQL = `SELECT ` + supplierProductColumns + ` FROM public.supplier_products WHERE id = $1`
+const getSupplierProductSQL = `SELECT ` + supplierProductColumns + `
+	FROM public.supplier_products sp LEFT JOIN public.recursos r ON r.id = sp.resource_id WHERE sp.id = $1`
 
 const findSupplierProductSQL = `SELECT ` + supplierProductColumns + `
-	FROM public.supplier_products WHERE supplier_id = $1 AND supplier_sku = $2`
+	FROM public.supplier_products sp LEFT JOIN public.recursos r ON r.id = sp.resource_id
+	WHERE sp.supplier_id = $1 AND sp.supplier_sku = $2`
 
 const listSupplierProductsSQL = `SELECT ` + supplierProductColumns + `
-	FROM public.supplier_products WHERE supplier_id = $1 ORDER BY supplier_sku LIMIT $2 OFFSET $3`
+	FROM public.supplier_products sp LEFT JOIN public.recursos r ON r.id = sp.resource_id
+	WHERE sp.supplier_id = $1 ORDER BY sp.supplier_sku LIMIT $2 OFFSET $3`
 
 func (r *repository) GetSupplierProduct(ctx context.Context, id int64) (domain.SupplierProduct, error) {
 	if err := r.ready(); err != nil {
@@ -64,68 +68,33 @@ func (r *repository) ListSupplierProducts(ctx context.Context, supplierID int64,
 	return products, nil
 }
 
-func (r *repository) LinkSupplierProductToResource(ctx context.Context, supplierProductID, resourceID int64) (domain.SupplierProduct, error) {
-	if err := r.ready(); err != nil {
-		return domain.SupplierProduct{}, err
-	}
-	const updateSQL = `UPDATE public.supplier_products SET resource_id = $2 WHERE id = $1 RETURNING ` + supplierProductColumns
-	product, err := scanSupplierProduct(r.pool.QueryRow(ctx, updateSQL, supplierProductID, resourceID))
-	if err != nil {
-		return domain.SupplierProduct{}, mapWriteError("link supplier product to resource", notFound(err, fmt.Errorf("%w: id %d", domain.ErrSupplierProductNotFound, supplierProductID)))
-	}
-	if err := cascadeLinkStatus(ctx, r.pool, supplierProductID, domain.LinkPending, domain.LinkLinked); err != nil {
-		return domain.SupplierProduct{}, err
-	}
-	return product, nil
-}
-
-func (r *repository) UnlinkSupplierProduct(ctx context.Context, supplierProductID int64) (domain.SupplierProduct, error) {
-	if err := r.ready(); err != nil {
-		return domain.SupplierProduct{}, err
-	}
-	const updateSQL = `UPDATE public.supplier_products SET resource_id = NULL WHERE id = $1 RETURNING ` + supplierProductColumns
-	product, err := scanSupplierProduct(r.pool.QueryRow(ctx, updateSQL, supplierProductID))
-	if err != nil {
-		return domain.SupplierProduct{}, wrapRead("unlink supplier product", notFound(err, fmt.Errorf("%w: id %d", domain.ErrSupplierProductNotFound, supplierProductID)))
-	}
-	if err := cascadeLinkStatus(ctx, r.pool, supplierProductID, domain.LinkLinked, domain.LinkPending); err != nil {
-		return domain.SupplierProduct{}, err
-	}
-	return product, nil
-}
-
-// cascadeLinkStatus updates every purchase line referencing
-// supplierProductID currently in from status to to, leaving manually set
-// NO_APLICA/CONFLICTO lines untouched.
-func cascadeLinkStatus(ctx context.Context, pool *pgxpool.Pool, supplierProductID int64, from, to domain.LinkStatus) error {
-	const updateSQL = `UPDATE public.purchase_lines SET link_status = $3 WHERE supplier_product_id = $1 AND link_status = $2`
-	if _, err := pool.Exec(ctx, updateSQL, supplierProductID, string(from), string(to)); err != nil {
-		return wrapRead("cascade purchase line link status", err)
-	}
-	return nil
-}
-
 func scanSupplierProduct(row scanner) (domain.SupplierProduct, error) {
 	var product domain.SupplierProduct
 	var resourceID *int64
-	err := row.Scan(&product.ID, &product.SupplierID, &product.SupplierSKU, &product.Description, &resourceID, &product.Notes, &product.CreatedAt, &product.UpdatedAt)
-	product.CurrentMapping = domain.SupplierProductMapping{ResourceID: resourceID}
+	var resourceActive *bool
+	err := row.Scan(
+		&product.ID, &product.SupplierID, &product.SupplierSKU, &product.Description,
+		&resourceID, &product.MappingRevision, &product.CurrentMapping.IdentityConflict, &resourceActive,
+		&product.Notes, &product.CreatedAt, &product.UpdatedAt,
+	)
+	product.CurrentMapping.ResourceID = resourceID
+	product.ResourceActive = resourceActive
 	return product, err
 }
 
-// upsertSupplierProduct returns the id and current resource_id of the
-// supplier product identified by (supplierID, sku) inside tx, creating it
-// with description when it does not yet exist. It never overwrites an
-// existing description or resource relation.
-func upsertSupplierProduct(ctx context.Context, tx pgx.Tx, supplierID int64, sku, description string) (int64, *int64, error) {
+// upsertSupplierProduct returns the complete current mapping projection for
+// the identity. Import updates only last-seen description; mapping authority
+// and revision are never changed by this path.
+func upsertSupplierProduct(ctx context.Context, tx pgx.Tx, supplierID int64, sku, description string) (domain.SupplierProduct, error) {
 	const upsertSQL = `INSERT INTO public.supplier_products (supplier_id, supplier_sku, description)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (supplier_id, supplier_sku) DO UPDATE SET supplier_id = EXCLUDED.supplier_id
-		RETURNING id, resource_id`
-	var id int64
-	var resourceID *int64
-	if err := tx.QueryRow(ctx, upsertSQL, supplierID, sku, description).Scan(&id, &resourceID); err != nil {
-		return 0, nil, mapWriteError("upsert supplier product", err)
+		ON CONFLICT (supplier_id, supplier_sku) DO UPDATE SET description = EXCLUDED.description
+		RETURNING id, supplier_id, supplier_sku, description, resource_id, mapping_revision,
+			mapping_identity_conflict, (SELECT r.active FROM public.recursos r WHERE r.id = supplier_products.resource_id),
+			notes, created_at, updated_at`
+	product, err := scanSupplierProduct(tx.QueryRow(ctx, upsertSQL, supplierID, sku, description))
+	if err != nil {
+		return domain.SupplierProduct{}, mapWriteError("upsert supplier product", err)
 	}
-	return id, resourceID, nil
+	return product, nil
 }

@@ -37,14 +37,14 @@ func TestPurchaseLineResolutionOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetResolutionOverride() error = %v", err)
 	}
-	if line.ResolutionOverride != LinkNotApplicable || line.LinkStatus != LinkNotApplicable {
-		t.Fatalf("line = %+v, want not-applicable override and derived projection", line)
+	if line.ResolutionOverride != LinkNotApplicable {
+		t.Fatalf("line = %+v, want not-applicable override", line)
 	}
 	if _, err := line.SetResolutionOverride(LinkPending); err == nil {
 		t.Fatal("expected derived status to be rejected as an override")
 	}
 	line = line.ClearResolutionOverride()
-	if line.ResolutionOverride != LinkStatusNone || line.LinkStatus != LinkStatusNone {
+	if line.ResolutionOverride != LinkStatusNone {
 		t.Fatalf("cleared line = %+v, want no override", line)
 	}
 }
