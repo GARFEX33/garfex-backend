@@ -147,16 +147,16 @@ Rollback boundary:
 - Purchase app/public-contract/bridge changes and their tests.
 
 ### SP-4 — Composition, compatibility cleanup, and full verification
-Status: pending.
+Status: done.
 Route: delegated writer for remaining code/docs; verification routed separately under
 orchestrator policy.
 
-- [ ] Wire the evolved Purchase Core without coupling Resource Master lifecycle writes
+- [x] Wire the evolved Purchase Core without coupling Resource Master lifecycle writes
       to mapping revisions or audit.
-- [ ] Update repository-facing documentation whose public handles or mapping semantics
+- [x] Update repository-facing documentation whose public handles or mapping semantics
       are stale.
-- [ ] Verify no candidate/DecisionProvider/AI infrastructure entered the diff.
-- [ ] Run focused and full project checks and record every observed result.
+- [x] Verify no candidate/DecisionProvider/AI infrastructure entered the diff.
+- [x] Run focused and full project checks and record every observed result.
 
 Required checks:
 - `gofmt -l .`
@@ -326,7 +326,30 @@ SP-2/SP-3 writer evidence:
 - Final independent correction verification: PASS. It matched the down/up index names,
   repeated all static suites successfully, found no remaining blocker, and accepted the
   runtime transcript explicitly as parent evidence rather than claiming to rerun it.
+- SP-2/SP-3 committed as `651f87d5da0d91d950a5a92e4921e9a0ac66f3d5` with message
+  `feat(purchases): persist supplier product mappings`; the worktree was clean afterward.
+- Parent post-commit focused and full DSN-unset suites passed. Independent post-commit
+  verifier: PASS; it confirmed the exact `3ec662a..651f87d` boundary, clean worktree,
+  reviewed file scope, formatting, vet, lint, focused tests, migrations, and full suite.
 
-## Next step
-Create the combined SP-2/SP-3 conventional work-unit commit, run post-commit verification,
-then proceed to SP-4 composition/documentation cleanup and final project verification.
+SP-4 evidence:
+- README now describes all three Core areas, lists the exact six public Application
+  handles, and gives the concise Purchase mapping/derived-status contract with a pointer
+  to `purchasecore/doc.go`.
+- `TestOpenIntegrationExposesSixLiveHandles` now asserts both Purchase handles in the
+  existing composition scenario; no new runtime behavior or DB requirement was added.
+- Current Purchase source/public grep found no legacy generic link/unlink/status writes
+  and no candidate, DecisionProvider, confidence, AI/LLM, approval, event bus, or outbox
+  infrastructure. Historical ODD evidence was not misclassified as current API surface.
+- Parent final checks passed: root and purchasecore/bridge focused tests, `gofmt -l .`,
+  `go vet ./...`, `golangci-lint run ./...` (0 issues), full DSN-unset suite, and
+  `git diff --check`.
+- Independent SP-4 verifier: PASS. It confirmed the exact three-file scope, six-handle
+  documentation/assertion, accurate task evidence, clean forbidden-concept audit, and
+  all seven requested checks; SP-4 is safe to commit.
+
+## Completion
+SP-4 was committed with `docs(core): document purchase core composition`. The immediate
+post-commit full DSN-unset suite passed and `git status --short` was empty. The approved
+SupplierProduct mapping implementation is complete on `feat/supplier-product-mapping`;
+no local `go build` ran and no disposable PostgreSQL database remains.

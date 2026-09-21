@@ -15,7 +15,7 @@ import (
 
 const coreIntegrationAdvisoryLock int64 = 0x4741524645583351
 
-func TestOpenIntegrationExposesFourLiveHandles(t *testing.T) {
+func TestOpenIntegrationExposesSixLiveHandles(t *testing.T) {
 	runtimeDSN := os.Getenv("GARFEX_TEST_DSN")
 	adminDSN := os.Getenv("GARFEX_ADMIN_TEST_DSN")
 	if runtimeDSN == "" || adminDSN == "" {
@@ -43,8 +43,8 @@ func TestOpenIntegrationExposesFourLiveHandles(t *testing.T) {
 		t.Fatalf("Open() error = %v", err)
 	}
 	defer app.Close()
-	if app.ResourceReader == nil || app.ResourceWriter == nil || app.SupplierReader == nil || app.SupplierWriter == nil {
-		t.Fatal("Open() did not expose all four public handles")
+	if app.ResourceReader == nil || app.ResourceWriter == nil || app.SupplierReader == nil || app.SupplierWriter == nil || app.PurchaseReader == nil || app.PurchaseWriter == nil {
+		t.Fatal("Open() did not expose all six public handles")
 	}
 
 	classes, err := app.ResourceReader.ActiveClasses(ctx)
