@@ -49,13 +49,14 @@ func scanPurchaseLineHistory(row scanner) (domain.PurchaseLineHistory, error) {
 	var entry domain.PurchaseLineHistory
 	var quantity, unitPrice, amount, discount, taxTransferred, taxWithheld, linkStatus string
 	var supplierProductID int64
+	var resourceID *int64
 
 	err := row.Scan(
 		&entry.Line.ID, &entry.Line.PurchaseID, &entry.Line.LineNumber, &entry.Line.Description, &entry.Line.SupplierSKU, &entry.Line.SATProductCode,
 		&quantity, &entry.Line.UnitCode, &entry.Line.Unit, &unitPrice, &amount, &discount, &taxTransferred, &taxWithheld, &entry.Line.TaxObject,
 		&supplierProductID, &linkStatus,
 		&entry.SupplierProduct.ID, &entry.SupplierProduct.SupplierID, &entry.SupplierProduct.SupplierSKU, &entry.SupplierProduct.Description,
-		&entry.SupplierProduct.ResourceID, &entry.SupplierProduct.Notes, &entry.SupplierProduct.CreatedAt, &entry.SupplierProduct.UpdatedAt,
+		&resourceID, &entry.SupplierProduct.Notes, &entry.SupplierProduct.CreatedAt, &entry.SupplierProduct.UpdatedAt,
 		&entry.PurchaseID, &entry.PurchaseUUID, &entry.SupplierID, &entry.BranchID, &entry.IssuedAt, &entry.Currency,
 	)
 	if err != nil {
@@ -64,6 +65,7 @@ func scanPurchaseLineHistory(row scanner) (domain.PurchaseLineHistory, error) {
 
 	entry.Line.SupplierProductID = &supplierProductID
 	entry.Line.LinkStatus = domain.LinkStatus(linkStatus)
+	entry.SupplierProduct.CurrentMapping = domain.SupplierProductMapping{ResourceID: resourceID}
 
 	if entry.Line.Quantity, err = decimal.NewFromString(quantity); err != nil {
 		return domain.PurchaseLineHistory{}, fmt.Errorf("decode quantity: %w", err)

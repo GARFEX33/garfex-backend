@@ -107,7 +107,9 @@ func cascadeLinkStatus(ctx context.Context, pool *pgxpool.Pool, supplierProductI
 
 func scanSupplierProduct(row scanner) (domain.SupplierProduct, error) {
 	var product domain.SupplierProduct
-	err := row.Scan(&product.ID, &product.SupplierID, &product.SupplierSKU, &product.Description, &product.ResourceID, &product.Notes, &product.CreatedAt, &product.UpdatedAt)
+	var resourceID *int64
+	err := row.Scan(&product.ID, &product.SupplierID, &product.SupplierSKU, &product.Description, &resourceID, &product.Notes, &product.CreatedAt, &product.UpdatedAt)
+	product.CurrentMapping = domain.SupplierProductMapping{ResourceID: resourceID}
 	return product, err
 }
 

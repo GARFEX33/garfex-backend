@@ -215,7 +215,10 @@ func TestAdapter_ListPurchasesBySupplier_DerivesHasNext(t *testing.T) {
 func TestAdapter_LinkSupplierProductToResource_MapsFields(t *testing.T) {
 	resourceID := int64(42)
 	stub := &stubService{linkSupplierProductToResource: func(ctx context.Context, supplierProductID, gotResourceID int64) (domain.SupplierProduct, error) {
-		return domain.SupplierProduct{ID: supplierProductID, ResourceID: &gotResourceID}, nil
+		return domain.SupplierProduct{
+			ID:             supplierProductID,
+			CurrentMapping: domain.SupplierProductMapping{ResourceID: &gotResourceID},
+		}, nil
 	}}
 	adapter := NewAdapter(stub)
 

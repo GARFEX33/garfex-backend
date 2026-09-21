@@ -294,7 +294,7 @@ func mapSupplierProduct(sp domain.SupplierProduct) public.SupplierProduct {
 		SupplierID:  sp.SupplierID,
 		SupplierSKU: sp.SupplierSKU,
 		Description: sp.Description,
-		ResourceID:  copyInt64(sp.ResourceID),
+		ResourceID:  copyInt64(sp.CurrentMapping.ResourceID),
 		Notes:       sp.Notes,
 		CreatedAt:   sp.CreatedAt,
 		UpdatedAt:   sp.UpdatedAt,

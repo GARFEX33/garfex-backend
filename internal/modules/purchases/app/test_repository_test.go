@@ -60,7 +60,7 @@ func (r *memoryRepository) Import(_ context.Context, draft domain.PurchaseDraft)
 		if lineDraft.HasSupplierIdentity() {
 			id := r.getOrCreateSupplierProduct(draft.Supplier.SupplierID, lineDraft.SupplierSKU, lineDraft.Description)
 			supplierProductID = &id
-			if r.supplierProducts[id].ResourceID != nil {
+			if r.supplierProducts[id].CurrentMapping.ResourceID != nil {
 				status = domain.LinkLinked
 			}
 		}
@@ -151,10 +151,11 @@ func (r *memoryRepository) LinkSupplierProductToResource(_ context.Context, supp
 	if !ok {
 		return domain.SupplierProduct{}, domain.ErrSupplierProductNotFound
 	}
-	product, err := product.WithResource(resourceID)
-	if err != nil {
-		return domain.SupplierProduct{}, err
+	if resourceID <= 0 {
+		return domain.SupplierProduct{}, domain.NewValidationError("resource_id", "must be positive")
 	}
+	resourceIDCopy := resourceID
+	product.CurrentMapping = domain.SupplierProductMapping{ResourceID: &resourceIDCopy}
 	r.supplierProducts[supplierProductID] = product
 	for purchaseID, lines := range r.lines {
 		for i, line := range lines {
@@ -172,7 +173,7 @@ func (r *memoryRepository) UnlinkSupplierProduct(_ context.Context, supplierProd
 	if !ok {
 		return domain.SupplierProduct{}, domain.ErrSupplierProductNotFound
 	}
-	product = product.WithoutResource()
+	product.CurrentMapping = domain.NewUnresolvedSupplierProductMapping()
 	r.supplierProducts[supplierProductID] = product
 	for purchaseID, lines := range r.lines {
 		for i, line := range lines {
@@ -206,7 +207,7 @@ func (r *memoryRepository) ListPurchaseLinesByResource(_ context.Context, resour
 				continue
 			}
 			product := r.supplierProducts[*line.SupplierProductID]
-			if product.ResourceID == nil || *product.ResourceID != resourceID {
+			if product.CurrentMapping.ResourceID == nil || *product.CurrentMapping.ResourceID != resourceID {
 				continue
 			}
 			history = append(history, domain.PurchaseLineHistory{
