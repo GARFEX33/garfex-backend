@@ -9,6 +9,7 @@ func TestLinkStatusValid(t *testing.T) {
 	}{
 		{LinkPending, true},
 		{LinkLinked, true},
+		{LinkSuspended, true},
 		{LinkNotApplicable, true},
 		{LinkConflict, true},
 		{LinkStatus("BOGUS"), false},

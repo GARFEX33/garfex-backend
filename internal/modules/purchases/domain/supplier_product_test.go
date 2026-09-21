@@ -38,23 +38,15 @@ func TestNewSupplierProductIdentity(t *testing.T) {
 	}
 }
 
-func TestSupplierProductWithResource(t *testing.T) {
-	sp := SupplierProduct{ID: 1, SupplierID: 1, SupplierSKU: "SKU-1"}
-
-	linked, err := sp.WithResource(42)
+func TestNewSupplierProduct(t *testing.T) {
+	sp, err := NewSupplierProduct(1, "  SKU-1  ", "description")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if linked.ResourceID == nil || *linked.ResourceID != 42 {
-		t.Fatalf("resource id = %v, want 42", linked.ResourceID)
+	if sp.SupplierSKU != "SKU-1" {
+		t.Fatalf("sku = %q, want trimmed SKU-1", sp.SupplierSKU)
 	}
-
-	if _, err := sp.WithResource(0); err == nil {
-		t.Fatal("expected error for non-positive resource id")
-	}
-
-	unlinked := linked.WithoutResource()
-	if unlinked.ResourceID != nil {
-		t.Fatalf("resource id = %v, want nil after unlink", unlinked.ResourceID)
+	if sp.CurrentMapping.State(true) != MappingStateUnresolved {
+		t.Fatalf("mapping state = %q, want unresolved", sp.CurrentMapping.State(true))
 	}
 }

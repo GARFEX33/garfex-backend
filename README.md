@@ -1,6 +1,9 @@
 # GARFEX Costos Unitarios
 
-Core hexagonal (dominio + casos de uso + adaptador PostgreSQL) del Resource Master y Supplier Master, sin ninguna capa de interfaz (TUI, CLI, Web, API, MCP o Agentes) — esas capas viven fuera de este repositorio.
+Core hexagonal (dominio + casos de uso + adaptador PostgreSQL) del Resource
+Master, Supplier Master y Purchase and Price History Core, sin ninguna capa de
+interfaz (TUI, CLI, Web, API, MCP o Agentes) — esas capas viven fuera de este
+repositorio.
 
 ## Arquitectura
 
@@ -38,12 +41,20 @@ pgx puede aplicar sus valores predeterminados documentados `PG*` únicamente a
 los parámetros de conexión omitidos. Usá la identidad runtime `garfex_app`;
 las migraciones son una tarea externa de administración con `garfex_admin`.
 
-`Application` expone exactamente estos cuatro handles públicos:
+`Application` expone exactamente estos seis handles públicos:
 
 - `ResourceReader` (`*resourcecore.Reader`)
 - `ResourceWriter` (`*resourcecore.Writer`)
 - `SupplierReader` (`*suppliercore.Reader`)
 - `SupplierWriter` (`*suppliercore.Writer`)
+- `PurchaseReader` (`*purchasecore.Reader`)
+- `PurchaseWriter` (`*purchasecore.Writer`)
+
+Purchase and Price History Core reutiliza `SupplierProduct.CurrentMapping` como
+conocimiento confirmado. Sus escrituras son semánticas, protegidas por revisión
+y auditadas; el estado efectivo de cada línea se deriva de su override, del
+mapeo actual y de `Resource.Active`. Consultá `purchasecore/doc.go` para el
+contrato completo.
 
 Para Resource Master, designá un único proceso writer autoritativo. Cada reader
 observa un snapshot coherente de su última lectura; otro proceso necesita una

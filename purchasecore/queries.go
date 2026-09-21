@@ -31,3 +31,10 @@ type PurchaseLineHistoryPage struct {
 	HasPrevious bool
 	HasNext     bool
 }
+
+type MappingAuditPage struct {
+	Query       ListCriteria
+	Entries     []MappingAuditEntry
+	HasPrevious bool
+	HasNext     bool
+}

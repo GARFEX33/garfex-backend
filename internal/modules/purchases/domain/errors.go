@@ -16,6 +16,17 @@ var (
 	// fiscal UUID of an already-registered purchase but its relevant content
 	// does not match. The existing purchase is never overwritten.
 	ErrPurchaseConflict = fmt.Errorf("%w: purchase uuid already registered with different content", ErrConflict)
+
+	// Mapping errors distinguish a rejected business transition, an optimistic
+	// concurrency failure, and malformed decision metadata.
+	ErrInvalidMappingTransition = errors.New("purchase master invalid mapping transition")
+	ErrStaleMappingRevision     = errors.New("purchase master stale mapping revision")
+	ErrInvalidDecisionMetadata  = errors.New("purchase master invalid decision metadata")
+
+	// ErrMappingRevisionConflict is retained as the domain vocabulary for
+	// callers that describe a stale mapping revision as a conflict.
+	ErrMappingRevisionConflict = ErrStaleMappingRevision
+	ErrInvalidMappingDecision  = ErrInvalidDecisionMetadata
 )
 
 type ValidationError struct {
