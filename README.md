@@ -89,17 +89,17 @@ nada. Los errores son tipos estables (`INVALID_XML`, `NOT_CFDI`,
 
 ## Preparación de versión
 
-`v0.5.0` será la primera versión publicada con el módulo
+`v0.5.0` es la primera versión publicada con el módulo
 `github.com/GARFEX33/garfex-backend`. Las versiones existentes hasta `v0.4.0`
-declaran el nombre anterior y no son válidas para este import path. Una vez
-publicado el tag `v0.5.0`, un consumidor externo podrá fijarlo sin `replace`:
+declaran el nombre anterior y no son válidas para este import path. Un
+consumidor externo puede fijar `v0.5.0` sin `replace`:
 
 ```go
 require github.com/GARFEX33/garfex-backend v0.5.0
 ```
 
-Para desarrollar contra un checkout antes de esa publicación, usá un `replace`
-local en el `go.mod` del consumidor:
+Para desarrollar contra un checkout local, usá un `replace` en el `go.mod` del
+consumidor:
 
 ```go
 replace github.com/GARFEX33/garfex-backend => ../garfex-backend

@@ -89,14 +89,19 @@ Rename the consolidated repository, local directory, Go module, and imports to `
 
 ### T4 — Deliver renamed backend
 
-- Status: pending.
-- Route: independent verification, work-unit commits, issue-first pull request, CI, GitHub rename, and local-directory rename.
-- Checks:
-  - `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, and `GOWORK=off go test ./... -count=1` pass locally.
-  - CI passes race tests, explicit API build, and full build before merge.
-  - GitHub remote becomes `GARFEX33/garfex-backend`.
-  - Local directory becomes `/home/garfex/PROGRAMACION/garfex-backend`.
-  - Final start/stop commands and runtime URLs are recorded.
+- Status: done.
+- Route: independent verification, work-unit commits, issue-first pull request, CI, GitHub rename, release, and local-directory rename.
+- Delivery evidence:
+  - Local format, vet, lint, full tests, script tests, shell syntax, Compose config, and diff checks passed; ShellCheck remained unavailable.
+  - Issue #195 was explicitly approved and closed by merged PR #196.
+  - The user explicitly approved the single-PR size exception; PR #196 carried `size:exception` and `type:breaking-change`.
+  - Work-unit commits `5287c0c` and `f7e0bd9` merged to `main` as `1096434`.
+  - PR and push CI passed; default-branch run `35792646060` passed formatting, vet, lint, race tests, explicit API build, and full build.
+  - GitHub repository and `origin` are `GARFEX33/garfex-backend`.
+  - Release `v0.5.0` is the first tag with module path `github.com/GARFEX33/garfex-backend`.
+  - The canonical local directory is `/home/garfex/PROGRAMACION/garfex-backend`.
+  - Start: `sh scripts/dev-backend.sh`. Stop the foreground API with Ctrl-C; stop PostgreSQL without deleting data with the same Compose project and `docker compose stop db`.
+  - Runtime URL: `http://127.0.0.1:8090`; PID and log files are `/tmp/garfex-backend.pid` and `/tmp/garfex-backend.log` for the supervised local run.
 
 ## Progress
 
@@ -107,7 +112,8 @@ Rename the consolidated repository, local directory, Go module, and imports to `
 - 2026-09-22: API runtime smoke test passed on port 8090 with successful health, catalog, resource, and supplier responses.
 - 2026-09-22: The new one-command launcher reused the preserved database volume; direct backend reads and an external read through the existing frontend proxy returned HTTP 200.
 - 2026-09-22: Issue #195 was created and explicitly approved. The user authorized one PR with a size exception, full GitHub delivery and repository rename, and a post-merge `v0.5.0` release.
+- 2026-09-22: PR #196 and default-branch CI passed, the change merged as `1096434`, the repository and local directory were renamed to `garfex-backend`, and release `v0.5.0` was published.
 
 ## Next Step
 
-Prepare reviewable commits and issue-first pull-request slices, observe CI, then rename the GitHub repository and local directory.
+Feature complete. Keep the backend running at `127.0.0.1:8090` for local frontend integration.
