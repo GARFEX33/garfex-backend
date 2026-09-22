@@ -1,4 +1,4 @@
-module github.com/GARFEX33/garfex-costos-unitarios
+module github.com/GARFEX33/garfex-backend
 
 go 1.26.5
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
 )
 
 func TestMappingTransitionSnapshotRefreshPolicy(t *testing.T) {

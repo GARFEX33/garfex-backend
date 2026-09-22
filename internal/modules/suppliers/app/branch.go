@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
 )
 
 func (s *Service) AddBranch(ctx context.Context, supplierID int64, details domain.BranchDetails) (domain.Branch, error) {

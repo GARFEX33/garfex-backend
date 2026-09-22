@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 )
 
 // --- fake domain.CatalogAdminRepository -----------------------------------

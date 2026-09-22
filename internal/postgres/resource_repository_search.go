@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 )
 
 // defaultSearchLimit is applied when SearchCriteria.Limit is not a positive

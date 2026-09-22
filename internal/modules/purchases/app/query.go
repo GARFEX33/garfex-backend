@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
 )
 
 func (s *Service) GetPurchase(ctx context.Context, id int64) (domain.Purchase, error) {

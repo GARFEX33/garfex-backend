@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/suppliercore"
+	"github.com/GARFEX33/garfex-backend/suppliercore"
 )
 
 // fakeCapabilities is a minimal external ReadCapabilities implementation,

@@ -3,7 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 )
 
 const effectiveValuesCTE = `WITH effective_candidates AS (SELECT v.resource_id,v.id AS value_id,v.value_state,v.option_code,v.integer_value,v.decimal_value,v.quantity_value,v.quantity_unit_id,v.boolean_value,v.text_value,d.id AS definition_id,d.code AS definition_code,d.value_type,(v.attribute_definition_id=ra.definition_id AND v.option_set=ra.option_set) AS metadata_ok,CASE WHEN ra.type_id IS NULL THEN 0 ELSE 1 END AS scope_rank FROM public.resource_attribute_values v JOIN public.recursos r ON r.id=v.resource_id JOIN public.resource_attributes ra ON ra.id=v.resource_attribute_id AND ra.class_id=r.class_id AND ra.family_id=r.family_id AND (ra.type_id IS NULL OR ra.type_id=r.type_id) JOIN public.attribute_definitions d ON d.id=ra.definition_id), ranked_effective_candidates AS (SELECT c.*,count(*) OVER (PARTITION BY c.resource_id,c.definition_code,c.scope_rank) AS scope_count FROM effective_candidates c), effective_values AS (SELECT c.* FROM ranked_effective_candidates c WHERE c.scope_rank=(SELECT max(w.scope_rank) FROM ranked_effective_candidates w WHERE w.resource_id=c.resource_id AND w.definition_code=c.definition_code))`

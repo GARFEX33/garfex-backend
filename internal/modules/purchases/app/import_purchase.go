@@ -7,9 +7,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/cfdicore"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
-	supplierdomain "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
+	"github.com/GARFEX33/garfex-backend/cfdicore"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
+	supplierdomain "github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
 	"github.com/shopspring/decimal"
 )
 

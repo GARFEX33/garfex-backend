@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
-	supplierdomain "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
+	supplierdomain "github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
 )
 
 // SupplierDirectory is the subset of the Supplier Master this module reuses:

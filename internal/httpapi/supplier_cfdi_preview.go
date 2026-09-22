@@ -3,8 +3,8 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/cfdicore"
-	"github.com/GARFEX33/garfex-costos-unitarios/suppliercore"
+	"github.com/GARFEX33/garfex-backend/cfdicore"
+	"github.com/GARFEX33/garfex-backend/suppliercore"
 )
 
 type supplierCFDIPreviewResponse struct {

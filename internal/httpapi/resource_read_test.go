@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
+	"github.com/GARFEX33/garfex-backend/resourcecore"
 )
 
 type resourceReaderFuncs struct {

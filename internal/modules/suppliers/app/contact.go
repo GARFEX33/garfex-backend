@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
 )
 
 func (s *Service) AddContact(ctx context.Context, supplierID int64, details domain.ContactDetails) (domain.Contact, error) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
 )
 
 func (s *Service) ResolvePurchaseLine(ctx context.Context, command domain.ResolvePurchaseLineCommand) (domain.ResolvePurchaseLineResult, error) {

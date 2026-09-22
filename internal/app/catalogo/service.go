@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/core"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/core"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 )
 
 // ErrInvalidArgument is returned when a caller omits a required lookup key

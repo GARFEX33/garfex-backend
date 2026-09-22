@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
 	"github.com/shopspring/decimal"
 )
 

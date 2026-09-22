@@ -2,9 +2,9 @@
 package suppliers
 
 import (
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/app"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
-	supplierpostgres "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/postgres"
+	"github.com/GARFEX33/garfex-backend/internal/modules/suppliers/app"
+	"github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
+	supplierpostgres "github.com/GARFEX33/garfex-backend/internal/modules/suppliers/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

@@ -3,7 +3,7 @@ package recursos
 import (
 	"context"
 	"errors"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 	"reflect"
 	"testing"
 )

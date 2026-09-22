@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/suppliercore"
+	"github.com/GARFEX33/garfex-backend/suppliercore"
 )
 
 type supplierWriterFuncs struct {

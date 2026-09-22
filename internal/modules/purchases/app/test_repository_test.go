@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
-	supplierdomain "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
+	supplierdomain "github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
 )
 
 // memoryRepository is a minimal in-process stand-in for domain.Repository,

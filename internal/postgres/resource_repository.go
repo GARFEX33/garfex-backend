@@ -1,7 +1,7 @@
 // Package postgres provides PostgreSQL-backed implementations of domain ports.
 package postgres
 
-import "github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+import "github.com/GARFEX33/garfex-backend/internal/domain"
 
 // resourceRepository additionally satisfies domain.ResourceRepositoryV2
 // (DeactivateRevision/ReactivateRevision, resource_repository_crud.go) —

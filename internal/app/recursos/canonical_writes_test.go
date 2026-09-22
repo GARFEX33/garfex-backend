@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 )
 
 func writeCommand() domain.CreateCommand {

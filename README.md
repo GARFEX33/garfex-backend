@@ -35,7 +35,7 @@ import (
 	"context"
 	"fmt"
 
-	garfex "github.com/GARFEX33/garfex-costos-unitarios"
+	garfex "github.com/GARFEX33/garfex-backend"
 )
 
 func run(ctx context.Context, dsn string) error {
@@ -89,18 +89,20 @@ nada. Los errores son tipos estables (`INVALID_XML`, `NOT_CFDI`,
 
 ## Preparación de versión
 
-Primera versión publicada: `v0.1.0`. Un consumidor externo la referencia
-directamente, sin `replace` local:
+`v0.5.0` será la primera versión publicada con el módulo
+`github.com/GARFEX33/garfex-backend`. Las versiones existentes hasta `v0.4.0`
+declaran el nombre anterior y no son válidas para este import path. Una vez
+publicado el tag `v0.5.0`, un consumidor externo podrá fijarlo sin `replace`:
 
 ```go
-require github.com/GARFEX33/garfex-costos-unitarios v0.1.0
+require github.com/GARFEX33/garfex-backend v0.5.0
 ```
 
-Para un consumidor externo que desarrolle contra un checkout sin publicar,
-seguí usando un `replace` local en su `go.mod`:
+Para desarrollar contra un checkout antes de esa publicación, usá un `replace`
+local en el `go.mod` del consumidor:
 
 ```go
-replace github.com/GARFEX33/garfex-costos-unitarios => ../garfex-costos-unitarios-workspace
+replace github.com/GARFEX33/garfex-backend => ../garfex-backend
 ```
 
 Ese reemplazo es local y no portable como mecanismo de release. Los consumidores
@@ -151,9 +153,30 @@ Copiá `.env.example` a `.env` y reemplazá cada valor vacío o `CHANGE_ME`; `.e
 | Runtime | `GARFEX_DB_HOST`, `GARFEX_DB_PORT`, `GARFEX_DB_NAME`, `GARFEX_DB_USER`, `GARFEX_DB_PASSWORD`, `GARFEX_DB_SSLMODE` | Conexión a PostgreSQL para el adaptador de persistencia y los tests de integración. |
 | Runtime | `GARFEX_LOG_LEVEL` | Opcional: `debug`, `info`, `warn` o `error`; omitir equivale a `info`. |
 | API HTTP | `GARFEX_API_DSN` | DSN obligatorio para abrir la aplicación Core desde `cmd/api`. |
-| API HTTP | `GARFEX_API_LISTEN_ADDR` | Dirección local opcional; por omisión es `127.0.0.1:8080`. |
+| API HTTP | `GARFEX_API_LISTEN_ADDR` | El script local usa `127.0.0.1:8090` por omisión; el ejecutable directo conserva su valor general `127.0.0.1:8080`. |
 | Bootstrap Compose | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Crea el cluster PostgreSQL. |
 | Roles Compose | `GARFEX_ADMIN_PASSWORD`, `GARFEX_APP_PASSWORD` | Contraseñas de los roles de migración y runtime. |
+
+## Arranque local del backend
+
+Requisitos: Go 1.26.5, Docker Engine con Compose v2, y `.env` creado desde
+`.env.example` con contraseñas y DSNs reemplazados. `GARFEX_ADMIN_DSN` usa
+`garfex_admin` y host `db` dentro de la red Compose para migraciones;
+`GARFEX_API_DSN` usa `garfex_app` y host `127.0.0.1` desde el host para la API.
+El archivo se puede cambiar con `GARFEX_ENV_FILE`; el proyecto Compose usa
+`garfex-backend` por omisión y admite `COMPOSE_PROJECT_NAME`.
+
+Desde la raíz del repositorio (también funciona desde otro directorio con la
+ruta correspondiente):
+
+```sh
+sh scripts/dev-backend.sh
+```
+
+El comando inicia solo `db`, aplica migraciones pendientes y deja la API en
+primer plano en `127.0.0.1:8090`. Detenela con Ctrl-C; PostgreSQL y sus datos
+persisten. Para detener PostgreSQL sin borrar datos, usá `docker compose stop db`
+con el mismo proyecto y archivo de entorno.
 
 ## PostgreSQL local
 
@@ -165,9 +188,9 @@ docker compose ps
 docker compose restart db
 ```
 
-El único servicio es `db`, publicado en `127.0.0.1:5432`, con el volumen nombrado `garfex_pgdata`; los datos persisten al reiniciar el servicio. El bootstrap crea `garfex_admin` (dueño de `public`, para migraciones) y `garfex_app` (runtime, solo `USAGE` en `public`); ambos son `NOSUPERUSER`, sin `CREATEDB` ni `CREATEROLE`. `POSTGRES_USER` es solo bootstrap y no debe usarse por la aplicación.
+El único servicio es `db`, publicado en `127.0.0.1:5432`, con volumen persistente. Para clones nuevos, `GARFEX_DB_VOLUME_NAME` usa `garfex_backend_pgdata`; si ya tenés datos en un volumen anterior, configurá esta variable con el nombre exacto de ese volumen antes de iniciar. No borres el volumen al cambiar de directorio o nombre de proyecto. Los datos persisten al reiniciar el servicio. El bootstrap crea `garfex_admin` (dueño de `public`, para migraciones) y `garfex_app` (runtime, solo `USAGE` en `public`); ambos son `NOSUPERUSER`, sin `CREATEDB` ni `CREATEROLE`. `POSTGRES_USER` es solo bootstrap y no debe usarse por la aplicación.
 
-Para borrar intencionalmente la base local y volver a ejecutar los scripts de inicialización, usá `docker compose down -v`. Ese comando destruye `garfex_pgdata`.
+No uses `docker compose down -v` para detener el entorno: ese comando destruye el volumen de datos.
 
 ## Migraciones
 

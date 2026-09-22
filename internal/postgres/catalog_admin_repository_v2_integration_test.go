@@ -7,11 +7,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/app/catalogo"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/app/recursos"
-	resourcebridge "github.com/GARFEX33/garfex-costos-unitarios/internal/bridge/resourcecore"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
-	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
+	"github.com/GARFEX33/garfex-backend/internal/app/catalogo"
+	"github.com/GARFEX33/garfex-backend/internal/app/recursos"
+	resourcebridge "github.com/GARFEX33/garfex-backend/internal/bridge/resourcecore"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
+	"github.com/GARFEX33/garfex-backend/resourcecore"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

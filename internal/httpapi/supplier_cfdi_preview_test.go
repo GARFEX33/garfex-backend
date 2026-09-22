@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/suppliercore"
+	"github.com/GARFEX33/garfex-backend/suppliercore"
 )
 
 const supplierPreviewPath = "/v1/suppliers/from-cfdi/preview"

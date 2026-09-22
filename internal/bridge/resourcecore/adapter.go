@@ -11,9 +11,9 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/core"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
-	public "github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
+	"github.com/GARFEX33/garfex-backend/internal/core"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
+	public "github.com/GARFEX33/garfex-backend/resourcecore"
 )
 
 // catalogReader is the narrow catalog read seam the bridge consumes.

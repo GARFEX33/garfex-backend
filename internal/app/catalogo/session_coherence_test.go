@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 )
 
 func TestCatalogMutationsMatchFreshCatalogAndFailuresRemainInvisible(t *testing.T) {

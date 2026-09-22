@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
-	supplierdomain "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
+	supplierdomain "github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
 )
 
 const cfdiTemplate = `<?xml version="1.0" encoding="utf-8"?>
