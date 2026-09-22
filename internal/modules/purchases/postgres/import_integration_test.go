@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	coredomain "github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
-	supplierdomain "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
-	supplierpostgres "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/postgres"
-	corepostgres "github.com/GARFEX33/garfex-costos-unitarios/internal/postgres"
+	coredomain "github.com/GARFEX33/garfex-backend/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
+	supplierdomain "github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
+	supplierpostgres "github.com/GARFEX33/garfex-backend/internal/modules/suppliers/postgres"
+	corepostgres "github.com/GARFEX33/garfex-backend/internal/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 )

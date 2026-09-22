@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
+	"github.com/GARFEX33/garfex-backend/resourcecore"
 )
 
 // catalogRecordResponse is the public representation of a Core catalog record.

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/app"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
-	supplierdomain "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
-	public "github.com/GARFEX33/garfex-costos-unitarios/purchasecore"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/app"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
+	supplierdomain "github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
+	public "github.com/GARFEX33/garfex-backend/purchasecore"
 	"github.com/shopspring/decimal"
 )
 

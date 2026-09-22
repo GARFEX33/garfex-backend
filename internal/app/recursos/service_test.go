@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 )
 
 // fakeRepo is a fake domain.ResourceRepository. Get is class-scoped: it

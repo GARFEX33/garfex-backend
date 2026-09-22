@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
 )
 
 type memoryRepository struct {

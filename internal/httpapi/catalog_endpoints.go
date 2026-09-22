@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
+	"github.com/GARFEX33/garfex-backend/resourcecore"
 )
 
 const (

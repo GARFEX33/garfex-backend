@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 )
 
 // ErrorCode is one of the fifteen stable GARFEX outcome categories.

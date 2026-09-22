@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/core"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
-	public "github.com/GARFEX33/garfex-costos-unitarios/suppliercore"
+	"github.com/GARFEX33/garfex-backend/internal/core"
+	"github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
+	public "github.com/GARFEX33/garfex-backend/suppliercore"
 )
 
 type stubService struct {

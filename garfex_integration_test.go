@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	garfex "github.com/GARFEX33/garfex-costos-unitarios"
-	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
-	"github.com/GARFEX33/garfex-costos-unitarios/suppliercore"
+	garfex "github.com/GARFEX33/garfex-backend"
+	"github.com/GARFEX33/garfex-backend/resourcecore"
+	"github.com/GARFEX33/garfex-backend/suppliercore"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

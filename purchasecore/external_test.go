@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/purchasecore"
+	"github.com/GARFEX33/garfex-backend/purchasecore"
 )
 
 // fakeReadCapabilities is a minimal external ReadCapabilities

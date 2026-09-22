@@ -3,9 +3,9 @@
 package purchases
 
 import (
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/app"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/domain"
-	purchasepostgres "github.com/GARFEX33/garfex-costos-unitarios/internal/modules/purchases/postgres"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/app"
+	"github.com/GARFEX33/garfex-backend/internal/modules/purchases/domain"
+	purchasepostgres "github.com/GARFEX33/garfex-backend/internal/modules/purchases/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

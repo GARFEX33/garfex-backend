@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/cfdicore"
+	"github.com/GARFEX33/garfex-backend/cfdicore"
 )
 
 // samplesGlob points at real supplier invoices kept out of git; the test

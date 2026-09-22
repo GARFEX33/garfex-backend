@@ -21,3 +21,4 @@ services:
 
 volumes:
   garfex_pgdata:
+    name: ${GARFEX_DB_VOLUME_NAME:-garfex_backend_pgdata}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/modules/suppliers/domain"
+	"github.com/GARFEX33/garfex-backend/internal/modules/suppliers/domain"
 )
 
 func (s *Service) CreateSupplier(ctx context.Context, details domain.SupplierDetails) (domain.Supplier, error) {

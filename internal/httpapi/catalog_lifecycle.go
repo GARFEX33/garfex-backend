@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
+	"github.com/GARFEX33/garfex-backend/resourcecore"
 )
 
 type catalogLifecycleRequest struct {

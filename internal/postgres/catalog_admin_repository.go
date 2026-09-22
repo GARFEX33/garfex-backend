@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/core"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/domain"
+	"github.com/GARFEX33/garfex-backend/internal/core"
+	"github.com/GARFEX33/garfex-backend/internal/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
+	"github.com/GARFEX33/garfex-backend/resourcecore"
 )
 
 // CatalogWriter is the narrow Core capability required by the catalog

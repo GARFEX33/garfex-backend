@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GARFEX33/garfex-costos-unitarios/resourcecore"
+	"github.com/GARFEX33/garfex-backend/resourcecore"
 )
 
 func TestCatalogLifecycleMapsRequestAndResponse(t *testing.T) {

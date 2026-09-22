@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	garfex "github.com/GARFEX33/garfex-costos-unitarios"
-	"github.com/GARFEX33/garfex-costos-unitarios/internal/httpapi"
+	garfex "github.com/GARFEX33/garfex-backend"
+	"github.com/GARFEX33/garfex-backend/internal/httpapi"
 )
 
 const (

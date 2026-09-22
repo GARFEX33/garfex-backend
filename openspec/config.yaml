@@ -2,7 +2,7 @@ schema: spec-driven
 
 context: |
   Project: GARFEX Costos Unitarios
-  Module: github.com/GARFEX33/garfex-costos-unitarios
+  Module: github.com/GARFEX33/garfex-backend
   Language and runtime: Go 1.26.5
   Technical artifact language: English by default.
 
