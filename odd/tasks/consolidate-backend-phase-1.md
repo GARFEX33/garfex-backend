@@ -52,9 +52,9 @@ A single backend repository must support the HTTP API and future worker executab
 - Chain strategy: `feature-branch-chain`, selected by the user.
 - Forecast: high review-load risk; importing the existing API includes approximately 10,416 tracked Go lines across 60 tracked files, so the authored diff will greatly exceed 400 lines even though most content is pre-existing behavior.
 - Planned slices:
-  1. API history and HTTP adapter import.
-  2. API executable and single-module integration.
-  3. Self-contained CI acceptance gates and documentation.
+  1. API history and HTTP adapter import — `c276dce`.
+  2. API executable and single-module integration — `62cc3ff`.
+  3. Self-contained CI acceptance gates and documentation — `7535a2b`.
 
 ## Tasks
 
@@ -98,7 +98,7 @@ A single backend repository must support the HTTP API and future worker executab
 
 ### T3 — Add self-contained CI acceptance gates
 
-- Status: in progress; independent pre-commit verification passed, commit creation pending.
+- Status: done.
 - Route: delegated writer; CI configuration plus documentation changes are expected.
 - Allowed edit surfaces:
   - `.github/workflows/ci.yml`
@@ -116,11 +116,11 @@ A single backend repository must support the HTTP API and future worker executab
   - `GOWORK=off go test ./... -count=1` passes locally.
   - CI includes `GOWORK=off go test ./... -race -count=1`.
   - CI includes `GOWORK=off go build ./cmd/api` or a stronger build covering it.
-- Commit evidence: conventional commit `ci: prove self-contained API build`; exact hash is recorded immediately after creation.
+- Commit evidence: `7535a2b7da743b534397ec1b6a74c4651edef54d` (`ci: prove self-contained API build`).
 
 ### T4 — Verify Phase 1 exit criteria
 
-- Status: pending.
+- Status: in progress; all local gates passed, pending CI execution after an authorized push.
 - Route: delegated verification; verification trigger applies.
 - Outcome:
   - Demonstrate the repository is a self-contained backend clone.
@@ -131,7 +131,7 @@ A single backend repository must support the HTTP API and future worker executab
   - `GOWORK=off go test ./... -count=1` passes.
   - `GOWORK=off go build ./cmd/api` passes in CI.
   - A clean clone needs no sibling GARFEX checkout.
-- Commit evidence: pending if verification requires corrective repository changes; otherwise recorded against T3.
+- Commit evidence: no corrective source commit required; local exit verification was performed against `7535a2b`. CI execution evidence is pending.
 
 ## Progress
 
@@ -152,7 +152,12 @@ A single backend repository must support the HTTP API and future worker executab
 - 2026-09-21: T3 remains partial because `golangci-lint run ./...` found one staticcheck issue in imported `internal/httpapi/catalog_descriptors_test.go`; a focused correction is required before completion.
 - 2026-09-21: Corrected imported staticcheck SA1029 with a local named context-key type.
 - 2026-09-21: T3 independent verification passed list, format, vet, lint, focused/full tests, CI semantics, documentation accuracy, and changed-path scope.
-- Current task: T3 commit creation and post-commit risk-gated verification.
+- 2026-09-21: Created T3 commit `7535a2b`.
+- 2026-09-21: Native assessment classified the committed CI change as high risk and requires post-commit independent verification.
+- 2026-09-21: Post-commit independent verification passed for T3 commit `7535a2b`; no blockers remain.
+- 2026-09-21: Final local Phase 1 verification passed every authorized non-build gate and the hexagonal architecture review.
+- 2026-09-21: Phase 1 remains incomplete until an authorized push runs CI race tests, the explicit API build, and the full build.
+- Current task: T4 — obtain authorization to push, then observe CI completion.
 
 ## Verification Evidence
 
@@ -171,7 +176,10 @@ A single backend repository must support the HTTP API and future worker executab
 - T3 initial verification: `go list`, format, vet, 1,830 tests, diff integrity, and CI inspection passed; lint initially failed on one imported staticcheck finding.
 - T3 correction verification: PASS; focused test, list, format, vet, lint, 1,830 full-suite tests, diff integrity, and CI inspection passed.
 - T3 independent verification: PASS; CI gates, README claims, SA1029 correction, and changed-path scope were confirmed.
+- T3 post-commit independent verification: PASS for `7535a2b`; list, format, vet, lint, 1,830 tests, CI semantics, README accuracy, and the focused lint correction were confirmed.
+- T4 local exit verification: PASS at `7535a2b`; required paths coexist, the repository has one module and no workspace/replace/external API import, formatting/vet/lint passed, 1,830 full-suite tests and 562 focused API tests passed, and architecture status is PASS.
+- T4 CI-only gates: CONFIGURED/PENDING — `go test ./... -race -count=1`, `go build ./cmd/api`, and `go build ./...` must run after an authorized push.
 
 ## Next Step
 
-Create the verified T3 work-unit commit, record its exact hash, and complete post-commit verification before Phase 1 exit verification.
+Commit this verification checkpoint, request push authorization, and observe the configured CI race/build gates before marking Phase 1 done.
