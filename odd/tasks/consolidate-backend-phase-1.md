@@ -154,6 +154,22 @@ A single backend repository must support the HTTP API and future worker executab
   - `b458ebea12ab3edbcda4a56b58c485ac99476a53` — non-destructive propagation into the executable child.
   - `3f11bb7c45326a1906105b5d5cbfaaf940db2784` — non-destructive propagation into the final child; final source tree remained unchanged from `d4ab361`.
 
+### T6 — Integrate the PR chain into `main`
+
+- Status: in progress.
+- Route: authorized GitHub delivery with CI verification after every retarget and merge.
+- Outcome:
+  - Merge child PRs #192, #193, and #194 into the tracker branch in order.
+  - Retarget each dependent child only after its predecessor is integrated.
+  - Mark tracker PR #191 ready only after the children are integrated and its checks pass.
+  - Merge tracker PR #191 into `main` and verify the resulting default-branch CI.
+  - Report the exact remaining local runtime prerequisites; do not expand Phase 1 scope with operational automation.
+- Checks:
+  - Every PR merge uses its green reviewed head and preserves the chain order.
+  - Issue #190 remains approved through delivery and closes only with the tracker merge.
+  - `main` CI passes formatting, vet, lint, race tests, explicit API build, and full build.
+  - No local build or race test is run.
+
 ## Progress
 
 - 2026-09-21: Completed read-only architecture mapping of both repositories.
@@ -184,7 +200,8 @@ A single backend repository must support the HTTP API and future worker executab
 - 2026-09-21: PRs #192 and #193 exposed the same SA1029 lint failure because the correction was originally committed only in the final CI slice.
 - 2026-09-21: Moved the existing typed context-key correction into PR #192 and propagated it through #193 and #194 with merge commits; no published history was rewritten and the final source tree was unchanged.
 - 2026-09-21: Current CI checks pass for tracker #191 and children #192–#194. PRs #192 and #193 carry the maintainer-approved `size:exception`; every PR carries exactly one `type:feature` label.
-- Current task: Phase 1 implementation and PR-chain delivery are complete; human review should proceed in child order #192, #193, #194, then tracker #191.
+- 2026-09-21: User explicitly authorized merging the complete chain and requested the remaining local runtime prerequisites.
+- Current task: T6 — integrate #192 → #193 → #194 into tracker #191, merge the tracker to `main`, verify default-branch CI, and report local startup gaps.
 
 ## Verification Evidence
 
@@ -213,4 +230,4 @@ A single backend repository must support the HTTP API and future worker executab
 
 ## Next Step
 
-Review and integrate child PRs in order #192 → #193 → #194, then update and review draft tracker #191 for the final merge to `main`. No merge is authorized by this task.
+Integrate child PRs in order #192 → #193 → #194, merge tracker #191 to `main`, verify default-branch CI, and report the remaining local runtime prerequisites.
