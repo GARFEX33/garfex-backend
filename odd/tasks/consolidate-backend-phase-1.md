@@ -133,6 +133,27 @@ A single backend repository must support the HTTP API and future worker executab
   - A clean clone needs no sibling GARFEX checkout.
 - Commit evidence: local exit verification was performed against `7535a2b`; GitHub Actions run `35774701371` passed at branch head `b2bfb0b`.
 
+### T5 — Stabilize the chained PR delivery
+
+- Status: done.
+- Route: bounded branch-topology correction plus delegated CI verification; no behavior change.
+- Outcome:
+  - Keep the selected Feature Branch Chain with tracker PR #191 and child PRs #192–#194.
+  - Make every child independently pass CI without force-pushing or separating tests from implementation.
+  - Preserve the final consolidated tree and approved issue linkage.
+- Allowed edit surfaces:
+  - `internal/httpapi/catalog_descriptors_test.go` on the first child branch (existing typed-context-key correction only)
+  - chain branch topology and this task document
+- Checks:
+  - PR #192 passes CI with the typed-context-key correction in its own slice.
+  - PR #193 remains a clean executable-only diff and passes CI.
+  - PR #194 remains the CI/documentation completion slice and passes CI.
+  - Tracker PR #191 remains draft and all PRs retain exactly one `type:*` label.
+- Commit evidence:
+  - `97754275f06108c242102da5cc15c6e9a704f983` — typed context-key correction on the first child.
+  - `b458ebea12ab3edbcda4a56b58c485ac99476a53` — non-destructive propagation into the executable child.
+  - `3f11bb7c45326a1906105b5d5cbfaaf940db2784` — non-destructive propagation into the final child; final source tree remained unchanged from `d4ab361`.
+
 ## Progress
 
 - 2026-09-21: Completed read-only architecture mapping of both repositories.
@@ -159,7 +180,11 @@ A single backend repository must support the HTTP API and future worker executab
 - 2026-09-21: Phase 1 remains incomplete until an authorized push runs CI race tests, the explicit API build, and the full build.
 - 2026-09-21: User authorized the push; branch `feat/consolidate-backend-phase-1` was pushed to `origin`.
 - 2026-09-21: GitHub Actions run `35774701371` passed on exact head `b2bfb0b`; format, vet, lint, race tests, explicit API build, and full build all succeeded.
-- Current task: Phase 1 complete; prepare the user-authorized pull request subject to the repository's approved-issue gate.
+- 2026-09-21: Created and approved issue #190, opened draft tracker PR #191, and opened child PRs #192–#194 with the selected Feature Branch Chain.
+- 2026-09-21: PRs #192 and #193 exposed the same SA1029 lint failure because the correction was originally committed only in the final CI slice.
+- 2026-09-21: Moved the existing typed context-key correction into PR #192 and propagated it through #193 and #194 with merge commits; no published history was rewritten and the final source tree was unchanged.
+- 2026-09-21: Current CI checks pass for tracker #191 and children #192–#194. PRs #192 and #193 carry the maintainer-approved `size:exception`; every PR carries exactly one `type:feature` label.
+- Current task: Phase 1 implementation and PR-chain delivery are complete; human review should proceed in child order #192, #193, #194, then tracker #191.
 
 ## Verification Evidence
 
@@ -181,7 +206,11 @@ A single backend repository must support the HTTP API and future worker executab
 - T3 post-commit independent verification: PASS for `7535a2b`; list, format, vet, lint, 1,830 tests, CI semantics, README accuracy, and the focused lint correction were confirmed.
 - T4 local exit verification: PASS at `7535a2b`; required paths coexist, the repository has one module and no workspace/replace/external API import, formatting/vet/lint passed, 1,830 full-suite tests and 562 focused API tests passed, and architecture status is PASS.
 - T4 CI gates: PASS in GitHub Actions run `35774701371` at `b2bfb0b` — formatting, vet, lint, `go test ./... -race -count=1`, `go build ./cmd/api`, and `go build ./...` all succeeded.
+- Final pre-chain head CI: PASS in GitHub Actions run `35776179665` at `d4ab361` with every required gate successful.
+- T5 local slice verification: PASS — PR #192's adapter suite and lint passed; PR #193's focused executable/adapter suite and lint passed.
+- T5 chain CI: PASS — current push and pull-request checks pass for #192, #193, and #194; tracker #191 also reports successful checks. Earlier SA1029 failures on the pre-correction child heads are superseded by these successful runs.
+- Chain integrity: #191 is a draft tracker to `main`; #192 targets #191's branch, #193 targets #192's branch, and #194 targets #193's branch. The issue #190 remains open with `status:approved`.
 
 ## Next Step
 
-Commit and push this completion record, confirm CI on the final documentation-only head, then prepare the authorized pull request if an approved issue exists.
+Review and integrate child PRs in order #192 → #193 → #194, then update and review draft tracker #191 for the final merge to `main`. No merge is authorized by this task.
