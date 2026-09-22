@@ -120,7 +120,7 @@ A single backend repository must support the HTTP API and future worker executab
 
 ### T4 — Verify Phase 1 exit criteria
 
-- Status: in progress; all local gates passed, pending CI execution after an authorized push.
+- Status: done.
 - Route: delegated verification; verification trigger applies.
 - Outcome:
   - Demonstrate the repository is a self-contained backend clone.
@@ -131,7 +131,7 @@ A single backend repository must support the HTTP API and future worker executab
   - `GOWORK=off go test ./... -count=1` passes.
   - `GOWORK=off go build ./cmd/api` passes in CI.
   - A clean clone needs no sibling GARFEX checkout.
-- Commit evidence: no corrective source commit required; local exit verification was performed against `7535a2b`. CI execution evidence is pending.
+- Commit evidence: local exit verification was performed against `7535a2b`; GitHub Actions run `35774701371` passed at branch head `b2bfb0b`.
 
 ## Progress
 
@@ -157,7 +157,9 @@ A single backend repository must support the HTTP API and future worker executab
 - 2026-09-21: Post-commit independent verification passed for T3 commit `7535a2b`; no blockers remain.
 - 2026-09-21: Final local Phase 1 verification passed every authorized non-build gate and the hexagonal architecture review.
 - 2026-09-21: Phase 1 remains incomplete until an authorized push runs CI race tests, the explicit API build, and the full build.
-- Current task: T4 — obtain authorization to push, then observe CI completion.
+- 2026-09-21: User authorized the push; branch `feat/consolidate-backend-phase-1` was pushed to `origin`.
+- 2026-09-21: GitHub Actions run `35774701371` passed on exact head `b2bfb0b`; format, vet, lint, race tests, explicit API build, and full build all succeeded.
+- Current task: Phase 1 complete; prepare the user-authorized pull request subject to the repository's approved-issue gate.
 
 ## Verification Evidence
 
@@ -178,8 +180,8 @@ A single backend repository must support the HTTP API and future worker executab
 - T3 independent verification: PASS; CI gates, README claims, SA1029 correction, and changed-path scope were confirmed.
 - T3 post-commit independent verification: PASS for `7535a2b`; list, format, vet, lint, 1,830 tests, CI semantics, README accuracy, and the focused lint correction were confirmed.
 - T4 local exit verification: PASS at `7535a2b`; required paths coexist, the repository has one module and no workspace/replace/external API import, formatting/vet/lint passed, 1,830 full-suite tests and 562 focused API tests passed, and architecture status is PASS.
-- T4 CI-only gates: CONFIGURED/PENDING — `go test ./... -race -count=1`, `go build ./cmd/api`, and `go build ./...` must run after an authorized push.
+- T4 CI gates: PASS in GitHub Actions run `35774701371` at `b2bfb0b` — formatting, vet, lint, `go test ./... -race -count=1`, `go build ./cmd/api`, and `go build ./...` all succeeded.
 
 ## Next Step
 
-Commit this verification checkpoint, request push authorization, and observe the configured CI race/build gates before marking Phase 1 done.
+Commit and push this completion record, confirm CI on the final documentation-only head, then prepare the authorized pull request if an approved issue exists.
