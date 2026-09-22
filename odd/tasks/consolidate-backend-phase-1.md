@@ -94,12 +94,16 @@ A single backend repository must support the HTTP API and future worker executab
   - No local `replace` points outside the repository.
   - `GOWORK=off go test ./cmd/api ./internal/httpapi -count=1` passes.
   - `GOWORK=off go test ./... -count=1` passes.
-- Commit evidence: conventional commit `feat(api): integrate API executable`; exact hash is recorded immediately after creation.
+- Commit evidence: `62cc3ffcfbd253942ad1f2f7735ec748a7913773` (`feat(api): integrate API executable`).
 
 ### T3 — Add self-contained CI acceptance gates
 
-- Status: pending.
+- Status: in progress; independent pre-commit verification passed, commit creation pending.
 - Route: delegated writer; CI configuration plus documentation changes are expected.
+- Allowed edit surfaces:
+  - `.github/workflows/ci.yml`
+  - `README.md`
+  - `internal/httpapi/catalog_descriptors_test.go` (focused lint correction required by the imported adapter)
 - Outcome:
   - CI proves the backend without workspace mode.
   - CI explicitly builds `./cmd/api`.
@@ -112,7 +116,7 @@ A single backend repository must support the HTTP API and future worker executab
   - `GOWORK=off go test ./... -count=1` passes locally.
   - CI includes `GOWORK=off go test ./... -race -count=1`.
   - CI includes `GOWORK=off go build ./cmd/api` or a stronger build covering it.
-- Commit evidence: pending.
+- Commit evidence: conventional commit `ci: prove self-contained API build`; exact hash is recorded immediately after creation.
 
 ### T4 — Verify Phase 1 exit criteria
 
@@ -141,7 +145,14 @@ A single backend repository must support the HTTP API and future worker executab
 - 2026-09-21: Native assessment classified the committed range as high risk and requires a post-commit independent verifier.
 - 2026-09-21: Post-commit independent verification passed for T1 commit `c276dce`; no merge-blocking issues remain.
 - 2026-09-21: Independent verification passed T2 source equivalence, lifecycle behavior, module isolation, 562 focused tests, and 1,830 full-suite tests.
-- Current task: T2 commit creation, followed by T3.
+- 2026-09-21: Created T2 commit `62cc3ff`.
+- 2026-09-21: Native assessment was unavailable/schema-incompatible and requires post-commit independent verification.
+- 2026-09-21: Post-commit independent verification passed for T2 commit `62cc3ff`; no blockers remain.
+- 2026-09-21: T3 CI and README changes were prepared; list, format, vet, tests, and CI inspection passed.
+- 2026-09-21: T3 remains partial because `golangci-lint run ./...` found one staticcheck issue in imported `internal/httpapi/catalog_descriptors_test.go`; a focused correction is required before completion.
+- 2026-09-21: Corrected imported staticcheck SA1029 with a local named context-key type.
+- 2026-09-21: T3 independent verification passed list, format, vet, lint, focused/full tests, CI semantics, documentation accuracy, and changed-path scope.
+- Current task: T3 commit creation and post-commit risk-gated verification.
 
 ## Verification Evidence
 
@@ -156,7 +167,11 @@ A single backend repository must support the HTTP API and future worker executab
 - Post-commit independent verification: PASS for `c276dce`; exact merge parents, tree equality, dependency metadata, public Core boundaries, and 548 focused tests were confirmed.
 - T2 writer verification: PASS; 562 focused tests and 1,830 full-suite tests passed with workspace mode disabled.
 - T2 independent verification: PASS; source equivalence, single-module isolation, lifecycle behavior, formatting, and changed-path boundaries were confirmed.
+- T2 post-commit independent verification: PASS for `62cc3ff`; 562 focused tests and 1,830 full-suite tests passed, committed source equivalence and module isolation were confirmed.
+- T3 initial verification: `go list`, format, vet, 1,830 tests, diff integrity, and CI inspection passed; lint initially failed on one imported staticcheck finding.
+- T3 correction verification: PASS; focused test, list, format, vet, lint, 1,830 full-suite tests, diff integrity, and CI inspection passed.
+- T3 independent verification: PASS; CI gates, README claims, SA1029 correction, and changed-path scope were confirmed.
 
 ## Next Step
 
-Create the verified T2 work-unit commit, record its exact hash, and begin T3 CI acceptance gates.
+Create the verified T3 work-unit commit, record its exact hash, and complete post-commit verification before Phase 1 exit verification.

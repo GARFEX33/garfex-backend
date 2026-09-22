@@ -31,7 +31,8 @@ func (catalogReaderFunc) ActiveClasses(context.Context) ([]resourcecore.CatalogR
 }
 
 func TestCatalogDescriptorsMapsCompleteMetadata(t *testing.T) {
-	key := struct{}{}
+	type contextKey struct{}
+	key := contextKey{}
 	descriptors := []resourcecore.CatalogDescriptor{{
 		Kind: "CHILD", Singular: "child", Plural: "children", IdentityFields: []string{"code"}, ParentKind: "PARENT", ParentField: "parent_id",
 		Fields: []resourcecore.FieldDescriptor{{

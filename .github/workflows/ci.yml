@@ -14,6 +14,8 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      GOWORK: off
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -29,5 +31,7 @@ jobs:
           version: v2.12.2
       - name: Test with race detector
         run: go test ./... -race -count=1
+      - name: Build API executable
+        run: go build ./cmd/api
       - name: Build
         run: go build ./...
