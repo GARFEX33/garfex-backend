@@ -76,22 +76,25 @@ A single backend repository must support the HTTP API and future worker executab
   - No unrelated API repository root artifacts remain in the backend tree.
   - Structural readback confirms no SQL/repository bypass was introduced.
   - `GOWORK=off go test ./internal/httpapi -count=1` passes.
-- Commit evidence: merge commit with Core parent `6a8c3ed` and API parent `63183bf`; exact merge commit hash is recorded immediately after creation.
+- Commit evidence: `c276dce74d87c9c2e6a267566ea474773aaff343` (`feat(api): import HTTP adapter history`), with Core parent `6a8c3ed` and API parent `63183bf`.
 
 ### T2 — Integrate the API executable into the root module
 
-- Status: pending.
+- Status: done.
 - Route: delegated writer; multi-file write trigger applies.
 - Outcome:
-  - Place the entrypoint at `cmd/api`.
+  - Place the entrypoint and its tests at `cmd/api`.
   - Replace old `garfex-api` module imports with same-module imports.
   - Keep current startup, configuration, lifecycle, and routing behavior.
+- Allowed edit surfaces:
+  - `cmd/api/**`
 - Checks:
   - Exactly one root `go.mod` and `go.sum` own the backend.
   - No committed `go.work` is required.
   - No local `replace` points outside the repository.
+  - `GOWORK=off go test ./cmd/api ./internal/httpapi -count=1` passes.
   - `GOWORK=off go test ./... -count=1` passes.
-- Commit evidence: pending.
+- Commit evidence: conventional commit `feat(api): integrate API executable`; exact hash is recorded immediately after creation.
 
 ### T3 — Add self-contained CI acceptance gates
 
@@ -134,7 +137,11 @@ A single backend repository must support the HTTP API and future worker executab
 - 2026-09-21: User selected `feature-branch-chain` for the oversized consolidation.
 - 2026-09-21: Corrected the initial staging-only verification failure by staging the root dependency metadata.
 - 2026-09-21: Independent re-verification passed all T1 content, history, boundary, and staging checks.
-- Current task: T1 merge commit creation, followed by T2.
+- 2026-09-21: Created T1 merge commit `c276dce` with both Core and API parents.
+- 2026-09-21: Native assessment classified the committed range as high risk and requires a post-commit independent verifier.
+- 2026-09-21: Post-commit independent verification passed for T1 commit `c276dce`; no merge-blocking issues remain.
+- 2026-09-21: Independent verification passed T2 source equivalence, lifecycle behavior, module isolation, 562 focused tests, and 1,830 full-suite tests.
+- Current task: T2 commit creation, followed by T3.
 
 ## Verification Evidence
 
@@ -146,7 +153,10 @@ A single backend repository must support the HTTP API and future worker executab
 - First independent verification: content, history, boundaries, and tests passed; overall result failed because `go.mod` and `go.sum` were not staged for the merge commit.
 - Correction: staged `go.mod`, `go.sum`, and this task document.
 - Independent re-verification: PASS; 548 adapter tests passed, no unstaged changes remained, all required metadata was staged, the 52-path adapter tree matched `api-import/main`, and no persistence bypass or unwanted API root artifacts were imported.
+- Post-commit independent verification: PASS for `c276dce`; exact merge parents, tree equality, dependency metadata, public Core boundaries, and 548 focused tests were confirmed.
+- T2 writer verification: PASS; 562 focused tests and 1,830 full-suite tests passed with workspace mode disabled.
+- T2 independent verification: PASS; source equivalence, single-module isolation, lifecycle behavior, formatting, and changed-path boundaries were confirmed.
 
 ## Next Step
 
-Create the verified T1 merge commit, record its exact hash, and begin T2 executable integration.
+Create the verified T2 work-unit commit, record its exact hash, and begin T3 CI acceptance gates.
