@@ -1,9 +1,19 @@
 # GARFEX Costos Unitarios
 
-Core hexagonal (dominio + casos de uso + adaptador PostgreSQL) del Resource
-Master, Supplier Master y Purchase and Price History Core, sin ninguna capa de
-interfaz (TUI, CLI, Web, API, MCP o Agentes) — esas capas viven fuera de este
-repositorio.
+Backend consolidado de GARFEX: contiene el Core compartido (dominio, casos de
+uso, contratos públicos y adaptador PostgreSQL) del Resource Master, Supplier
+Master y Purchase and Price History Core, junto con el adaptador HTTP y el
+`cmd/api` ejecutable. No contiene TUI ni CLI; la consolidación operativa de
+Docker/Compose queda fuera de Phase 1.
+
+La dirección de dependencias es `HTTP -> contratos públicos de Core ->
+dominio/aplicación -> adaptadores PostgreSQL`. El Core permanece independiente
+de HTTP y queda disponible para futuras integraciones de Temporal o Jev; esas
+integraciones no forman parte de Phase 1.
+
+El backend se administra con un único `go.mod` y `go.sum` en la raíz. No hace
+falta otro checkout de GARFEX ni un `go.work` para compilarlo, probarlo o
+trabajar con el backend consolidado.
 
 ## Arquitectura
 
@@ -12,6 +22,10 @@ repositorio.
 - [Harness de runtime de agentes](docs/architecture/agent-runtime-harness.md)
 
 ## Consumo como librería Core
+
+El backend consolidado también conserva el Core como librería compartida: sus
+contratos públicos pueden ser consumidos por `cmd/api` y por futuras capas sin
+hacer que Core dependa de HTTP.
 
 El punto de entrada público es el paquete raíz `garfex`. Abrí una instancia con
 un DSN explícito y cerrala cuando termine su uso:
@@ -82,8 +96,8 @@ directamente, sin `replace` local:
 require github.com/GARFEX33/garfex-costos-unitarios v0.1.0
 ```
 
-Para desarrollo local contra un checkout sin publicar, seguí usando un
-`replace` local en `go.mod`:
+Para un consumidor externo que desarrolle contra un checkout sin publicar,
+seguí usando un `replace` local en su `go.mod`:
 
 ```go
 replace github.com/GARFEX33/garfex-costos-unitarios => ../garfex-costos-unitarios-workspace
@@ -136,6 +150,8 @@ Copiá `.env.example` a `.env` y reemplazá cada valor vacío o `CHANGE_ME`; `.e
 | --- | --- | --- |
 | Runtime | `GARFEX_DB_HOST`, `GARFEX_DB_PORT`, `GARFEX_DB_NAME`, `GARFEX_DB_USER`, `GARFEX_DB_PASSWORD`, `GARFEX_DB_SSLMODE` | Conexión a PostgreSQL para el adaptador de persistencia y los tests de integración. |
 | Runtime | `GARFEX_LOG_LEVEL` | Opcional: `debug`, `info`, `warn` o `error`; omitir equivale a `info`. |
+| API HTTP | `GARFEX_API_DSN` | DSN obligatorio para abrir la aplicación Core desde `cmd/api`. |
+| API HTTP | `GARFEX_API_LISTEN_ADDR` | Dirección local opcional; por omisión es `127.0.0.1:8080`. |
 | Bootstrap Compose | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Crea el cluster PostgreSQL. |
 | Roles Compose | `GARFEX_ADMIN_PASSWORD`, `GARFEX_APP_PASSWORD` | Contraseñas de los roles de migración y runtime. |
 
@@ -168,13 +184,20 @@ Ejecutalas con el DSN de `garfex_admin`; no uses `garfex_app` para administrar e
 Los equivalentes locales de los controles no constructivos de CI son:
 
 ```powershell
+GOWORK=off go list -m -mod=readonly all
 gofmt -l .
 go vet ./...
 golangci-lint run ./...
-go test ./... -count=1
+GOWORK=off go test ./... -count=1
 docker compose config -q
 ```
 
+La política actual del repositorio reserva `go build` para CI: no lo ejecutes
+localmente después de cambios. CI prueba explícitamente el ejecutable con
+`GOWORK=off go build ./cmd/api` y conserva además el build completo
+`GOWORK=off go build ./...`.
+
 `golangci-lint` requiere una versión compatible con Go 1.26.5 (probado con v2.12.2); instalala con `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`. Su configuración vive en `.golangci.yml`.
 
-CI ejecuta además `go test ./... -race -count=1` y `go build ./...`.
+CI ejecuta además `GOWORK=off go test ./... -race -count=1`,
+`GOWORK=off go build ./cmd/api` y `GOWORK=off go build ./...`.

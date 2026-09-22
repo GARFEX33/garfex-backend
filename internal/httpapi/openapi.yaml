@@ -1,0 +1,2289 @@
+openapi: 3.0.3
+info:
+  title: Garfex API
+  version: 0.1.0
+  description: Public operational, API-reference, catalog-descriptor, catalog-list, and catalog-detail endpoints.
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Reports that this HTTP process is running. It does not check database or dependency readiness.
+      responses:
+        '200':
+          description: Process is live
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /v1/catalog/descriptors:
+    get:
+      summary: List catalog descriptors
+      description: Returns Core's dynamic catalog metadata. It does not list catalog records.
+      responses:
+        '200':
+          description: Catalog descriptors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogDescriptorsResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/classes:
+    get:
+      summary: List active classes
+      description: Returns every active CLASE record, unpaginated.
+      responses:
+        '200':
+          description: Active CLASE records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveClassesResponse'
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/{kind}:
+    get:
+      summary: List catalog records
+      description: Returns a page of catalog records for one kind.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: classCode
+          in: query
+          description: Scopes results to records whose parent CLASE has this code (e.g. listing FAMILIA or TIPO under one class). Silently ignored by a kind whose descriptor has no class parent field.
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          description: Scopes results to records whose parent FAMILIA has this code (e.g. listing TIPO under one family). Silently ignored by a kind whose descriptor has no family parent field.
+          schema: { type: string }
+        - name: typeCode
+          in: query
+          description: Scopes results to records whose parent TIPO has this code (e.g. listing APLICABILIDAD or PRESENTACION under one type). Silently ignored by a kind whose descriptor has no type parent field.
+          schema: { type: string }
+        - name: optionSetCode
+          in: query
+          description: Scopes results to records whose parent CONJUNTO_OPCIONES has this code (e.g. listing OPCION under one option set). Silently ignored by a kind whose descriptor has no option-set parent field.
+          schema: { type: string }
+        - name: characteristicCode
+          in: query
+          description: Scopes results to records whose parent CARACTERISTICA has this code (e.g. listing APLICABILIDAD or OPCION under one characteristic). Silently ignored by a kind whose descriptor has no characteristic parent field.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Catalog records page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+    post:
+      summary: Create a catalog record
+      description: Creates one catalog record of the requested kind.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogCreateRequest'
+      responses:
+        '201':
+          description: Created catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/{kind}/{id}:
+    get:
+      summary: Get a catalog record
+      description: Returns one catalog record by kind and strict positive decimal identifier.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+    put:
+      summary: Update a catalog record
+      description: Replaces one existing catalog record's content under optimistic concurrency.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogUpdateRequest'
+      responses:
+        '200':
+          description: Updated catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+    delete:
+      summary: Permanently delete a catalog record
+      description: Irreversibly removes one existing catalog record under optimistic concurrency. Unlike deactivate, there is no idempotent no-op target and no record left to read back. The record must already be inactive (deactivate it first) — deleting an active record fails with 409 Conflict.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogLifecycleRequest'
+      responses:
+        '204':
+          description: Catalog record permanently deleted
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/{kind}/{id}/deactivate:
+    post:
+      summary: Deactivate a catalog record
+      description: Deactivates one existing catalog record under optimistic concurrency.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogLifecycleRequest'
+      responses:
+        '200':
+          description: Deactivated catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/catalog/{kind}/{id}/reactivate:
+    post:
+      summary: Reactivate a catalog record
+      description: Reactivates one existing catalog record under optimistic concurrency.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogLifecycleRequest'
+      responses:
+        '200':
+          description: Reactivated catalog record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRecord'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers:
+    get:
+      summary: Search suppliers
+      description: Returns a page of suppliers matching the query.
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Supplier page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+    post:
+      summary: Create a supplier
+      description: Creates one supplier. Created suppliers are always active.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierCreateRequest'
+      responses:
+        '201':
+          description: Created supplier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/from-cfdi/preview:
+    post:
+      summary: Preview creating a supplier from a CFDI XML
+      description: >-
+        Reads a CFDI 4.0 voucher (multipart `file` field or raw XML body) and
+        returns the supplier draft built from its Emisor plus the supplier that
+        already owns that RFC, active or inactive, or null when the RFC is new.
+        Read-only: nothing is created. To create, call `POST /v1/suppliers`
+        with the draft; the unique RFC constraint stays authoritative if
+        another request creates the supplier in between.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The CFDI XML file.
+          application/xml:
+            schema:
+              type: string
+              description: The raw CFDI XML document.
+      responses:
+        '200':
+          description: Draft and existing supplier, if any
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierCFDIPreview'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '422':
+          description: >-
+            The file is not a usable CFDI 4.0. `code` is one of INVALID_XML,
+            NOT_CFDI, UNSUPPORTED_VERSION, INVALID_CFDI.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}:
+    get:
+      summary: Get a supplier
+      description: Returns one supplier by strict positive decimal identifier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Supplier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+    put:
+      summary: Update a supplier
+      description: Fully replaces one existing supplier's content. A field left empty clears the stored value.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierUpdateRequest'
+      responses:
+        '200':
+          description: Updated supplier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/branches:
+    get:
+      summary: List branches
+      description: Returns a page of branches belonging to one supplier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Branch page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/branches/{branchId}:
+    get:
+      summary: Get a branch
+      description: Returns one branch belonging to one supplier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: branchId
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Branch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/contacts:
+    get:
+      summary: List contacts
+      description: Returns a page of contacts belonging to one supplier, optionally narrowed to one branch.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: branchId
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Contact page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/contacts/{contactId}:
+    get:
+      summary: Get a contact
+      description: Returns one contact belonging to one supplier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: contactId
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources:
+    get:
+      summary: Search resources
+      description: Returns a page of resources matching the query.
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [ACTIVE, INACTIVE, ALL], default: ACTIVE }
+        - name: text
+          in: query
+          schema: { type: string }
+        - name: classCode
+          in: query
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          schema: { type: string }
+        - name: typeCode
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Resource page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourcePage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+    post:
+      summary: Create a resource
+      description: Creates one resource under a class/family/type scope.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceCreateRequest'
+      responses:
+        '201':
+          description: Created resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{classCode}/{identityV1}:
+    get:
+      summary: Get a resource
+      description: Returns one resource by class code and durable identity-v1.
+      parameters:
+        - name: classCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: identityV1
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{classCode}/{identityV1}/describe:
+    get:
+      summary: Describe a resource
+      description: Returns the canonical presentation text of one resource by class code and durable identity-v1.
+      parameters:
+        - name: classCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: identityV1
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Resource description
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceDescription'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{id}:
+    put:
+      summary: Update a resource
+      description: Replaces one existing resource's content by its internal id, obtained from a prior read, under optimistic concurrency.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceUpdateRequest'
+      responses:
+        '200':
+          description: Updated resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{id}/deactivate:
+    post:
+      summary: Deactivate a resource
+      description: Deactivates one existing resource under optimistic concurrency.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceLifecycleRequest'
+      responses:
+        '200':
+          description: Deactivated resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{id}/reactivate:
+    post:
+      summary: Reactivate a resource
+      description: Reactivates one existing resource under optimistic concurrency.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceLifecycleRequest'
+      responses:
+        '200':
+          description: Reactivated resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/types/{typeCode}/attributes/effective:
+    get:
+      summary: Resolve the static baseline attributes for a Tipo
+      description: Returns the attributes applicable to one ResourceType with inheritance (Familia/Tipo) and presentation order already resolved by Core, evaluated against NO known values (the static baseline) — a CONDITIONAL attribute with no matching rule defaults to REQUIRED here. To resolve mode/options against real, already-known values, use POST .../attributes/evaluate instead. Never re-derive inheritance or rule defaults client-side.
+      parameters:
+        - name: typeCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: classCode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Resolved attribute view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveAttributesResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/types/{typeCode}/attributes/order:
+    get:
+      summary: Get the effective attribute order for a Tipo
+      description: Returns the authoritative committed per-Tipo visual order snapshot — the exact scope, the full ordered permutation, and an opaque OrderRevision. OrderRevision is never parsed or synthesized client-side; pass it back verbatim as expectedOrderRevision on the next write.
+      parameters:
+        - name: typeCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: classCode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Attribute order snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeOrderResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+    put:
+      summary: Replace the effective attribute order for a Tipo
+      description: Replaces one existing Tipo's effective attribute presentation order under optimistic concurrency. expectedOrderRevision must equal the OrderRevision most recently observed from GET (or a prior PUT result) for the exact same scope; orderedAttributes must be an exact permutation of that same snapshot's orderedAttributes. Actor is audit metadata, not authentication. The frontend never automatically retries a conflict.
+      parameters:
+        - name: typeCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: classCode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeOrderWriteRequest'
+      responses:
+        '200':
+          description: Updated attribute order snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeOrderResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/types/{typeCode}/attributes/evaluate:
+    post:
+      summary: Evaluate attributes for a Tipo against known values
+      description: Same resolution as the effective-attributes GET, but with the caller's already-known values folded into CONDITIONAL rule evaluation and relation-narrowed allowed options — reuses Core's exact ResourceAttribute Effective/ValidOptions resolution. Never re-derive this client-side.
+      parameters:
+        - name: typeCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: classCode
+          in: query
+          required: true
+          schema: { type: string }
+        - name: familyCode
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateAttributesRequest'
+      responses:
+        '200':
+          description: Resolved attribute view against the given values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveAttributesResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/cfdi/parse:
+    post:
+      summary: Parse a CFDI 4.0 XML
+      description: >-
+        Reads one CFDI 4.0 voucher (Mexican electronic invoice) and returns all
+        of its data. Nothing is stored. The XML may be uploaded as a multipart
+        `file` field or sent as the raw request body. `supplierDraft` holds
+        the Emisor shaped like a supplier create request, so a client can
+        prefill a supplier form; `taxRegime` has no supplier field and is
+        informational.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The CFDI XML file.
+          application/xml:
+            schema:
+              type: string
+              description: The raw CFDI XML document.
+          text/xml:
+            schema:
+              type: string
+              description: The raw CFDI XML document.
+      responses:
+        '200':
+          description: Parsed voucher
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CFDIParseResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '422':
+          description: >-
+            The file is not a usable CFDI 4.0. `code` is one of INVALID_XML,
+            NOT_CFDI, UNSUPPORTED_VERSION, INVALID_CFDI.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchase-lines:
+    get:
+      summary: List the purchase-line workbench
+      description: >-
+        Returns the server-authoritative cross-document workbench, ordered by
+        issuedAt descending and then lineId descending. `supplierSku` is the
+        immutable XML supplier SKU evidence. Dates are inclusive calendar dates;
+        dateTo includes the complete day. After a successful mutation, a
+        conflict, or an ambiguous failure, reread this workbench rather than
+        retrying blindly.
+      parameters:
+        - name: supplierId
+          in: query
+          schema: { type: string, pattern: '^[1-9][0-9]*$', maxLength: 19, description: 'Strict positive decimal supplier identifier; runtime rejects values exceeding int64 9223372036854775807.' }
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDIENTE, VINCULADO, SUSPENDIDO, NO_APLICA, CONFLICTO] }
+        - name: dateFrom
+          in: query
+          description: Inclusive CFDI issue date in YYYY-MM-DD format.
+          schema: { type: string, format: date, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - name: dateTo
+          in: query
+          description: Inclusive CFDI issue date in YYYY-MM-DD format; the whole day is included.
+          schema: { type: string, format: date, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - name: invoice
+          in: query
+          schema: { type: string }
+        - name: supplierSku
+          in: query
+          description: Immutable supplier SKU copied from the purchase XML.
+          schema: { type: string }
+        - name: description
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Purchase-line workbench page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseLineWorkbenchPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchases:
+    post:
+      summary: Import a CFDI purchase document
+      description: >-
+        Imports one CFDI 4.0 purchase document from its raw XML, sent as
+        multipart/form-data. Idempotent on the document's fiscal UUID:
+        re-importing the same document returns 200 with alreadyExisted true
+        and creates nothing; importing the same UUID with different content
+        returns 409. If the Emisor RFC matches no existing supplier, a
+        minimal supplier is auto-registered.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, actor]
+              properties:
+                file: { type: string, format: binary, description: The CFDI XML file. }
+                actor: { type: string }
+                branchId: { type: string, description: 'Optional strict positive decimal branch identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+      responses:
+        '201':
+          description: Purchase imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseImportResponse'
+        '200':
+          description: Purchase already existed with matching content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseImportResponse'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchases/{id}:
+    get:
+      summary: Get a purchase
+      description: Returns one purchase by strict positive decimal identifier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Purchase
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchases/by-uuid/{uuid}:
+    get:
+      summary: Get a purchase by its CFDI fiscal UUID
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Purchase
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchases/{id}/lines:
+    get:
+      summary: List a purchase's lines
+      description: Returns every line of one purchase, in original order.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Purchase lines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PurchaseLine' }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/purchases:
+    get:
+      summary: List a supplier's purchases
+      description: Returns a page of purchases from one supplier, most recent first.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Purchase page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasePage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/products:
+    get:
+      summary: List a supplier's products
+      description: Returns a page of one supplier's registered products.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Supplier product page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierProductPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/suppliers/{id}/products/find:
+    get:
+      summary: Find a supplier product by SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: sku
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Supplier product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierProduct'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}:
+    get:
+      summary: Get a supplier product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      responses:
+        '200':
+          description: Supplier product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierProduct'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/mapping/confirm:
+    post:
+      summary: Confirm a supplier-product mapping
+      description: >-
+        Conditionally confirms the selected active Resource for this
+        SupplierProduct. The expected mapping revision is authoritative; after
+        success, conflict, or an ambiguous failure, reread the SupplierProduct
+        and do not retry blindly.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmMappingRequest' }
+      responses:
+        '200':
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Selected Resource cannot be used (`RESOURCE_INACTIVE` or `VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/mapping/correct:
+    post:
+      summary: Correct a supplier-product mapping
+      description: >-
+        Replaces the current Resource only when both the expected current
+        Resource and mapping revision match. Reread after every result; this
+        operation is not a blind-idempotent retry contract.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CorrectMappingRequest' }
+      responses:
+        '200':
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Selected Resource cannot be used (`RESOURCE_INACTIVE` or `VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/mapping/retire:
+    post:
+      summary: Retire a supplier-product mapping
+      description: >-
+        Removes the current mapping only when the expected current Resource and
+        mapping revision match. Reread after success, conflict, or ambiguous
+        failure; do not retry blindly.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RetireMappingRequest' }
+      responses:
+        '200':
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/mapping/report-conflict:
+    post:
+      summary: Report a supplier-product identity conflict
+      description: >-
+        Records an identity conflict after checking the expected current
+        Resource and mapping revision. Reread after any result and never retry
+        an ambiguous failure blindly.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportMappingConflictRequest' }
+      responses:
+        '200':
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/supplier-products/{id}/mapping/resolve-conflict:
+    post:
+      summary: Resolve a supplier-product identity conflict
+      description: >-
+        Selects the canonical active Resource only when the expected current
+        Resource and mapping revision match. Reread after every result; do not
+        retry an ambiguous failure blindly.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveMappingConflictRequest' }
+      responses:
+        '200':
+          description: Authoritative SupplierProduct after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierProduct' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: SupplierProduct or selected Resource was not found (`NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Conditional transition failed (`STALE_MAPPING_REVISION`, `SUPPLIER_PRODUCT_TARGET_CONFLICT`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Selected Resource cannot be used (`RESOURCE_INACTIVE` or `VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchase-lines/{lineId}/resolve:
+    post:
+      summary: Resolve one purchase line
+      description: >-
+        Resolves one line transactionally through its SupplierProduct. The
+        expected SupplierProduct id and mapping revision are required snapshot
+        fields and may each be null for an unassociated line. A non-empty
+        commercialSupplierSku applies only when expectedSupplierProductId is
+        null; it creates or reuses the commercial identity. The XML
+        supplierSku is immutable evidence and is never changed by this action.
+        After success, conflict, or an ambiguous failure, reread the line and
+        workbench; do not retry blindly.
+      parameters:
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolvePurchaseLineRequest' }
+      responses:
+        '200':
+          description: Authoritative line, SupplierProduct, and commercial identity disposition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/ResolvePurchaseLineResponse' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: Purchase line or selected Resource was not found (`PURCHASE_LINE_NOT_FOUND`, `RESOURCE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Authoritative state or snapshot conflict (`PURCHASE_LINE_STATE_CONFLICT`, `STALE_RESOLUTION_REVISION`, `STALE_MAPPING_REVISION`, `SUPPLIER_PRODUCT_TARGET_CONFLICT`, `INVALID_MAPPING_TRANSITION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Resolution validation failed (`COMMERCIAL_SUPPLIER_SKU_REQUIRED`, `COMMERCIAL_SUPPLIER_SKU_FORBIDDEN`, `RESOURCE_INACTIVE`, or `VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/purchase-lines/{lineId}/resolution-override:
+    post:
+      summary: Set a purchase-line resolution override
+      description: >-
+        Sets the line-specific override under the expected resolution revision.
+        Only NONE, NO_APLICA, and CONFLICTO are accepted. Reread after success,
+        conflict, or ambiguous failure; do not retry blindly.
+      parameters:
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolutionOverrideRequest' }
+      responses:
+        '200':
+          description: Authoritative PurchaseLine after the transition.
+          content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseLine' } } }
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '404':
+          description: Purchase line was not found (`PURCHASE_LINE_NOT_FOUND`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Resolution state or revision conflict (`PURCHASE_LINE_STATE_CONFLICT`, `STALE_RESOLUTION_REVISION`, or `INTEGRITY_CONFLICT`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Override validation failed (`VALIDATION`).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/resources/{id}/purchase-history:
+    get:
+      summary: List a Resource Master entry's purchase history
+      description: Which suppliers and supplier products have sold this resource, when, at what price and quantity, in what currency, and from which branch and source document. Most recent purchase first.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, description: 'Strict positive decimal identifier; the runtime rejects values exceeding the int64 boundary 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19, not: { pattern: '[\r\n]' } }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Purchase line history page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseLineHistoryPage'
+        '400': { $ref: '#/components/responses/InvalidArgument' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /openapi.yaml:
+    get:
+      summary: OpenAPI document
+      responses:
+        '200':
+          description: Embedded OpenAPI YAML document
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /docs:
+    get:
+      summary: API reference
+      description: Serves a Scalar API-reference page for this OpenAPI document.
+      responses:
+        '200':
+          description: HTML API-reference page
+          content:
+            text/html:
+              schema:
+                type: string
+components:
+  responses:
+    InvalidArgument: { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Requested resource was not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Conflict: { description: Request conflicts with current state, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unprocessable: { description: Request failed validation, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unavailable: { description: Service is temporarily unavailable, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Internal: { description: Internal server error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  schemas:
+    CatalogRecord:
+      type: object
+      required: [kind, id, revision, active, values, rules]
+      properties:
+        kind: { type: string }
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        revision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        active: { type: boolean }
+        values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
+    CatalogPage:
+      type: object
+      required: [records, hasPrevious, hasNext]
+      properties:
+        records: { type: array, items: { $ref: '#/components/schemas/CatalogRecord' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    ApplicabilityRule:
+      type: object
+      required: [attributeCode, equals, mode, identityParticipates, notApplicable, active]
+      properties:
+        attributeCode: { type: string }
+        equals: { $ref: '#/components/schemas/CatalogValue' }
+        mode: { type: string }
+        identityParticipates: { type: boolean }
+        notApplicable: { type: boolean }
+        active: { type: boolean }
+    CatalogValue:
+      oneOf:
+        - { $ref: '#/components/schemas/CatalogTextValue' }
+        - { $ref: '#/components/schemas/CatalogCodeValue' }
+        - { $ref: '#/components/schemas/CatalogBooleanValue' }
+        - { $ref: '#/components/schemas/CatalogIntegerValue' }
+        - { $ref: '#/components/schemas/CatalogDecimalValue' }
+        - { $ref: '#/components/schemas/CatalogQuantityValue' }
+        - { $ref: '#/components/schemas/CatalogReferenceValue' }
+        - { $ref: '#/components/schemas/CatalogEnumValue' }
+        - { $ref: '#/components/schemas/CatalogStringListValue' }
+        - { $ref: '#/components/schemas/CatalogControlledOptionValue' }
+        - { $ref: '#/components/schemas/CatalogNotApplicableValue' }
+      discriminator:
+        propertyName: kind
+        mapping:
+          TEXT: '#/components/schemas/CatalogTextValue'
+          CODE: '#/components/schemas/CatalogCodeValue'
+          BOOLEAN: '#/components/schemas/CatalogBooleanValue'
+          INTEGER: '#/components/schemas/CatalogIntegerValue'
+          DECIMAL: '#/components/schemas/CatalogDecimalValue'
+          QUANTITY: '#/components/schemas/CatalogQuantityValue'
+          REFERENCE: '#/components/schemas/CatalogReferenceValue'
+          ENUM: '#/components/schemas/CatalogEnumValue'
+          STRING_LIST: '#/components/schemas/CatalogStringListValue'
+          CONTROLLED_OPTION: '#/components/schemas/CatalogControlledOptionValue'
+          NOT_APPLICABLE: '#/components/schemas/CatalogNotApplicableValue'
+    CatalogTextValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [TEXT] }, value: { type: string } }
+    CatalogCodeValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [CODE] }, value: { type: string } }
+    CatalogBooleanValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [BOOLEAN] }, value: { type: boolean } }
+    CatalogIntegerValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [INTEGER] }, value: { type: string, description: Decimal integer, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } } }
+    CatalogDecimalValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [DECIMAL] }, value: { type: string, pattern: '^(?:0|-?(?:[1-9][0-9]*|(?:0|[1-9][0-9]*)\.[0-9]*[1-9]))$', not: { pattern: '[\r\n]' } } }
+    CatalogQuantityValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value, unitCode]
+      properties: { kind: { type: string, enum: [QUANTITY] }, value: { type: string, pattern: '^(?:0|-?(?:[1-9][0-9]*|(?:0|[1-9][0-9]*)\.[0-9]*[1-9]))$', not: { pattern: '[\r\n]' } }, unitCode: { type: string } }
+    CatalogReferenceValue:
+      type: object
+      additionalProperties: false
+      required: [kind, reference]
+      properties: { kind: { type: string, enum: [REFERENCE] }, reference: { $ref: '#/components/schemas/CatalogReference' } }
+    CatalogReference:
+      type: object
+      additionalProperties: false
+      required: [kind, id, code]
+      properties:
+        kind: { type: string }
+        id:
+          type: string
+          pattern: '^(?:0|-?[1-9][0-9]*)$'
+          not: { pattern: '[\r\n]' }
+          description: >-
+            Decimal integer identifier. In a response this is the referenced
+            record's real id. In a create/update request body it MUST be "0":
+            the server resolves the reference by code, and a non-zero id is
+            rejected as invalid (references are addressed by natural code on
+            write, never by id).
+        code: { type: string }
+    CatalogEnumValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [ENUM] }, value: { type: string } }
+    CatalogStringListValue:
+      type: object
+      additionalProperties: false
+      required: [kind, values]
+      properties: { kind: { type: string, enum: [STRING_LIST] }, values: { type: array, items: { type: string } } }
+    CatalogControlledOptionValue:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties: { kind: { type: string, enum: [CONTROLLED_OPTION] }, value: { type: string } }
+    CatalogNotApplicableValue:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties: { kind: { type: string, enum: [NOT_APPLICABLE] } }
+    CatalogCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, values]
+      properties:
+        actor: { type: string }
+        active: { type: boolean }
+        values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' }, description: 'For kind APLICABILIDAD this field is required and must be present as an array even when the binding is non-conditional: omitting it fails with "applicability rules are omitted", and sending a non-empty array on a non-conditional binding fails with "non-conditional applicability has rules". Send an explicit empty array ([]) for the common non-conditional case.' }
+    CatalogUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedRevision, values]
+      properties:
+        actor: { type: string }
+        expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        active: { type: boolean }
+        values: { type: object, additionalProperties: { $ref: '#/components/schemas/CatalogValue' } }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' }, description: 'For kind APLICABILIDAD this field is required and must be present as an array even when the binding is non-conditional: omitting it fails with "applicability rules are omitted", and sending a non-empty array on a non-conditional binding fails with "non-conditional applicability has rules". Send an explicit empty array ([]) for the common non-conditional case.' }
+    CatalogLifecycleRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedRevision]
+      properties:
+        actor: { type: string }
+        expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+    CatalogDescriptorsResponse:
+      type: object
+      required: [descriptors]
+      properties: { descriptors: { type: array, items: { $ref: '#/components/schemas/CatalogDescriptor' } } }
+    ActiveClassesResponse:
+      type: object
+      required: [records]
+      properties: { records: { type: array, items: { $ref: '#/components/schemas/CatalogRecord' } } }
+    CatalogDescriptor:
+      type: object
+      required: [kind, singular, plural, fields, identityFields, parentKind, parentField]
+      properties:
+        kind: { type: string }
+        singular: { type: string }
+        plural: { type: string }
+        fields: { type: array, items: { $ref: '#/components/schemas/FieldDescriptor' } }
+        identityFields: { type: array, items: { type: string } }
+        parentKind: { type: string }
+        parentField: { type: string }
+    FieldDescriptor:
+      type: object
+      required: [name, label, kind, required, refKind, refScopedBy, allowCreate, enumValues]
+      properties:
+        name: { type: string }
+        label: { type: string }
+        kind: { type: string }
+        required: { type: boolean }
+        refKind: { type: string }
+        refScopedBy: { type: array, items: { type: string } }
+        allowCreate:
+          type: boolean
+          description: >-
+            True on a reference field (refKind set) that should be presented
+            as search-existing-first, create-as-fallback — never a plain
+            "create new" form by default. Always false, and meaningless, on a
+            non-reference field.
+        enumValues: { type: array, items: { $ref: '#/components/schemas/EnumValue' } }
+    EnumValue:
+      type: object
+      required: [value, label]
+      properties: { value: { type: string }, label: { type: string } }
+    SupplierCFDIPreview:
+      type: object
+      additionalProperties: false
+      required: [draft, existing]
+      properties:
+        draft: { $ref: '#/components/schemas/CFDISupplierDraft' }
+        existing:
+          nullable: true
+          description: The supplier already owning the RFC (active or inactive); null when the RFC is new.
+          allOf:
+            - $ref: '#/components/schemas/Supplier'
+    CFDIParseResponse:
+      type: object
+      additionalProperties: false
+      required: [invoice, supplierDraft]
+      properties:
+        invoice: { $ref: '#/components/schemas/CFDIInvoice' }
+        supplierDraft: { $ref: '#/components/schemas/CFDISupplierDraft' }
+    CFDISupplierDraft:
+      type: object
+      additionalProperties: false
+      required: [taxIdentifier, legalName, taxRegime]
+      description: Emisor data shaped like a supplier create request. RFC is trimmed and upper-cased.
+      properties:
+        taxIdentifier: { type: string }
+        legalName: { type: string }
+        taxRegime: { type: string, description: "SAT regimen fiscal code, such as 601. Informational only; suppliers have no such field." }
+    CFDIInvoice:
+      type: object
+      additionalProperties: false
+      description: >-
+        Amounts, quantities and rates are exact decimal strings as written in
+        the XML. Absent values are empty strings. Dates have no zone
+        (`YYYY-MM-DDThh:mm:ss`).
+      required:
+        - version
+        - series
+        - folio
+        - issuedAt
+        - seal
+        - paymentForm
+        - certificateNumber
+        - certificate
+        - paymentConditions
+        - subtotal
+        - discount
+        - currency
+        - exchangeRate
+        - total
+        - voucherType
+        - export
+        - paymentMethod
+        - issuePlace
+        - confirmation
+        - related
+        - issuer
+        - receiver
+        - concepts
+        - taxes
+        - stamp
+      properties:
+        version: { type: string }
+        series: { type: string }
+        folio: { type: string }
+        issuedAt: { type: string }
+        seal: { type: string }
+        paymentForm: { type: string }
+        certificateNumber: { type: string }
+        certificate: { type: string }
+        paymentConditions: { type: string }
+        subtotal: { type: string }
+        discount: { type: string }
+        currency: { type: string }
+        exchangeRate: { type: string }
+        total: { type: string }
+        voucherType: { type: string }
+        export: { type: string }
+        paymentMethod: { type: string }
+        issuePlace: { type: string }
+        confirmation: { type: string }
+        related:
+          type: array
+          items: { $ref: '#/components/schemas/CFDIRelated' }
+        issuer: { $ref: '#/components/schemas/CFDIIssuer' }
+        receiver: { $ref: '#/components/schemas/CFDIReceiver' }
+        concepts:
+          type: array
+          items: { $ref: '#/components/schemas/CFDIConcept' }
+        taxes: { $ref: '#/components/schemas/CFDITaxes' }
+        stamp:
+          nullable: true
+          description: The SAT TimbreFiscalDigital complement; null when the voucher has none.
+          allOf:
+            - $ref: '#/components/schemas/CFDIStamp'
+    CFDIRelated:
+      type: object
+      additionalProperties: false
+      required: [relationType, uuids]
+      properties:
+        relationType: { type: string }
+        uuids:
+          type: array
+          items: { type: string }
+    CFDIIssuer:
+      type: object
+      additionalProperties: false
+      required: [taxIdentifier, name, taxRegime]
+      properties:
+        taxIdentifier: { type: string }
+        name: { type: string }
+        taxRegime: { type: string }
+    CFDIReceiver:
+      type: object
+      additionalProperties: false
+      required: [taxIdentifier, name, postalCode, taxRegime, cfdiUse, foreignResidence, foreignTaxIdentifier]
+      properties:
+        taxIdentifier: { type: string }
+        name: { type: string }
+        postalCode: { type: string }
+        taxRegime: { type: string }
+        cfdiUse: { type: string }
+        foreignResidence: { type: string }
+        foreignTaxIdentifier: { type: string }
+    CFDIConcept:
+      type: object
+      additionalProperties: false
+      required: [productServiceCode, itemNumber, quantity, unitCode, unit, description, unitPrice, amount, discount, taxObject, taxes]
+      properties:
+        productServiceCode: { type: string }
+        itemNumber: { type: string, description: "The issuer product code (NoIdentificacion)." }
+        quantity: { type: string }
+        unitCode: { type: string }
+        unit: { type: string }
+        description: { type: string }
+        unitPrice: { type: string }
+        amount: { type: string }
+        discount: { type: string }
+        taxObject: { type: string }
+        taxes:
+          type: object
+          additionalProperties: false
+          required: [transferred, withheld]
+          properties:
+            transferred:
+              type: array
+              items: { $ref: '#/components/schemas/CFDITax' }
+            withheld:
+              type: array
+              items: { $ref: '#/components/schemas/CFDITax' }
+    CFDITaxes:
+      type: object
+      additionalProperties: false
+      required: [totalTransferred, totalWithheld, transferred, withheld]
+      properties:
+        totalTransferred: { type: string }
+        totalWithheld: { type: string }
+        transferred:
+          type: array
+          items: { $ref: '#/components/schemas/CFDITax' }
+        withheld:
+          type: array
+          items: { $ref: '#/components/schemas/CFDITax' }
+    CFDITax:
+      type: object
+      additionalProperties: false
+      required: [base, tax, factorType, rate, amount]
+      description: Voucher-level withholdings only carry `tax` and `amount`.
+      properties:
+        base: { type: string }
+        tax: { type: string, description: "SAT tax code: 001 ISR, 002 IVA, 003 IEPS." }
+        factorType: { type: string }
+        rate: { type: string }
+        amount: { type: string }
+    CFDIStamp:
+      type: object
+      additionalProperties: false
+      required: [version, uuid, stampedAt, providerTaxIdentifier, legend, cfdSeal, satCertificateNumber, satSeal]
+      properties:
+        version: { type: string }
+        uuid: { type: string, description: Upper-cased. }
+        stampedAt: { type: string }
+        providerTaxIdentifier: { type: string }
+        legend: { type: string }
+        cfdSeal: { type: string }
+        satCertificateNumber: { type: string }
+        satSeal: { type: string }
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: 'Generic, sanitized classification of the failure (e.g. "invalid request", "validation failed").'
+        code:
+          type: string
+          description: >-
+            Stable, machine-readable reason code, safe to switch on: distinct
+            outcomes that read the same generic "conflict" error (e.g. an
+            expected-revision mismatch, a still-active record, or a record
+            still in use) are always distinguishable here even when error is
+            identical. Absent only when the failure never reached Core (e.g.
+            an HTTP method mismatch).
+          enum:
+            - INVALID_ARGUMENT
+            - NOT_FOUND
+            - DUPLICATE
+            - INVALID_REFERENCE
+            - VALIDATION
+            - INTEGRITY
+            - IDENTITY_CONFLICT
+            - INVALID_LIFECYCLE
+            - REACTIVATION_IMPOSSIBLE
+            - INVALID_CATALOG
+            - IN_USE
+            - IMMUTABLE_CODE
+            - CONFLICT
+            - UNAVAILABLE
+            - INTERNAL
+            - PURCHASE_LINE_NOT_FOUND
+            - RESOURCE_NOT_FOUND
+            - RESOURCE_INACTIVE
+            - COMMERCIAL_SUPPLIER_SKU_REQUIRED
+            - COMMERCIAL_SUPPLIER_SKU_FORBIDDEN
+            - PURCHASE_LINE_STATE_CONFLICT
+            - STALE_RESOLUTION_REVISION
+            - STALE_MAPPING_REVISION
+            - SUPPLIER_PRODUCT_TARGET_CONFLICT
+            - INVALID_MAPPING_TRANSITION
+            - INTEGRITY_CONFLICT
+        detail:
+          type: string
+          description: >-
+            The specific reason, present only when error is "invalid request" or
+            "validation failed". Absent for every other error (not found, conflict,
+            unavailable, internal server error), which never expose internal detail.
+    SupplierCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor]
+      properties:
+        actor: { type: string }
+        tradeName: { type: string }
+        legalName: { type: string }
+        taxIdentifier: { type: string }
+        website: { type: string }
+        notes: { type: string }
+    SupplierUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor]
+      properties:
+        actor: { type: string }
+        tradeName: { type: string }
+        legalName: { type: string }
+        taxIdentifier: { type: string }
+        website: { type: string }
+        notes: { type: string }
+    Supplier:
+      type: object
+      additionalProperties: false
+      required: [id, tradeName, legalName, taxIdentifier, website, notes, active, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        tradeName: { type: string }
+        legalName: { type: string }
+        taxIdentifier: { type: string }
+        website: { type: string }
+        notes: { type: string }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SupplierPage:
+      type: object
+      additionalProperties: false
+      required: [suppliers, hasPrevious, hasNext]
+      properties:
+        suppliers: { type: array, items: { $ref: '#/components/schemas/Supplier' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    Branch:
+      type: object
+      additionalProperties: false
+      required: [id, supplierId, name, reference, city, state, country, address, generalPhone, generalEmail, notes, active, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        name: { type: string }
+        reference: { type: string }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+        address: { type: string }
+        generalPhone: { type: string }
+        generalEmail: { type: string }
+        notes: { type: string }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BranchPage:
+      type: object
+      additionalProperties: false
+      required: [branches, hasPrevious, hasNext]
+      properties:
+        branches: { type: array, items: { $ref: '#/components/schemas/Branch' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    Contact:
+      type: object
+      additionalProperties: false
+      required: [id, supplierId, name, role, phone, mobile, email, notes, active, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        branchId: { type: string, description: Decimal integer identifier; omitted when the contact has no branch, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        name: { type: string }
+        role: { type: string }
+        phone: { type: string }
+        mobile: { type: string }
+        email: { type: string }
+        notes: { type: string }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ContactPage:
+      type: object
+      additionalProperties: false
+      required: [contacts, hasPrevious, hasNext]
+      properties:
+        contacts: { type: array, items: { $ref: '#/components/schemas/Contact' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    ResourceScope:
+      type: object
+      additionalProperties: false
+      required: [classCode, familyCode, typeCode]
+      properties:
+        classCode: { type: string }
+        familyCode: { type: string }
+        typeCode: { type: string }
+    ResourceAttribute:
+      type: object
+      additionalProperties: false
+      required: [code, value]
+      properties:
+        code: { type: string }
+        value: { $ref: '#/components/schemas/CatalogValue' }
+    ResourceCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, scope, naturalUnit, attributes]
+      properties:
+        actor: { type: string }
+        scope: { $ref: '#/components/schemas/ResourceScope' }
+        naturalUnit: { type: string }
+        attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    ResourceUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedRevision, scope, naturalUnit, attributes]
+      properties:
+        actor: { type: string }
+        expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        scope: { $ref: '#/components/schemas/ResourceScope' }
+        naturalUnit: { type: string }
+        attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    ResourceLifecycleRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedRevision]
+      properties:
+        actor: { type: string }
+        expectedRevision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+    Resource:
+      type: object
+      additionalProperties: false
+      required: [id, identityV1, scope, naturalUnit, active, revision, attributes]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        identityV1: { type: string }
+        scope: { $ref: '#/components/schemas/ResourceScope' }
+        naturalUnit: { type: string }
+        active: { type: boolean }
+        revision: { type: string, description: Decimal unsigned revision, pattern: '^(?:0|[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        attributes: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    ResourcePage:
+      type: object
+      additionalProperties: false
+      required: [resources, hasPrevious, hasNext]
+      properties:
+        resources: { type: array, items: { $ref: '#/components/schemas/Resource' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    ResourceDescription:
+      type: object
+      additionalProperties: false
+      required: [description]
+      properties:
+        description: { type: string }
+    CharacteristicDescriptor:
+      type: object
+      required: [code, name, valueType]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        valueType: { type: string }
+        dimension: { type: string }
+    EffectiveAttributeSource:
+      type: object
+      required: [level, code]
+      properties:
+        level: { type: string, enum: [FAMILY, TYPE] }
+        code: { type: string }
+    EffectiveAttributeOption:
+      type: object
+      required: [code, label]
+      properties:
+        code: { type: string }
+        label: { type: string }
+    EffectiveAttribute:
+      type: object
+      required: [characteristic, effectiveMode, identityParticipates, notApplicable, position, hasPosition, source, rules, options]
+      properties:
+        characteristic: { $ref: '#/components/schemas/CharacteristicDescriptor' }
+        effectiveMode: { type: string }
+        identityParticipates: { type: boolean }
+        notApplicable: { type: boolean }
+        position: { type: integer }
+        hasPosition: { type: boolean, description: 'false means position is a placeholder zero — no PresentationField is configured for this attribute.' }
+        optionSetCode: { type: string }
+        source: { $ref: '#/components/schemas/EffectiveAttributeSource' }
+        rules: { type: array, items: { $ref: '#/components/schemas/ApplicabilityRule' } }
+        options: { type: array, items: { $ref: '#/components/schemas/EffectiveAttributeOption' }, description: 'Allowed values, narrowed by AttributeOptionRelation against whatever values were provided (unconstrained on the effective GET, since it provides none; narrowed on evaluate). Empty for non-option attributes.' }
+    EffectiveAttributesResponse:
+      type: object
+      required: [typeCode, attributes]
+      properties:
+        typeCode: { type: string }
+        attributes: { type: array, items: { $ref: '#/components/schemas/EffectiveAttribute' } }
+    EvaluateAttributesRequest:
+      type: object
+      additionalProperties: false
+      required: [values]
+      properties:
+        values: { type: array, items: { $ref: '#/components/schemas/ResourceAttribute' } }
+    AttributeOrderKey:
+      type: object
+      additionalProperties: false
+      required: [sourceLevel, sourceCode, characteristicCode]
+      properties:
+        sourceLevel: { type: string }
+        sourceCode: { type: string }
+        characteristicCode: { type: string }
+    AttributeOrderResponse:
+      type: object
+      additionalProperties: false
+      required: [scope, orderedAttributes, orderRevision]
+      properties:
+        scope: { $ref: '#/components/schemas/ResourceScope' }
+        orderedAttributes: { type: array, items: { $ref: '#/components/schemas/AttributeOrderKey' } }
+        orderRevision: { type: string, description: 'Opaque concurrency token; never parsed or synthesized client-side.' }
+    AttributeOrderWriteRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, expectedOrderRevision, orderedAttributes]
+      properties:
+        actor: { type: string }
+        expectedOrderRevision: { type: string, description: 'Opaque concurrency token, passed through verbatim from a prior GET or PUT response.' }
+        orderedAttributes: { type: array, items: { $ref: '#/components/schemas/AttributeOrderKey' } }
+    XMLDocument:
+      type: object
+      additionalProperties: false
+      required: [hash, filename]
+      properties:
+        hash: { type: string, description: Lower-case hex SHA-256 of the original XML content. }
+        filename: { type: string, description: Informational traceability only; never part of any document's identity. }
+    Purchase:
+      type: object
+      additionalProperties: false
+      required: [id, supplierId, branchId, cfdiUuid, series, folio, issuedAt, currency, exchangeRate, subtotal, discount, taxTransferred, taxWithheld, total, issuerTaxId, issuerName, xml, importedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        branchId: { type: string, nullable: true, description: Decimal integer identifier; null when the document carries no applicable branch. }
+        cfdiUuid: { type: string }
+        series: { type: string }
+        folio: { type: string }
+        issuedAt: { type: string, description: "The CFDI's own issuance date, with no zone." }
+        currency: { type: string }
+        exchangeRate: { type: string, nullable: true }
+        subtotal: { type: string }
+        discount: { type: string }
+        taxTransferred: { type: string }
+        taxWithheld: { type: string }
+        total: { type: string }
+        issuerTaxId: { type: string }
+        issuerName: { type: string }
+        xml: { $ref: '#/components/schemas/XMLDocument' }
+        importedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PurchaseLine:
+      type: object
+      additionalProperties: false
+      required: [id, purchaseId, lineNumber, description, supplierSku, satProductCode, quantity, unitCode, unit, unitPrice, amount, discount, taxTransferred, taxWithheld, taxObject, supplierProductId, resolutionRevision, resolutionOverride, effectiveStatus, effectiveCause]
+      properties:
+        id: { type: string, description: 'Decimal integer identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        purchaseId: { type: string, description: 'Decimal integer identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        lineNumber: { type: integer }
+        description: { type: string }
+        supplierSku: { type: string, description: Immutable supplier SKU copied from the purchase XML. }
+        satProductCode: { type: string }
+        quantity: { type: string, description: Decimal quantity represented as a string. }
+        unitCode: { type: string }
+        unit: { type: string }
+        unitPrice: { type: string, description: Decimal amount represented as a string. }
+        amount: { type: string, description: Decimal amount represented as a string. }
+        discount: { type: string, description: Decimal amount represented as a string. }
+        taxTransferred: { type: string, description: Decimal amount represented as a string. }
+        taxWithheld: { type: string, description: Decimal amount represented as a string. }
+        taxObject: { type: string }
+        supplierProductId: { type: string, nullable: true, description: 'Decimal SupplierProduct identifier; null until this line is associated with a SupplierProduct; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        resolutionRevision: { type: string, description: 'Unsigned decimal resolution revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resolutionOverride: { type: string, enum: [NONE, NO_APLICA, CONFLICTO] }
+        effectiveStatus: { type: string, enum: [PENDIENTE, VINCULADO, SUSPENDIDO, NO_APLICA, CONFLICTO] }
+        effectiveCause: { type: string, description: Machine-readable reason supplied by Core for the effective status. }
+    PurchaseLineWorkbenchRow:
+      type: object
+      additionalProperties: false
+      required: [lineId, purchaseId, lineNumber, issuedAt, series, folio, cfdiUuid, supplierId, supplierDisplayName, description, supplierSku, commercialSupplierSku, satProductCode, quantity, unitCode, unit, unitPrice, amount, currency, supplierProductId, mappingRevision, resolutionRevision, resourceId, resourceIdentity, resourceDisplayName, resolutionOverride, effectiveStatus, effectiveCause]
+      properties:
+        lineId: { type: string, description: 'Decimal line identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        purchaseId: { type: string, description: 'Decimal purchase identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        lineNumber: { type: integer }
+        issuedAt: { type: string, description: CFDI issue date-time without a zone. }
+        series: { type: string }
+        folio: { type: string }
+        cfdiUuid: { type: string }
+        supplierId: { type: string, description: 'Decimal supplier identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        supplierDisplayName: { type: string }
+        description: { type: string }
+        supplierSku: { type: string, description: Immutable supplier SKU evidence from XML. }
+        commercialSupplierSku: { type: string, nullable: true, description: Commercial SupplierProduct identity; null when no commercial identity is associated. }
+        satProductCode: { type: string }
+        quantity: { type: string, description: Decimal quantity represented as a string. }
+        unitCode: { type: string }
+        unit: { type: string }
+        unitPrice: { type: string, description: Decimal amount represented as a string. }
+        amount: { type: string, description: Decimal amount represented as a string. }
+        currency: { type: string }
+        supplierProductId: { type: string, nullable: true, description: 'Decimal SupplierProduct identifier; null when no commercial identity is associated; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        mappingRevision: { type: string, nullable: true, description: 'Unsigned decimal mapping revision; zero is allowed; null when no SupplierProduct mapping snapshot exists; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resolutionRevision: { type: string, description: 'Unsigned decimal resolution revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resourceId: { type: string, nullable: true, description: 'Decimal Resource identifier; null when no Resource is selected; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 19 }
+        resourceIdentity: { type: string, nullable: true }
+        resourceDisplayName: { type: string, nullable: true }
+        resolutionOverride: { type: string, enum: [NONE, NO_APLICA, CONFLICTO] }
+        effectiveStatus: { type: string, enum: [PENDIENTE, VINCULADO, SUSPENDIDO, NO_APLICA, CONFLICTO] }
+        effectiveCause: { type: string, description: Machine-readable reason supplied by Core for the effective status. }
+    PurchaseLineWorkbenchPage:
+      type: object
+      additionalProperties: false
+      required: [lines, hasPrevious, hasNext]
+      properties:
+        lines: { type: array, items: { $ref: '#/components/schemas/PurchaseLineWorkbenchRow' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    SupplierProduct:
+      type: object
+      additionalProperties: false
+      required: [id, supplierId, supplierSku, description, resourceId, mappingRevision, resourceActive, mappingState, mappingCause, notes, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: 'Strict positive decimal SupplierProduct identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        supplierId: { type: string, description: 'Strict positive decimal supplier identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        supplierSku: { type: string }
+        description: { type: string, description: Last-seen description for this commercial SKU; informational only. }
+        resourceId: { type: string, nullable: true, description: 'Strict positive decimal Resource identifier; null when unresolved; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        mappingRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resourceActive: { type: boolean, nullable: true, description: Non-authoritative Resource activity snapshot; null when no Resource is selected. }
+        mappingState: { type: string, enum: [UNRESOLVED, CONFIRMED, SUSPENDED, IDENTITY_CONFLICT] }
+        mappingCause: { type: string, enum: [NONE, UNRESOLVED, RESOURCE_INACTIVE, IDENTITY_CONFLICT] }
+        notes: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PurchaseLineHistory:
+      type: object
+      additionalProperties: false
+      required: [line, supplierProduct, purchaseId, purchaseUuid, supplierId, branchId, issuedAt, currency]
+      properties:
+        line: { $ref: '#/components/schemas/PurchaseLine' }
+        supplierProduct: { $ref: '#/components/schemas/SupplierProduct' }
+        purchaseId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        purchaseUuid: { type: string }
+        supplierId: { type: string, description: Decimal integer identifier, pattern: '^(?:0|-?[1-9][0-9]*)$', not: { pattern: '[\r\n]' } }
+        branchId: { type: string, nullable: true }
+        issuedAt: { type: string }
+        currency: { type: string }
+    PurchasePage:
+      type: object
+      additionalProperties: false
+      required: [purchases, hasPrevious, hasNext]
+      properties:
+        purchases: { type: array, items: { $ref: '#/components/schemas/Purchase' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    SupplierProductPage:
+      type: object
+      additionalProperties: false
+      required: [products, hasPrevious, hasNext]
+      properties:
+        products: { type: array, items: { $ref: '#/components/schemas/SupplierProduct' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    PurchaseLineHistoryPage:
+      type: object
+      additionalProperties: false
+      required: [history, hasPrevious, hasNext]
+      properties:
+        history: { type: array, items: { $ref: '#/components/schemas/PurchaseLineHistory' } }
+        hasPrevious: { type: boolean }
+        hasNext: { type: boolean }
+    PurchaseImportResponse:
+      type: object
+      additionalProperties: false
+      required: [purchase, lines, alreadyExisted]
+      properties:
+        purchase: { $ref: '#/components/schemas/Purchase' }
+        lines: { type: array, items: { $ref: '#/components/schemas/PurchaseLine' } }
+        alreadyExisted: { type: boolean, description: True when the document's fiscal UUID was already registered with matching content; no additional write happened. }
+    MappingDecisionFields:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    ConfirmMappingRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, resourceId, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        resourceId: { type: string, description: 'Strict positive decimal Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    CorrectMappingRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, expectedCurrentResourceId, resourceId, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        expectedCurrentResourceId: { type: string, description: 'Strict positive decimal current Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        resourceId: { type: string, description: 'Strict positive decimal replacement Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    RetireMappingRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, expectedCurrentResourceId, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        expectedCurrentResourceId: { type: string, description: 'Strict positive decimal current Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    ReportMappingConflictRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, expectedCurrentResourceId, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        expectedCurrentResourceId: { type: string, description: 'Strict positive decimal current Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    ResolveMappingConflictRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, expectedCurrentResourceId, resourceId, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        expectedCurrentResourceId: { type: string, description: 'Strict positive decimal current Resource identifier retained under conflict; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        resourceId: { type: string, description: 'Strict positive decimal canonical Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    ResolvePurchaseLineRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, resourceId, expectedSupplierProductId, expectedMappingRevision, expectedResolutionRevision, commercialSupplierSku]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        resourceId: { type: string, description: 'Strict positive decimal Resource identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedSupplierProductId: { type: string, nullable: true, description: 'Strict positive decimal SupplierProduct identifier snapshot; null for an unassociated line; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        expectedMappingRevision: { type: string, nullable: true, description: 'Unsigned decimal mapping revision snapshot; zero is allowed; null when expectedSupplierProductId is null; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        expectedResolutionRevision: { type: string, description: 'Unsigned decimal line-resolution revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        commercialSupplierSku: { type: string, description: Commercial SKU used only when expectedSupplierProductId is null; the XML supplierSku is never changed. }
+    ResolutionOverrideRequest:
+      type: object
+      additionalProperties: false
+      required: [actor, reason, override, expectedRevision]
+      properties:
+        actor: { type: string }
+        reason: { type: string }
+        override: { type: string, enum: [NONE, NO_APLICA, CONFLICTO] }
+        expectedRevision: { type: string, description: 'Unsigned decimal resolution revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+    CommercialIdentity:
+      type: object
+      additionalProperties: false
+      required: [supplierProductId, supplierId, commercialSupplierSku, disposition, mappingRevision, resourceId]
+      properties:
+        supplierProductId: { type: string, description: 'Strict positive decimal SupplierProduct identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        supplierId: { type: string, description: 'Strict positive decimal supplier identifier; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+        commercialSupplierSku: { type: string }
+        disposition: { type: string, enum: [CREATED, REUSED, ALREADY_MAPPED] }
+        mappingRevision: { type: string, description: 'Unsigned decimal mapping revision; zero is allowed; runtime rejects values exceeding uint64 18446744073709551615.', pattern: '^(?:0|[1-9][0-9]*)$', maxLength: 20 }
+        resourceId: { type: string, nullable: true, description: 'Strict positive decimal Resource identifier; null when unresolved; runtime rejects values exceeding int64 9223372036854775807.', pattern: '^[1-9][0-9]*$', maxLength: 19 }
+    ResolvePurchaseLineResponse:
+      type: object
+      additionalProperties: false
+      required: [line, supplierProduct, commercialIdentity]
+      properties:
+        line: { $ref: '#/components/schemas/PurchaseLine' }
+        supplierProduct: { $ref: '#/components/schemas/SupplierProduct' }
+        commercialIdentity: { $ref: '#/components/schemas/CommercialIdentity' }
