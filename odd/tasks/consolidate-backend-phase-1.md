@@ -52,9 +52,9 @@ A single backend repository must support the HTTP API and future worker executab
 - Chain strategy: `feature-branch-chain`, selected by the user.
 - Forecast: high review-load risk; importing the existing API includes approximately 10,416 tracked Go lines across 60 tracked files, so the authored diff will greatly exceed 400 lines even though most content is pre-existing behavior.
 - Planned slices:
-  1. API history and HTTP adapter import.
-  2. API executable and single-module integration.
-  3. Self-contained CI acceptance gates and documentation.
+  1. API history and HTTP adapter import — `c276dce`.
+  2. API executable and single-module integration — `62cc3ff`.
+  3. Self-contained CI acceptance gates and documentation — `7535a2b`.
 
 ## Tasks
 
@@ -94,12 +94,16 @@ A single backend repository must support the HTTP API and future worker executab
   - No local `replace` points outside the repository.
   - `GOWORK=off go test ./cmd/api ./internal/httpapi -count=1` passes.
   - `GOWORK=off go test ./... -count=1` passes.
-- Commit evidence: conventional commit `feat(api): integrate API executable`; exact hash is recorded immediately after creation.
+- Commit evidence: `62cc3ffcfbd253942ad1f2f7735ec748a7913773` (`feat(api): integrate API executable`).
 
 ### T3 — Add self-contained CI acceptance gates
 
-- Status: pending.
+- Status: done.
 - Route: delegated writer; CI configuration plus documentation changes are expected.
+- Allowed edit surfaces:
+  - `.github/workflows/ci.yml`
+  - `README.md`
+  - `internal/httpapi/catalog_descriptors_test.go` (focused lint correction required by the imported adapter)
 - Outcome:
   - CI proves the backend without workspace mode.
   - CI explicitly builds `./cmd/api`.
@@ -112,11 +116,11 @@ A single backend repository must support the HTTP API and future worker executab
   - `GOWORK=off go test ./... -count=1` passes locally.
   - CI includes `GOWORK=off go test ./... -race -count=1`.
   - CI includes `GOWORK=off go build ./cmd/api` or a stronger build covering it.
-- Commit evidence: pending.
+- Commit evidence: `7535a2b7da743b534397ec1b6a74c4651edef54d` (`ci: prove self-contained API build`).
 
 ### T4 — Verify Phase 1 exit criteria
 
-- Status: pending.
+- Status: done.
 - Route: delegated verification; verification trigger applies.
 - Outcome:
   - Demonstrate the repository is a self-contained backend clone.
@@ -127,7 +131,44 @@ A single backend repository must support the HTTP API and future worker executab
   - `GOWORK=off go test ./... -count=1` passes.
   - `GOWORK=off go build ./cmd/api` passes in CI.
   - A clean clone needs no sibling GARFEX checkout.
-- Commit evidence: pending if verification requires corrective repository changes; otherwise recorded against T3.
+- Commit evidence: local exit verification was performed against `7535a2b`; GitHub Actions run `35774701371` passed at branch head `b2bfb0b`.
+
+### T5 — Stabilize the chained PR delivery
+
+- Status: done.
+- Route: bounded branch-topology correction plus delegated CI verification; no behavior change.
+- Outcome:
+  - Keep the selected Feature Branch Chain with tracker PR #191 and child PRs #192–#194.
+  - Make every child independently pass CI without force-pushing or separating tests from implementation.
+  - Preserve the final consolidated tree and approved issue linkage.
+- Allowed edit surfaces:
+  - `internal/httpapi/catalog_descriptors_test.go` on the first child branch (existing typed-context-key correction only)
+  - chain branch topology and this task document
+- Checks:
+  - PR #192 passes CI with the typed-context-key correction in its own slice.
+  - PR #193 remains a clean executable-only diff and passes CI.
+  - PR #194 remains the CI/documentation completion slice and passes CI.
+  - Tracker PR #191 remains draft and all PRs retain exactly one `type:*` label.
+- Commit evidence:
+  - `97754275f06108c242102da5cc15c6e9a704f983` — typed context-key correction on the first child.
+  - `b458ebea12ab3edbcda4a56b58c485ac99476a53` — non-destructive propagation into the executable child.
+  - `3f11bb7c45326a1906105b5d5cbfaaf940db2784` — non-destructive propagation into the final child; final source tree remained unchanged from `d4ab361`.
+
+### T6 — Integrate the PR chain into `main`
+
+- Status: in progress.
+- Route: authorized GitHub delivery with CI verification after every retarget and merge.
+- Outcome:
+  - Merge child PRs #192, #193, and #194 into the tracker branch in order.
+  - Retarget each dependent child only after its predecessor is integrated.
+  - Mark tracker PR #191 ready only after the children are integrated and its checks pass.
+  - Merge tracker PR #191 into `main` and verify the resulting default-branch CI.
+  - Report the exact remaining local runtime prerequisites; do not expand Phase 1 scope with operational automation.
+- Checks:
+  - Every PR merge uses its green reviewed head and preserves the chain order.
+  - Issue #190 remains approved through delivery and closes only with the tracker merge.
+  - `main` CI passes formatting, vet, lint, race tests, explicit API build, and full build.
+  - No local build or race test is run.
 
 ## Progress
 
@@ -141,7 +182,26 @@ A single backend repository must support the HTTP API and future worker executab
 - 2026-09-21: Native assessment classified the committed range as high risk and requires a post-commit independent verifier.
 - 2026-09-21: Post-commit independent verification passed for T1 commit `c276dce`; no merge-blocking issues remain.
 - 2026-09-21: Independent verification passed T2 source equivalence, lifecycle behavior, module isolation, 562 focused tests, and 1,830 full-suite tests.
-- Current task: T2 commit creation, followed by T3.
+- 2026-09-21: Created T2 commit `62cc3ff`.
+- 2026-09-21: Native assessment was unavailable/schema-incompatible and requires post-commit independent verification.
+- 2026-09-21: Post-commit independent verification passed for T2 commit `62cc3ff`; no blockers remain.
+- 2026-09-21: T3 CI and README changes were prepared; list, format, vet, tests, and CI inspection passed.
+- 2026-09-21: T3 remains partial because `golangci-lint run ./...` found one staticcheck issue in imported `internal/httpapi/catalog_descriptors_test.go`; a focused correction is required before completion.
+- 2026-09-21: Corrected imported staticcheck SA1029 with a local named context-key type.
+- 2026-09-21: T3 independent verification passed list, format, vet, lint, focused/full tests, CI semantics, documentation accuracy, and changed-path scope.
+- 2026-09-21: Created T3 commit `7535a2b`.
+- 2026-09-21: Native assessment classified the committed CI change as high risk and requires post-commit independent verification.
+- 2026-09-21: Post-commit independent verification passed for T3 commit `7535a2b`; no blockers remain.
+- 2026-09-21: Final local Phase 1 verification passed every authorized non-build gate and the hexagonal architecture review.
+- 2026-09-21: Phase 1 remains incomplete until an authorized push runs CI race tests, the explicit API build, and the full build.
+- 2026-09-21: User authorized the push; branch `feat/consolidate-backend-phase-1` was pushed to `origin`.
+- 2026-09-21: GitHub Actions run `35774701371` passed on exact head `b2bfb0b`; format, vet, lint, race tests, explicit API build, and full build all succeeded.
+- 2026-09-21: Created and approved issue #190, opened draft tracker PR #191, and opened child PRs #192–#194 with the selected Feature Branch Chain.
+- 2026-09-21: PRs #192 and #193 exposed the same SA1029 lint failure because the correction was originally committed only in the final CI slice.
+- 2026-09-21: Moved the existing typed context-key correction into PR #192 and propagated it through #193 and #194 with merge commits; no published history was rewritten and the final source tree was unchanged.
+- 2026-09-21: Current CI checks pass for tracker #191 and children #192–#194. PRs #192 and #193 carry the maintainer-approved `size:exception`; every PR carries exactly one `type:feature` label.
+- 2026-09-21: User explicitly authorized merging the complete chain and requested the remaining local runtime prerequisites.
+- Current task: T6 — integrate #192 → #193 → #194 into tracker #191, merge the tracker to `main`, verify default-branch CI, and report local startup gaps.
 
 ## Verification Evidence
 
@@ -156,7 +216,18 @@ A single backend repository must support the HTTP API and future worker executab
 - Post-commit independent verification: PASS for `c276dce`; exact merge parents, tree equality, dependency metadata, public Core boundaries, and 548 focused tests were confirmed.
 - T2 writer verification: PASS; 562 focused tests and 1,830 full-suite tests passed with workspace mode disabled.
 - T2 independent verification: PASS; source equivalence, single-module isolation, lifecycle behavior, formatting, and changed-path boundaries were confirmed.
+- T2 post-commit independent verification: PASS for `62cc3ff`; 562 focused tests and 1,830 full-suite tests passed, committed source equivalence and module isolation were confirmed.
+- T3 initial verification: `go list`, format, vet, 1,830 tests, diff integrity, and CI inspection passed; lint initially failed on one imported staticcheck finding.
+- T3 correction verification: PASS; focused test, list, format, vet, lint, 1,830 full-suite tests, diff integrity, and CI inspection passed.
+- T3 independent verification: PASS; CI gates, README claims, SA1029 correction, and changed-path scope were confirmed.
+- T3 post-commit independent verification: PASS for `7535a2b`; list, format, vet, lint, 1,830 tests, CI semantics, README accuracy, and the focused lint correction were confirmed.
+- T4 local exit verification: PASS at `7535a2b`; required paths coexist, the repository has one module and no workspace/replace/external API import, formatting/vet/lint passed, 1,830 full-suite tests and 562 focused API tests passed, and architecture status is PASS.
+- T4 CI gates: PASS in GitHub Actions run `35774701371` at `b2bfb0b` — formatting, vet, lint, `go test ./... -race -count=1`, `go build ./cmd/api`, and `go build ./...` all succeeded.
+- Final pre-chain head CI: PASS in GitHub Actions run `35776179665` at `d4ab361` with every required gate successful.
+- T5 local slice verification: PASS — PR #192's adapter suite and lint passed; PR #193's focused executable/adapter suite and lint passed.
+- T5 chain CI: PASS — current push and pull-request checks pass for #192, #193, and #194; tracker #191 also reports successful checks. Earlier SA1029 failures on the pre-correction child heads are superseded by these successful runs.
+- Chain integrity: #191 is a draft tracker to `main`; #192 targets #191's branch, #193 targets #192's branch, and #194 targets #193's branch. The issue #190 remains open with `status:approved`.
 
 ## Next Step
 
-Create the verified T2 work-unit commit, record its exact hash, and begin T3 CI acceptance gates.
+Integrate child PRs in order #192 → #193 → #194, merge tracker #191 to `main`, verify default-branch CI, and report the remaining local runtime prerequisites.
